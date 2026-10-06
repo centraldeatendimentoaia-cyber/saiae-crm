@@ -1,26 +1,28 @@
 /**
- * Backup do banco MySQL (mysqldump + gzip) com rotação.
+ * Backup do banco MySQL (mysqldump + gzip) com rotação e envio opcional para um bucket S3.
  *
  * Uso:   npm run db:backup
  * Env:   DATABASE_URL        (obrigatória, mysql://user:senha@host:porta/banco)
  *        BACKUP_DIR          pasta de destino (padrão: ./backups)
- *        BACKUP_KEEP         quantos backups manter (padrão: 14)
+ *        BACKUP_KEEP         quantos backups manter localmente (padrão: 14)
  *        MYSQLDUMP_PATH      caminho do mysqldump (padrão: "mysqldump" no PATH)
- *
  *        BACKUP_S3_BUCKET    (opcional) envia o arquivo para um bucket S3-compatível
- *        BACKUP_S3_ENDPOINT  endpoint (ex.: https://s3.us-west-004.backblazeb2.com)
+ *        BACKUP_S3_ENDPOINT  endpoint (ex.: https://<conta>.r2.cloudflarestorage.com)
  *        BACKUP_S3_REGION    região (padrão: auto)
  *        BACKUP_S3_KEY_ID / BACKUP_S3_SECRET   credenciais do bucket
  *
- * Em produção (Railway), rode este script em um serviço com Cron Schedule e envie o
- * arquivo gerado para um armazenamento externo (S3, Backblaze B2, Google Drive...).
+ * Em produção (Railway) roda como serviço com Cron Schedule, enviando o arquivo
+ * para o bucket (a cópia dentro do container some quando ele termina).
  */
 const { spawn } = require("child_process");
+const { pipeline } = require("stream/promises");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
-// carrega o .env sem depender de bibliotecas
+const log = (...a) => console.log("[backup]", ...a);
+
+// carrega o .env (uso local) sem depender de bibliotecas
 try {
     for (const line of fs.readFileSync(path.resolve(".env"), "utf8").split(String.fromCharCode(10))) {
         const i = line.indexOf("=");
@@ -31,101 +33,102 @@ try {
     }
 } catch { /* sem .env: usa variáveis do ambiente */ }
 
-const url = process.env.DATABASE_URL;
-if (!url) {
-    console.error("DATABASE_URL não definida.");
-    process.exit(1);
-}
-
-const u = new URL(url);
-const db = u.pathname.replace(/^\//, "");
-const dir = path.resolve(process.env.BACKUP_DIR || "backups");
-const keep = parseInt(process.env.BACKUP_KEEP || "14", 10);
-const bin = process.env.MYSQLDUMP_PATH || "mysqldump";
-
-fs.mkdirSync(dir, { recursive: true });
-
 async function uploadToS3(filePath) {
     const bucket = process.env.BACKUP_S3_BUCKET;
-    if (!bucket) return;
+    if (!bucket) {
+        log("BACKUP_S3_BUCKET não definida: o arquivo fica só no disco local.");
+        return;
+    }
     const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
     const client = new S3Client({
         region: process.env.BACKUP_S3_REGION || "auto",
         endpoint: process.env.BACKUP_S3_ENDPOINT || undefined,
         forcePathStyle: !!process.env.BACKUP_S3_ENDPOINT,
         credentials: {
-            accessKeyId: process.env.BACKUP_S3_KEY_ID,
-            secretAccessKey: process.env.BACKUP_S3_SECRET,
+            accessKeyId: (process.env.BACKUP_S3_KEY_ID || "").trim(),
+            secretAccessKey: (process.env.BACKUP_S3_SECRET || "").trim(),
         },
     });
-    await client.send(new PutObjectCommand({
-        Bucket: bucket,
-        Key: path.basename(filePath),
-        Body: fs.readFileSync(filePath),
-    }));
-    console.log("Backup enviado para o bucket:", bucket);
+    await client.send(
+        new PutObjectCommand({ Bucket: bucket, Key: path.basename(filePath), Body: fs.readFileSync(filePath) })
+    );
+    log("Backup enviado para o bucket:", bucket, "->", path.basename(filePath));
 }
 
-const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const file = path.join(dir, `${db}-${stamp}.sql.gz`);
+async function main() {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL não definida.");
 
-const args = [
-    `--host=${u.hostname}`,
-    `--port=${u.port || 3306}`,
-    `--user=${decodeURIComponent(u.username)}`,
-    "--single-transaction",
-    "--routines",
-    "--default-character-set=utf8mb4",
-    db,
-];
-const env = { ...process.env };
-if (u.password) env.MYSQL_PWD = decodeURIComponent(u.password);
+    const u = new URL(url);
+    const db = u.pathname.replace(/^\//, "");
+    const dir = path.resolve(process.env.BACKUP_DIR || "backups");
+    const keep = parseInt(process.env.BACKUP_KEEP || "14", 10);
+    const bin = process.env.MYSQLDUMP_PATH || "mysqldump";
 
-const dump = spawn(bin, args, { env });
-const out = fs.createWriteStream(file);
-let stderr = "";
+    log(`Iniciando backup de "${db}" em ${u.hostname}:${u.port || 3306} (usando ${bin})`);
+    fs.mkdirSync(dir, { recursive: true });
 
-dump.stderr.on("data", (d) => (stderr += d));
-dump.stdout.pipe(zlib.createGzip()).pipe(out);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const file = path.join(dir, `${db}-${stamp}.sql.gz`);
 
-dump.on("error", (e) => {
-    console.error(`Não consegui executar "${bin}": ${e.message}`);
-    console.error("Defina MYSQLDUMP_PATH com o caminho do mysqldump.");
-    fs.rmSync(file, { force: true });
-    process.exit(1);
-});
+    const args = [
+        `--host=${u.hostname}`,
+        `--port=${u.port || 3306}`,
+        `--user=${decodeURIComponent(u.username)}`,
+        "--single-transaction",
+        "--routines",
+        "--default-character-set=utf8mb4",
+        db,
+    ];
+    const env = { ...process.env };
+    if (u.password) env.MYSQL_PWD = decodeURIComponent(u.password);
 
-out.on("close", () => {
-    if (dump.exitCode !== 0 && dump.exitCode !== null) return;
-});
+    const dump = spawn(bin, args, { env });
+    let stderr = "";
+    dump.stderr.on("data", (d) => (stderr += d));
 
-dump.on("close", (code) => {
-    if (code !== 0) {
-        console.error("mysqldump falhou:", stderr.trim());
-        fs.rmSync(file, { force: true });
-        process.exit(1);
-    }
-    out.on("finish", () => {
-        const size = fs.statSync(file).size;
-        if (size < 200) {
-            console.error("Backup suspeito (arquivo muito pequeno). Removendo.");
-            fs.rmSync(file, { force: true });
-            process.exit(1);
-        }
-        console.log(`Backup criado: ${file} (${(size / 1024 / 1024).toFixed(2)} MB)`);
-        uploadToS3(file).catch((e) => {
-            console.error("Falha ao enviar o backup para o bucket:", e.message);
-            process.exitCode = 1;
-        });
-
-        // rotação: mantém só os N mais recentes
-        const files = fs.readdirSync(dir)
-            .filter((f) => f.startsWith(`${db}-`) && f.endsWith(".sql.gz"))
-            .sort()
-            .reverse();
-        for (const old of files.slice(keep)) {
-            fs.rmSync(path.join(dir, old), { force: true });
-            console.log("Removido backup antigo:", old);
-        }
+    const exited = new Promise((resolve, reject) => {
+        dump.on("error", (e) => reject(new Error(`Não consegui executar "${bin}": ${e.message}`)));
+        dump.on("close", (code) => resolve(code));
     });
-});
+    const written = pipeline(dump.stdout, zlib.createGzip(), fs.createWriteStream(file));
+
+    const [code] = await Promise.all([exited, written]).catch((e) => {
+        fs.rmSync(file, { force: true });
+        throw e;
+    });
+
+    if (code !== 0) {
+        fs.rmSync(file, { force: true });
+        throw new Error(`mysqldump terminou com código ${code}: ${stderr.trim() || "(sem mensagem)"}`);
+    }
+
+    const size = fs.statSync(file).size;
+    if (size < 200) {
+        fs.rmSync(file, { force: true });
+        throw new Error("Backup suspeito (arquivo muito pequeno). Removido.");
+    }
+    log(`Backup criado: ${file} (${(size / 1024 / 1024).toFixed(2)} MB)`);
+
+    await uploadToS3(file);
+
+    // rotação local: mantém só os N mais recentes
+    const files = fs.readdirSync(dir)
+        .filter((f) => f.startsWith(`${db}-`) && f.endsWith(".sql.gz"))
+        .sort()
+        .reverse();
+    for (const old of files.slice(keep)) {
+        fs.rmSync(path.join(dir, old), { force: true });
+        log("Removido backup antigo:", old);
+    }
+}
+
+main()
+    .then(() => {
+        log("Concluído.");
+        process.exit(0);
+    })
+    .catch((e) => {
+        console.error("[backup] ERRO:", e.message);
+        process.exit(1);
+    });
