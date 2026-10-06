@@ -36,7 +36,7 @@ export default function PrivacyPage() {
                     <li>Conteúdo do serviço: contatos, nomes, números de telefone, mensagens, mídias e etiquetas sincronizados do número de WhatsApp que você conecta.</li>
                     <li>Uso: quantidade de disparos e de textos com IA no mês, e registros técnicos para segurança e suporte.</li>
                     <li>Pagamento: processado pela Stripe. Não armazenamos número de cartão.</li>
-                    <li>Site e anúncios: se você chegar por um anúncio, podemos usar cookies e a tag do Google para medir resultados.</li>
+                    <li>Site e anúncios: se você chegar por um anúncio, podemos usar cookies e a tag do Google para medir resultados, mas só depois que você aceitar no aviso de cookies. Você pode mudar de ideia a qualquer momento pelo link "Cookies" no rodapé da página inicial.</li>
                 </ul>
             </section>
 

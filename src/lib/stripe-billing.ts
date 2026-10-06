@@ -113,9 +113,17 @@ async function createAccountForBuyer(email: string, name: string | null): Promis
     return user.id;
 }
 
-async function handleCheckoutCompleted(session: any): Promise<void> {
-    if (session.mode !== "subscription" || !session.subscription) return;
+/** A assinatura é do Sai aê CRM? (a conta Stripe também tem outros produtos, como o PDV) */
+function isOurSubscription(obj: any): boolean {
+    const items: any[] = obj?.items?.data || [];
+    return items.some((it) => {
+        const key = it?.price?.lookup_key as string | undefined;
+        return !!key && (!!LOOKUP_TO_PLAN[key] || key === EXTRA_LOOKUP);
+    });
+}
 
+/** Vincula o checkout concluído a uma conta (cria a conta se o comprador ainda não tiver). */
+async function linkCheckout(session: any): Promise<void> {
     const email = String(session.customer_details?.email || session.customer_email || "").trim().toLowerCase();
     let userId: string | null = null;
 
@@ -145,18 +153,59 @@ async function handleCheckoutCompleted(session: any): Promise<void> {
         where: { id: userId },
         data: { stripeCustomerId: String(session.customer || "") || undefined, stripeSubscriptionId: String(session.subscription) },
     });
+}
 
-    // reaplica eventos da assinatura que chegaram antes do checkout
+/**
+ * Checkout concluído. Como a conta Stripe tem outros produtos, só vinculamos quando a
+ * assinatura é do CRM (lookup key conhecida). Como a assinatura e o checkout podem chegar
+ * em qualquer ordem, quem chegar primeiro espera pelo outro.
+ * Retorna true quando o evento foi resolvido (vinculado ou ignorado).
+ */
+async function handleCheckoutCompleted(session: any): Promise<boolean> {
+    if (session.mode !== "subscription" || !session.subscription) return true;
+
+    const subEvent = await prisma.stripeEvent.findFirst({
+        where: { objectId: String(session.subscription), type: { startsWith: "customer.subscription." } },
+        orderBy: { createdAt: "desc" },
+    });
+    if (!subEvent) return false; // ainda não sabemos o que foi comprado: aguarda a assinatura chegar
+
+    const subObj = (subEvent.payload as any)?.data?.object;
+    if (!isOurSubscription(subObj)) return true; // compra de outro produto (ex.: PDV): ignora
+
+    await linkCheckout(session);
+
+    // aplica os eventos da assinatura que já tinham chegado
     const pending = await prisma.stripeEvent.findMany({
-        where: { objectId: String(session.subscription), processedAt: null, type: { startsWith: "customer.subscription." } },
+        where: { objectId: String(session.subscription), type: { startsWith: "customer.subscription." }, processedAt: null },
         orderBy: { createdAt: "asc" },
     });
     for (const ev of pending) {
-        const obj = (ev.payload as any)?.data?.object;
-        if (obj && (await applySubscriptionObject(obj))) {
+        const o = (ev.payload as any)?.data?.object;
+        if (o && (await applySubscriptionObject(ev.type === "customer.subscription.deleted" ? { ...o, status: "canceled" } : o))) {
             await prisma.stripeEvent.update({ where: { id: ev.id }, data: { processedAt: new Date() } });
         }
     }
+    return true;
+}
+
+/** Evento customer.subscription.*: aplica se já houver vínculo; senão tenta resolver um checkout pendente. */
+async function handleSubscriptionEvent(type: string, obj: any): Promise<boolean> {
+    if (!isOurSubscription(obj)) return true; // outro produto: ignora
+
+    const data = type === "customer.subscription.deleted" ? { ...obj, status: "canceled" } : obj;
+    if (await applySubscriptionObject(data)) return true;
+
+    // ainda sem vínculo: se o checkout já chegou, resolve agora
+    const checkout = await prisma.stripeEvent.findFirst({
+        where: { objectId: String(obj.id), type: "checkout.session.completed", processedAt: null },
+        orderBy: { createdAt: "asc" },
+    });
+    if (!checkout) return false;
+    const session = (checkout.payload as any)?.data?.object;
+    await linkCheckout(session);
+    await prisma.stripeEvent.update({ where: { id: checkout.id }, data: { processedAt: new Date() } });
+    return applySubscriptionObject(data);
 }
 
 /** Processa um evento já validado. Idempotente: o mesmo evento nunca é aplicado duas vezes. */
@@ -166,29 +215,28 @@ export async function handleStripeEvent(event: any): Promise<void> {
     if (already?.processedAt) return;
 
     if (!already) {
-        await prisma.stripeEvent.create({
-            data: { id: event.id, type: event.type, objectId: obj?.id ? String(obj.id) : null, payload: event },
-        });
+        // no checkout, o "objeto" de ligação é a assinatura criada (não o ID da sessão)
+        const objectId = event.type === "checkout.session.completed"
+            ? (obj?.subscription ? String(obj.subscription) : null)
+            : (obj?.id ? String(obj.id) : null);
+        await prisma.stripeEvent.create({ data: { id: event.id, type: event.type, objectId, payload: event } });
     }
 
     let processed = true;
     switch (event.type) {
         case "checkout.session.completed":
-            await handleCheckoutCompleted(obj);
+            processed = await handleCheckoutCompleted(obj);
             break;
         case "customer.subscription.created":
         case "customer.subscription.updated":
         case "customer.subscription.deleted":
-            // se ainda não sabemos de quem é, fica pendente até o checkout chegar
-            processed = await applySubscriptionObject(event.type === "customer.subscription.deleted" ? { ...obj, status: "canceled" } : obj);
+            processed = await handleSubscriptionEvent(event.type, obj);
             break;
-        case "invoice.paid":
         case "invoice.payment_failed":
-            // o estado da assinatura chega pelos eventos customer.subscription.*; aqui só registramos
-            if (event.type === "invoice.payment_failed") console.warn("[stripe] pagamento falhou:", obj?.customer, obj?.subscription);
+            console.warn("[stripe] pagamento falhou:", obj?.customer, obj?.subscription);
             break;
         default:
-            break;
+            break; // invoice.paid e outros: o estado vem pelos eventos de assinatura
     }
 
     if (processed) {
