@@ -1,5 +1,7 @@
 "use client";
 
+import { EmojiTextarea } from "@/components/emoji-textarea";
+
 import { useState, useEffect } from "react";
 import { useSession } from "@/components/dashboard/session-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -255,9 +257,9 @@ export default function AutoReplyPage() {
 
                             <div className="space-y-2">
                                 <Label>Mensagem de resposta (opcional)</Label>
-                                <Textarea 
-                                    value={response} 
-                                    onChange={(e) => setResponse(e.target.value)} 
+                                <EmojiTextarea
+                                    value={response}
+                                    onValueChange={setResponse}
                                     placeholder="Obrigado pela sua mensagem! Nossa equipe retornará em breve." 
                                     className="min-h-[120px]"
                                 />
@@ -423,9 +425,9 @@ export default function AutoReplyPage() {
 
                         <div className="space-y-2">
                             <Label>Mensagem de resposta (opcional)</Label>
-                            <Textarea 
-                                value={editResponse} 
-                                onChange={(e) => setEditResponse(e.target.value)} 
+                            <EmojiTextarea
+                                value={editResponse}
+                                onValueChange={setEditResponse}
                                 placeholder="Texto da resposta..." 
                                 className="min-h-[120px]"
                             />

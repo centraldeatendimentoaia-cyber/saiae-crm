@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { EmojiTextarea } from "@/components/emoji-textarea";
 import { parseRecipients } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -324,24 +325,26 @@ export default function BroadcastPage() {
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
                                         <Label>Mensagem</Label>
-                                        <Textarea
+                                        <EmojiTextarea
                                             placeholder="Digite sua mensagem aqui..."
                                             className="min-h-[150px]"
                                             value={message}
-                                            onChange={e => setMessage(e.target.value)}
+                                            onValueChange={setMessage}
                                             disabled={loading}
+                                            toolbar={
+                                                <>
+                                                    <span className="ml-1 text-xs text-muted-foreground">Inserir:</span>
+                                                    <Button type="button" size="sm" variant="outline" disabled={loading}
+                                                        onClick={() => setMessage(m => (m ? m + " " : "") + "{primeironome}")}>
+                                                        {"{primeironome}"}
+                                                    </Button>
+                                                    <Button type="button" size="sm" variant="outline" disabled={loading}
+                                                        onClick={() => setMessage(m => (m ? m + " " : "") + "{nome}")}>
+                                                        {"{nome}"}
+                                                    </Button>
+                                                </>
+                                            }
                                         />
-                                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                                            <span className="text-xs text-muted-foreground">Inserir:</span>
-                                            <Button type="button" size="sm" variant="outline" disabled={loading}
-                                                onClick={() => setMessage(m => (m ? m + " " : "") + "{primeironome}")}>
-                                                {"{primeironome}"}
-                                            </Button>
-                                            <Button type="button" size="sm" variant="outline" disabled={loading}
-                                                onClick={() => setMessage(m => (m ? m + " " : "") + "{nome}")}>
-                                                {"{nome}"}
-                                            </Button>
-                                        </div>
                                         <p className="text-xs text-muted-foreground">
                                             Cada cliente recebe o próprio nome (ex.: "Oi, {"{primeironome}"}!" vira "Oi, Maria!"). Se o nome não for conhecido, a variável some sozinha. Para escolher um texto reserva, use {"{primeironome|cliente}"}.
                                         </p>
@@ -349,19 +352,20 @@ export default function BroadcastPage() {
 
                                     <div className="space-y-3 border border-border p-4">
                                         <p className="kicker">Gerar texto com IA</p>
-                                        <div className="flex gap-2">
-                                            <input
-                                                className="flex-1 border-0 border-b border-input bg-transparent py-2 text-sm outline-none focus:border-foreground"
-                                                placeholder="Ex.: promoção de hidratação em outubro para clientes antigas"
-                                                value={aiObjective}
-                                                onChange={e => setAiObjective(e.target.value)}
-                                                onKeyDown={e => { if (e.key === "Enter") generateCopies(); }}
-                                                disabled={aiLoading || loading}
-                                            />
-                                            <Button type="button" size="sm" variant="secondary" onClick={generateCopies} disabled={aiLoading || loading}>
-                                                {aiLoading ? "Gerando..." : "Gerar"}
-                                            </Button>
-                                        </div>
+                                        <EmojiTextarea
+                                            className="min-h-[130px]"
+                                            placeholder={"Descreva o que você quer comunicar, com o máximo de detalhes.\nEx.: promoção de hidratação em outubro para clientes antigas, 20% de desconto até sexta, horário de atendimento até 19h."}
+                                            value={aiObjective}
+                                            onValueChange={setAiObjective}
+                                            maxLength={1000}
+                                            disabled={aiLoading || loading}
+                                            onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") generateCopies(); }}
+                                            toolbar={
+                                                <Button type="button" size="sm" variant="secondary" onClick={generateCopies} disabled={aiLoading || loading} className="ml-auto">
+                                                    {aiLoading ? "Gerando..." : "Gerar texto"}
+                                                </Button>
+                                            }
+                                        />
                                         {aiCopies.map((c, i) => (
                                             <button
                                                 key={i}

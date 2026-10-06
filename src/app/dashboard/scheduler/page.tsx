@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { EmojiTextarea } from "@/components/emoji-textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -552,7 +553,7 @@ export default function SchedulerPage() {
 
                             <div className="space-y-2 mt-4">
                                 <Label>Mensagem (opcional)</Label>
-                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Olá!" />
+                                <EmojiTextarea value={newContent} onValueChange={setNewContent} placeholder="Olá!" className="min-h-[110px]" />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -692,7 +693,7 @@ export default function SchedulerPage() {
 
                             <div className="space-y-2 mt-4">
                                 <Label>Mensagem (opcional)</Label>
-                                <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} />
+                                <EmojiTextarea value={editContent} onValueChange={setEditContent} className="min-h-[110px]" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
