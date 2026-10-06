@@ -1,96 +1,95 @@
-import Link from "next/link";
-import { ArrowLeft, Lock, Shield } from "lucide-react";
+import type { Metadata } from "next";
+import { LegalLayout } from "@/components/legal-layout";
 
-export const metadata = {
-    title: "Privacy Policy | Saiaê",
-    description: "Privacy Policy for Saiaê self-hosted WhatsApp Gateway. Zero-tracking architecture, data ownership, and security practices.",
-    openGraph: {
-        title: "Privacy Policy | Saiaê",
-        description: "Privacy Policy for Saiaê self-hosted WhatsApp Gateway.",
-        type: "website",
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: "Privacy Policy | Saiaê",
-        description: "Privacy Policy for Saiaê self-hosted WhatsApp Gateway.",
-    },
+export const metadata: Metadata = {
+    title: { absolute: "Política de Privacidade | Sai aê CRM" },
+    description: "Como o Sai aê CRM coleta, usa e protege os dados dos seus clientes, conforme a LGPD.",
+    alternates: { canonical: "/privacy" },
+    robots: { index: true, follow: true },
 };
+
+const WHATSAPP = "https://wa.me/5561999531848?text=Oi%21%20Tenho%20uma%20d%C3%BAvida%20sobre%20privacidade%20no%20Sai%20a%C3%AA%20CRM.";
 
 export default function PrivacyPage() {
     return (
-        <div className="min-h-screen bg-background relative overflow-hidden py-24 selection:bg-primary/30 selection:text-primary-foreground">
-            {/* Ambient background glows */}
-            <div className="fixed top-0 right-1/4 translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-zinc-500/5 dark:bg-zinc-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-            <div className="fixed bottom-0 left-1/4 -translate-x-1/2 translate-y-1/2 w-[30rem] h-[30rem] bg-zinc-500/5 dark:bg-zinc-600/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+        <LegalLayout title="Política de Privacidade" updated="6 de outubro de 2026">
+            <section>
+                <h2>1. Quem somos</h2>
+                <p>
+                    O Sai aê CRM é um serviço de atendimento e envio de mensagens pelo WhatsApp, oferecido pelo Sai aê.
+                    Para falar sobre privacidade ou exercer seus direitos, <a className="underline underline-offset-4 font-semibold" href={WHATSAPP}>fale com a gente pelo WhatsApp</a>.
+                </p>
+            </section>
 
-            <div className="container max-w-4xl px-4 mx-auto relative z-10">
+            <section>
+                <h2>2. Dois papéis diferentes</h2>
+                <ul>
+                    <li><strong>Seus dados de conta</strong> (nome, e-mail, plano e pagamentos): somos os controladores.</li>
+                    <li><strong>Os dados dos seus clientes</strong> (contatos, conversas e etiquetas): você, assinante, decide o que fazer com eles. Nós somos operadores e tratamos esses dados apenas para prestar o serviço.</li>
+                </ul>
+            </section>
 
-                <Link href="/" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-8 transition-colors group">
-                    <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-                    Back to Home
-                </Link>
+            <section>
+                <h2>3. Quais dados tratamos</h2>
+                <ul>
+                    <li>Conta: nome, e-mail, senha (guardada de forma criptografada) e plano contratado.</li>
+                    <li>Conteúdo do serviço: contatos, nomes, números de telefone, mensagens, mídias e etiquetas sincronizados do número de WhatsApp que você conecta.</li>
+                    <li>Uso: quantidade de disparos e de textos com IA no mês, e registros técnicos para segurança e suporte.</li>
+                    <li>Pagamento: processado pela Stripe. Não armazenamos número de cartão.</li>
+                    <li>Site e anúncios: se você chegar por um anúncio, podemos usar cookies e a tag do Google para medir resultados.</li>
+                </ul>
+            </section>
 
-                <div className="glass-panel p-8 md:p-12 rounded-3xl shadow-xl shadow-black/5 dark:shadow-black/20 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-zinc-500/10 rounded-2xl">
-                            <Shield className="h-8 w-8 text-zinc-500" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">Privacy Policy</h1>
-                            <p className="text-muted-foreground mt-2">Effective Date: {new Date().toLocaleDateString()}</p>
-                        </div>
-                    </div>
+            <section>
+                <h2>4. Para que usamos</h2>
+                <ul>
+                    <li>Prestar o serviço contratado: conectar o WhatsApp, enviar, agendar e responder mensagens.</li>
+                    <li>Cobrar, aplicar os limites do plano e dar suporte.</li>
+                    <li>Proteger a plataforma contra abuso, fraude e envio de spam.</li>
+                    <li>Medir e melhorar nossos anúncios e o produto.</li>
+                </ul>
+                <p className="mt-3">Não vendemos dados e não os usamos para outras campanhas nossas.</p>
+            </section>
 
-                    <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-p:leading-relaxed">
+            <section>
+                <h2>5. Com quem compartilhamos</h2>
+                <ul>
+                    <li><strong>Hospedagem e banco de dados:</strong> Railway.</li>
+                    <li><strong>Pagamentos:</strong> Stripe.</li>
+                    <li><strong>Textos com IA:</strong> Google (Gemini). Apenas o que você escreve no campo da IA é enviado, sem a lista de contatos.</li>
+                    <li><strong>Medição de anúncios:</strong> Google Ads.</li>
+                    <li>Autoridades, quando a lei exigir.</li>
+                </ul>
+            </section>
 
-                        <p className="lead text-lg text-muted-foreground mb-8">
-                            At Saiaê, we believe that your data is your property. This Privacy Policy details the strict boundaries regarding how information is handled when using our open-source, self-hosted WhatsApp Gateway.
-                        </p>
+            <section>
+                <h2>6. Por quanto tempo guardamos</h2>
+                <p>
+                    Enquanto sua assinatura estiver ativa. Depois do cancelamento, mantemos os dados por até 30 dias para você poder voltar
+                    e então os apagamos, salvo o que a lei exigir guardar (por exemplo, registros de pagamento).
+                </p>
+            </section>
 
-                        <h2 className="flex items-center gap-2 mt-8 text-2xl border-b pb-2">
-                            <Lock className="h-6 w-6 text-zinc-500" />
-                            1. Zero-Tracking Architecture
-                        </h2>
-                        <p>
-                            Because Saiaê is designed to be <strong>self-hosted</strong>, all core data processing occurs exclusively on the hardware where you deploy the application.
-                        </p>
-                        <ul>
-                            <li><strong>No Centralized Telemetry:</strong> The creators of Saiaê do not receive telemetry, analytics, or usage reports about your WhatsApp interactions.</li>
-                            <li><strong>Absolute Data Ownership:</strong> Your contacts, messages, schedules, and auto-replies remain in your own database. We cannot and will not access it.</li>
-                        </ul>
+            <section>
+                <h2>7. Seus direitos (LGPD)</h2>
+                <p>
+                    Você pode pedir acesso, correção, portabilidade, anonimização ou exclusão dos seus dados, e saber com quem compartilhamos,
+                    conforme o art. 18 da Lei 13.709/2018. Se for cliente final de um dos nossos assinantes, o pedido também pode ser feito diretamente ao estabelecimento.
+                </p>
+            </section>
 
-                        <h2 className="mt-8 text-2xl border-b pb-2">2. Data We Process Locally</h2>
-                        <p>
-                            When you deploy the gateway, the application running on your server interacts with:
-                        </p>
-                        <ul>
-                            <li><strong>Authentication Credentials:</strong> Passwords you create for the dashboard are securely hashed using bcrypt before being stored in your local database.</li>
-                            <li><strong>WhatsApp Sessions:</strong> Saiaê acts as a bridge to WhatsApp Web. The session tokens (keys) necessary to maintain this connection are stored locally on your server.</li>
-                            <li><strong>Communication Logs:</strong> Messages sent and received via the gateway are logged within your local database to provide you with historical data and webhook functionality.</li>
-                        </ul>
+            <section>
+                <h2>8. Segurança</h2>
+                <p>
+                    Usamos conexão criptografada (HTTPS), senhas criptografadas, acesso restrito e cópias de segurança do banco.
+                    Nenhum sistema é 100% imune, e avisaremos você caso ocorra um incidente relevante.
+                </p>
+            </section>
 
-                        <h2 className="mt-8 text-2xl border-b pb-2">3. Protecting Your Information</h2>
-                        <p>
-                            While Saiaê is built with modern security practices, the ultimate safety of your data depends on your hosting environment. We strongly recommend:
-                        </p>
-                        <ul>
-                            <li>Deploying the application behind a reverse proxy with enforced <strong>SSL/TLS encryption</strong> (HTTPS).</li>
-                            <li>Securing the host server with firewalls and SSH key authentication.</li>
-                            <li>Keeping the underlying operating system and Node.js environment constantly updated.</li>
-                        </ul>
-
-                        <h2 className="mt-8 text-2xl border-b pb-2">4. Third-Party Integrations</h2>
-                        <p>
-                            Saiaê utilizes the <code>@whiskeysockets/baileys</code> library to communicate directly with WhatsApp's servers. By using this gateway, your server will establish a direct web-socket connection to WhatsApp. Please be aware that your use of WhatsApp is still subject to Meta's Privacy Policy.
-                        </p>
-
-                        <div className="mt-12 p-6 bg-zinc-500/5 rounded-2xl border border-zinc-500/10">
-                            <p className="font-semibold mb-2">Need Further Details?</p>
-                            <p className="text-sm text-muted-foreground mb-0">If you have specific questions about data handling or wish to audit the code, please visit our <Link href="#">GitHub Repository</Link>.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+            <section>
+                <h2>9. Mudanças</h2>
+                <p>Podemos atualizar esta política. A data de atualização fica no topo da página.</p>
+            </section>
+        </LegalLayout>
     );
 }

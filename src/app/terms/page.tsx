@@ -1,92 +1,85 @@
-import Link from "next/link";
-import { ArrowLeft, ShieldCheck, Scale } from "lucide-react";
+import type { Metadata } from "next";
+import { LegalLayout } from "@/components/legal-layout";
 
-export const metadata = {
-    title: "Terms of Service | Saiaê",
-    description: "Terms of Service for Saiaê self-hosted WhatsApp Gateway. Usage guidelines, security requirements, and acceptable use policy.",
-    openGraph: {
-        title: "Terms of Service | Saiaê",
-        description: "Terms of Service for Saiaê self-hosted WhatsApp Gateway.",
-        type: "website",
-    },
-    twitter: {
-        card: "summary_large_image",
-        title: "Terms of Service | Saiaê",
-        description: "Terms of Service for Saiaê self-hosted WhatsApp Gateway.",
-    },
+export const metadata: Metadata = {
+    title: { absolute: "Termos de Uso | Sai aê CRM" },
+    description: "Regras de uso, planos, cobrança e responsabilidades do Sai aê CRM.",
+    alternates: { canonical: "/terms" },
+    robots: { index: true, follow: true },
 };
 
 export default function TermsPage() {
     return (
-        <div className="min-h-screen bg-background relative overflow-hidden py-24 selection:bg-primary/30 selection:text-primary-foreground">
-            {/* Ambient background glows */}
-            <div className="fixed top-0 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-zinc-500/5 dark:bg-zinc-500/10 rounded-full blur-[120px] pointer-events-none -z-10" />
-            <div className="fixed bottom-0 right-1/4 translate-x-1/2 translate-y-1/2 w-[30rem] h-[30rem] bg-zinc-500/5 dark:bg-zinc-600/10 rounded-full blur-[100px] pointer-events-none -z-10" />
+        <LegalLayout title="Termos de Uso" updated="6 de outubro de 2026">
+            <section>
+                <h2>1. O serviço</h2>
+                <p>
+                    O Sai aê CRM é uma ferramenta web para conectar o seu número de WhatsApp e enviar, agendar e responder mensagens,
+                    organizar contatos com etiquetas e gerar textos com inteligência artificial. Ao criar uma conta ou assinar, você concorda com estes termos.
+                </p>
+            </section>
 
-            <div className="container max-w-4xl px-4 mx-auto relative z-10">
+            <section>
+                <h2>2. Seu número e sua responsabilidade</h2>
+                <ul>
+                    <li>O Sai aê CRM <strong>não é um produto do WhatsApp nem da Meta</strong> e não usa a API oficial. A conexão funciona como o WhatsApp Web.</li>
+                    <li>O WhatsApp pode restringir ou bloquear números por conta própria. Você usa o serviço <strong>por sua conta e risco</strong> e não garantimos que um número nunca será bloqueado.</li>
+                    <li>Você é responsável pelo conteúdo que envia e pelas listas de contatos que usa.</li>
+                </ul>
+            </section>
 
-                <Link href="/" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-8 transition-colors group">
-                    <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
-                    Back to Home
-                </Link>
+            <section>
+                <h2>3. Uso aceitável</h2>
+                <p>É proibido usar o serviço para:</p>
+                <ul>
+                    <li>enviar mensagens para quem não pediu ou não consentiu em recebê-las (spam), inclusive com listas compradas;</li>
+                    <li>golpes, conteúdo ilegal, ofensivo ou que viole direitos de terceiros;</li>
+                    <li>tentar burlar limites do plano, o intervalo entre envios ou os mecanismos de proteção;</li>
+                    <li>revender ou compartilhar sua conta sem autorização.</li>
+                </ul>
+                <p className="mt-3">Podemos suspender ou encerrar contas que descumpram estas regras, sem reembolso.</p>
+            </section>
 
-                <div className="glass-panel p-8 md:p-12 rounded-3xl shadow-xl shadow-black/5 dark:shadow-black/20 animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-primary/10 rounded-2xl">
-                            <Scale className="h-8 w-8 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-foreground">Terms of Service</h1>
-                            <p className="text-muted-foreground mt-2">Last updated: {new Date().toLocaleDateString()}</p>
-                        </div>
-                    </div>
+            <section>
+                <h2>4. Planos, limites e cobrança</h2>
+                <ul>
+                    <li>As assinaturas são mensais e renovadas automaticamente, com cobrança por cartão pela Stripe.</li>
+                    <li>Cada plano tem limites de números de WhatsApp, disparos e textos com IA por mês, informados na página de planos.</li>
+                    <li>Ao atingir um limite, os envios correspondentes ficam bloqueados até o mês seguinte ou até a troca de plano.</li>
+                    <li>Se o pagamento falhar, a conta pode ser suspensa. Os dados são mantidos para você regularizar.</li>
+                    <li>Você pode cancelar a qualquer momento. O acesso continua até o fim do período já pago.</li>
+                </ul>
+            </section>
 
-                    <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-headings:tracking-tight prose-a:text-primary hover:prose-a:text-primary/80 prose-p:leading-relaxed">
+            <section>
+                <h2>5. Teste grátis</h2>
+                <p>O teste grátis tem duração e limites reduzidos. Ao fim dele, é preciso escolher um plano para continuar enviando mensagens.</p>
+            </section>
 
-                        <p className="lead text-lg text-muted-foreground mb-8">
-                            Welcome to Saiaê. By accessing or using our WhatsApp Gateway platform, you agree to be bound by these Terms. If you do not agree, please do not use the service.
-                        </p>
+            <section>
+                <h2>6. Dados</h2>
+                <p>
+                    O tratamento de dados está descrito na <a className="underline underline-offset-4 font-semibold" href="/privacy">Política de Privacidade</a>.
+                    Você é responsável por ter base legal para enviar mensagens aos seus contatos.
+                </p>
+            </section>
 
-                        <h2 className="flex items-center gap-2 mt-8 text-2xl border-b pb-2">
-                            <ShieldCheck className="h-6 w-6 text-zinc-500" />
-                            1. Data Security & Responsibility
-                        </h2>
-                        <p>
-                            Security forms the core of our service. As a self-hosted platform, Saiaê ensures that your data remains strictly within your own infrastructure.
-                        </p>
-                        <ul>
-                            <li><strong>Your Data is Yours:</strong> We do not track, intercept, or sell your WhatsApp messages, contact lists, or session data. Your information is secure and not misused.</li>
-                            <li><strong>Safe Usage:</strong> You are responsible for ensuring your hardware and server environments are properly secured.</li>
-                            <li><strong>Authentication:</strong> You must safeguard your account credentials. Do not share your login details with unauthorized personnel.</li>
-                        </ul>
+            <section>
+                <h2>7. Disponibilidade e responsabilidade</h2>
+                <p>
+                    Trabalhamos para manter o serviço disponível, mas ele é oferecido no estado em que se encontra, podendo ter interrupções.
+                    Na extensão permitida pela lei, não respondemos por lucros cessantes, bloqueio de números ou perdas decorrentes de uso indevido.
+                    Nossa responsabilidade se limita ao valor pago nos últimos 3 meses.
+                </p>
+            </section>
 
-                        <h2 className="mt-8 text-2xl border-b pb-2">2. Acceptable Use Policy</h2>
-                        <p>
-                            When utilizing Saiaê's API, auto-replies, and broadcasting capabilities, you agree to abide by WhatsApp's official Terms of Service and Anti-Spam policies. You agree not to:
-                        </p>
-                        <ul>
-                            <li>Send unsolicited "spam" messages or bulk promotional campaigns to users who have not explicitly opted-in.</li>
-                            <li>Use the platform to distribute malicious software, phishing links, or illegal content.</li>
-                            <li>Attempt to reverse-engineer the core API or overload the service with excessive requests.</li>
-                        </ul>
-
-                        <h2 className="mt-8 text-2xl border-b pb-2">3. Account Integrity</h2>
-                        <p>
-                            Saiaê provides tools to manage multiple WhatsApp sessions. It is crucial to monitor your active devices. If you suspect unauthorized access to your gateway dashboard, immediately change your password and revoke any connected WhatsApp sessions from your physical device.
-                        </p>
-
-                        <h2 className="mt-8 text-2xl border-b pb-2">4. Disclaimers and Limitations</h2>
-                        <p>
-                            Saiaê is provided "as is" and without warranties of any kind. We utilize third-party libraries (such as Baileys) to connect to WhatsApp web protocols. Changes to WhatsApp's internal systems may occasionally disrupt service. We are not liable for any account suspensions or bans imposed by WhatsApp as a result of your usage.
-                        </p>
-
-                        <div className="mt-12 p-6 bg-primary/5 rounded-2xl border border-primary/10">
-                            <p className="font-semibold mb-2">Have questions about these terms?</p>
-                            <p className="text-sm text-muted-foreground mb-0">Please review our <Link href="/docs">Documentation</Link> or reach out to the project maintainers for further clarification.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+            <section>
+                <h2>8. Mudanças e foro</h2>
+                <p>
+                    Podemos atualizar estes termos e avisaremos quando a mudança for relevante. Fica eleito o foro da comarca de Brasília/DF
+                    para resolver questões deste contrato, ressalvados os direitos do consumidor.
+                </p>
+            </section>
+        </LegalLayout>
     );
 }

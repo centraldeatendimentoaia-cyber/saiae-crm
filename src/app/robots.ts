@@ -1,15 +1,14 @@
 import { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-    const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true";
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://crm.saiae.com.br";
 
     return {
         rules: {
             userAgent: "*",
-            allow: allowIndexing ? "/" : "",
-            disallow: allowIndexing ? "/dashboard/" : "/",
+            allow: ["/", "/privacy", "/terms"],
+            disallow: ["/dashboard/", "/api/", "/auth/", "/swagger", "/docs"],
         },
-        sitemap: allowIndexing ? `${baseUrl}/sitemap.xml` : undefined,
+        sitemap: `${baseUrl}/sitemap.xml`,
     };
 }
