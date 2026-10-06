@@ -39,15 +39,15 @@ export default function ApiDocsPage() {
         e.preventDefault();
 
         // Basic auth - compare with env variables or hardcoded (for demo)
-        const validUsername = process.env.NEXT_PUBLIC_SWAGGER_USERNAME || "admin";
-        const validPassword = process.env.NEXT_PUBLIC_SWAGGER_PASSWORD || "admin123";
+        const validUsername = process.env.NEXT_PUBLIC_SWAGGER_USERNAME || "";
+        const validPassword = process.env.NEXT_PUBLIC_SWAGGER_PASSWORD || "";
 
-        if (username === validUsername && password === validPassword) {
+        if (validPassword && username === validUsername && password === validPassword) {
             sessionStorage.setItem("swagger_auth", "true");
             setAuthorized(true);
             setError("");
         } else {
-            setError("Invalid credentials");
+            setError("Credenciais inválidas");
         }
     };
 
@@ -60,50 +60,53 @@ export default function ApiDocsPage() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-50">
-                <div className="text-gray-600">Loading...</div>
+            <div className="flex items-center justify-center min-h-screen bg-zinc-50">
+                <div className="text-zinc-600">Carregando...</div>
             </div>
         );
     }
 
     if (!authorized) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+            <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-zinc-50 to-zinc-100">
                 <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
                     <div className="text-center mb-6">
-                        <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                            WA-AKG API Documentation
+                        <h1 className="text-3xl font-bold text-zinc-800 mb-2">
+                            Saiaê Documentação da API
                         </h1>
-                        <p className="text-gray-600 text-sm">
-                            Please authenticate to access Swagger UI
+                        <p className="text-zinc-600 text-sm">
+                            
+                            Autentique-se para acessar o Swagger UI
                         </p>
                     </div>
 
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Username
+                            <label className="block text-sm font-medium text-zinc-700 mb-2">
+                                
+                                Usuário
                             </label>
                             <input
                                 type="text"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                placeholder="Enter username"
+                                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-500 focus:border-transparent outline-none"
+                                placeholder="Informe o usuário"
                                 required
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Password
+                            <label className="block text-sm font-medium text-zinc-700 mb-2">
+                                
+                                Senha
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                                placeholder="Enter password"
+                                className="w-full px-4 py-2 border border-zinc-300 rounded-lg focus:ring-2 focus:ring-zinc-500 focus:border-transparent outline-none"
+                                placeholder="Informe a senha"
                                 required
                             />
                         </div>
@@ -116,39 +119,35 @@ export default function ApiDocsPage() {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                            className="w-full bg-zinc-600 hover:bg-zinc-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
                         >
-                            Access Documentation
+                            
+                            Acessar documentação
                         </button>
                     </form>
 
-                    <div className="mt-6 text-center text-sm text-gray-500">
-                        <p>Default credentials:</p>
-                        <p className="font-mono mt-1">
-                            Username: <span className="font-semibold">admin</span> |
-                            Password: <span className="font-semibold">admin123</span>
-                        </p>
-                    </div>
-                </div>
+                                    </div>
             </div>
         );
     }
 
     return (
         <div className="min-h-screen bg-white">
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 shadow-lg">
+            <div className="bg-gradient-to-r from-zinc-600 to-zinc-600 text-white p-4 shadow-lg">
                 <div className="container mx-auto flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-bold">WA-AKG API Documentation</h1>
-                        <p className="text-blue-100 text-sm mt-1">
-                            Interactive API documentation with 58+ endpoints
+                        <h1 className="text-2xl font-bold">Saiaê API Documentation</h1>
+                        <p className="text-zinc-100 text-sm mt-1">
+                            
+                            Documentação interativa da API com mais de 58 endpoints
                         </p>
                     </div>
                     <button
                         onClick={handleLogout}
                         className="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
                     >
-                        Logout
+                        
+                        Desconectar
                     </button>
                 </div>
             </div>

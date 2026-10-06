@@ -209,40 +209,40 @@ export default function ApiDocsPage() {
     const getMethodColor = (method: string) => {
         switch (method) {
             case "GET": return "bg-green-100 text-green-800 border-green-300";
-            case "POST": return "bg-blue-100 text-blue-800 border-blue-300";
+            case "POST": return "bg-zinc-100 text-zinc-800 border-zinc-300";
             case "PUT": return "bg-yellow-100 text-yellow-800 border-yellow-300";
             case "PATCH": return "bg-orange-100 text-orange-800 border-orange-300";
             case "DELETE": return "bg-red-100 text-red-800 border-red-300";
-            default: return "bg-gray-100 text-gray-800 border-gray-300";
+            default: return "bg-zinc-100 text-zinc-800 border-zinc-300";
         }
     };
 
     if (status === "loading") {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <div className="text-gray-600">Loading...</div>
+                <div className="text-zinc-600">Loading...</div>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
+        <div className="min-h-screen bg-zinc-50 p-3 sm:p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 sm:mb-8">
                     <div>
-                        <h1 className="text-xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2">
-                            <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+                        <h1 className="text-xl sm:text-3xl font-bold text-zinc-900 tracking-tight flex items-center gap-2">
+                            <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-zinc-600" />
                             API Documentation
                         </h1>
-                        <p className="text-gray-500 mt-2">
+                        <p className="text-zinc-500 mt-2">
                             Complete reference for all {apiEndpoints.length} API endpoints.
                         </p>
                     </div>
                     <a
                         href="/docs"
                         target="_blank"
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        className="flex items-center gap-2 px-4 py-2 bg-zinc-600 text-white rounded-lg hover:bg-zinc-700 transition"
                     >
                         <Code className="w-4 h-4" />
                         Open Swagger UI
@@ -251,17 +251,17 @@ export default function ApiDocsPage() {
                 </div>
 
                 {/* Master Documentation Alert */}
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r shadow-sm mb-6">
+                <div className="bg-zinc-50 border-l-4 border-zinc-500 p-4 rounded-r shadow-sm mb-6">
                     <div className="flex items-start">
                         <div className="flex-shrink-0">
-                            <FileText className="h-5 w-5 text-blue-600" />
+                            <FileText className="h-5 w-5 text-zinc-600" />
                         </div>
                         <div className="ml-3">
-                            <h3 className="text-sm font-medium text-blue-800">📘 Project Documentation Available</h3>
-                            <div className="mt-2 text-sm text-blue-700">
+                            <h3 className="text-sm font-medium text-zinc-800">📘 Project Documentation Available</h3>
+                            <div className="mt-2 text-sm text-zinc-700">
                                 <p>
                                     For a deep dive into the <strong>Project Architecture</strong>, <strong>Database Schema</strong>, and <strong>Frontend Routing</strong>,
-                                    please refer to the <a href="/docs/PROJECT_DOCUMENTATION.md" className="font-bold underline hover:text-blue-900">Master Project Documentation</a> file in your codebase.
+                                    please refer to the <a href="/docs/PROJECT_DOCUMENTATION.md" className="font-bold underline hover:text-zinc-900">Master Project Documentation</a> file in your codebase.
                                 </p>
                             </div>
                         </div>
@@ -275,31 +275,31 @@ export default function ApiDocsPage() {
                         <a
                             href="/docs"
                             target="_blank"
-                            className="flex items-center p-4 border rounded-lg hover:bg-gray-50 transition-colors group"
+                            className="flex items-center p-4 border rounded-lg hover:bg-zinc-50 transition-colors group"
                         >
-                            <Code className="w-10 h-10 text-blue-600 mr-4" />
+                            <Code className="w-10 h-10 text-zinc-600 mr-4" />
                             <div className="flex-1">
-                                <h3 className="font-medium text-gray-800 group-hover:text-blue-600">Swagger UI</h3>
-                                <p className="text-sm text-gray-600">Interactive API testing</p>
+                                <h3 className="font-medium text-zinc-800 group-hover:text-zinc-600">Swagger UI</h3>
+                                <p className="text-sm text-zinc-600">Interactive API testing</p>
                             </div>
-                            <ExternalLink className="w-5 h-5 text-gray-400" />
+                            <ExternalLink className="w-5 h-5 text-zinc-400" />
                         </a>
                         <a
                             href="/api/docs"
                             target="_blank"
-                            className="flex items-center p-4 border rounded-lg hover:bg-gray-50 transition-colors group"
+                            className="flex items-center p-4 border rounded-lg hover:bg-zinc-50 transition-colors group"
                         >
                             <FileText className="w-10 h-10 text-green-600 mr-4" />
                             <div className="flex-1">
-                                <h3 className="font-medium text-gray-800 group-hover:text-green-600">OpenAPI Spec</h3>
-                                <p className="text-sm text-gray-600">JSON specification</p>
+                                <h3 className="font-medium text-zinc-800 group-hover:text-green-600">OpenAPI Spec</h3>
+                                <p className="text-sm text-zinc-600">JSON specification</p>
                             </div>
-                            <ExternalLink className="w-5 h-5 text-gray-400" />
+                            <ExternalLink className="w-5 h-5 text-zinc-400" />
                         </a>
-                        <div className="flex items-center p-4 border rounded-lg bg-gray-50">
+                        <div className="flex items-center p-4 border rounded-lg bg-zinc-50">
                             <div className="flex-1">
-                                <h3 className="font-medium text-gray-800">Base URL</h3>
-                                <p className="text-sm text-gray-600 font-mono break-all">{process.env.NEXT_PUBLIC_API_URL || '/api'}</p>
+                                <h3 className="font-medium text-zinc-800">Base URL</h3>
+                                <p className="text-sm text-zinc-600 font-mono break-all">{process.env.NEXT_PUBLIC_API_URL || '/api'}</p>
                             </div>
                         </div>
                     </div>
@@ -309,21 +309,21 @@ export default function ApiDocsPage() {
                 <div className="bg-white rounded-lg shadow p-6 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                            <label className="block text-sm font-medium text-zinc-700 mb-2">Search</label>
                             <input
                                 type="text"
                                 value={filter}
                                 onChange={(e) => setFilter(e.target.value)}
                                 placeholder="Search endpoints..."
-                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-zinc-500 focus:border-transparent"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                            <label className="block text-sm font-medium text-zinc-700 mb-2">Category</label>
                             <select
                                 value={selectedCategory}
                                 onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-zinc-500 focus:border-transparent"
                             >
                                 {categories.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
@@ -336,33 +336,33 @@ export default function ApiDocsPage() {
                 {/* Endpoints List */}
                 <div className="bg-white rounded-lg shadow overflow-hidden">
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-zinc-200">
+                            <thead className="bg-zinc-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Params</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Method</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Endpoint</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Params</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Description</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</th>
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white divide-y divide-zinc-200">
                                 {filteredEndpoints.map((endpoint, index) => (
-                                    <tr key={index} className="hover:bg-gray-50">
+                                    <tr key={index} className="hover:bg-zinc-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${getMethodColor(endpoint.method)}`}>
                                                 {endpoint.method}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <code className="text-sm text-gray-900 font-mono">{endpoint.path}</code>
+                                            <code className="text-sm text-zinc-900 font-mono">{endpoint.path}</code>
                                         </td>
-                                        <td className="px-6 py-4 text-xs font-mono text-gray-600 max-w-xs break-words">
+                                        <td className="px-6 py-4 text-xs font-mono text-zinc-600 max-w-xs break-words">
                                             {endpoint.params || "-"}
                                         </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">{endpoint.description}</td>
+                                        <td className="px-6 py-4 text-sm text-zinc-600">{endpoint.description}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                                            <span className="px-2 py-1 text-xs bg-zinc-100 text-zinc-700 rounded">
                                                 {endpoint.category}
                                             </span>
                                         </td>
@@ -373,7 +373,7 @@ export default function ApiDocsPage() {
                     </div>
 
                     {filteredEndpoints.length === 0 && (
-                        <div className="text-center py-12 text-gray-500">
+                        <div className="text-center py-12 text-zinc-500">
                             No endpoints found matching your criteria
                         </div>
                     )}
@@ -382,20 +382,20 @@ export default function ApiDocsPage() {
                 {/* Stats */}
                 <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-lg shadow p-4">
-                        <div className="text-2xl font-bold text-blue-600">{apiEndpoints.length}</div>
-                        <div className="text-sm text-gray-600">Total Endpoints</div>
+                        <div className="text-2xl font-bold text-zinc-600">{apiEndpoints.length}</div>
+                        <div className="text-sm text-zinc-600">Total Endpoints</div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-4">
                         <div className="text-2xl font-bold text-green-600">{categories.length - 1}</div>
-                        <div className="text-sm text-gray-600">Categories</div>
+                        <div className="text-sm text-zinc-600">Categories</div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-4">
                         <div className="text-2xl font-bold text-yellow-600">{apiEndpoints.filter(e => e.method === "POST").length}</div>
-                        <div className="text-sm text-gray-600">POST Endpoints</div>
+                        <div className="text-sm text-zinc-600">POST Endpoints</div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-4">
-                        <div className="text-2xl font-bold text-purple-600">{apiEndpoints.filter(e => e.method === "GET").length}</div>
-                        <div className="text-sm text-gray-600">GET Endpoints</div>
+                        <div className="text-2xl font-bold text-zinc-600">{apiEndpoints.filter(e => e.method === "GET").length}</div>
+                        <div className="text-sm text-zinc-600">GET Endpoints</div>
                     </div>
                 </div>
             </div>

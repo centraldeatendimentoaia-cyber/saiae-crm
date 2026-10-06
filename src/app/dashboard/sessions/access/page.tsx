@@ -88,7 +88,7 @@ export default function SessionAccessPage() {
             }
         } catch (error) {
             console.error("Failed to fetch sessions", error);
-            toast.error("Failed to load sessions");
+            toast.error("Falha ao carregar as sessões");
         } finally {
             setLoading(false);
         }
@@ -103,14 +103,14 @@ export default function SessionAccessPage() {
                 const data = await res.json();
                 setAccessList(data?.data || []);
             } else if (res.status === 403) {
-                toast.error("You don't have permission to manage this session's access");
+                toast.error("Você não tem permissão para gerenciar o acesso a esta sessão");
                 setAccessList([]);
             } else {
                 setAccessList([]);
             }
         } catch (error) {
             console.error("Failed to fetch access list", error);
-            toast.error("Failed to load access list");
+            toast.error("Falha ao carregar a lista de acessos");
         } finally {
             setAccessLoading(false);
         }
@@ -144,7 +144,7 @@ export default function SessionAccessPage() {
                 toast.error(data.message || "Failed to grant access");
             }
         } catch (error) {
-            toast.error("Failed to grant access");
+            toast.error("Falha ao conceder o acesso");
         } finally {
             setSubmitting(false);
         }
@@ -163,13 +163,13 @@ export default function SessionAccessPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success("Access revoked successfully");
+                toast.success("Acesso revogado com sucesso");
                 fetchAccessList();
             } else {
                 toast.error(data.message || "Failed to revoke access");
             }
         } catch (error) {
-            toast.error("Failed to revoke access");
+            toast.error("Falha ao revogar o acesso");
         } finally {
             setRevokeTarget(null);
         }
@@ -178,8 +178,8 @@ export default function SessionAccessPage() {
     const getRoleIcon = (role: string) => {
         switch (role) {
             case "SUPERADMIN": return <ShieldAlert className="h-4 w-4 text-red-500" />;
-            case "OWNER": return <ShieldCheck className="h-4 w-4 text-blue-500" />;
-            default: return <User className="h-4 w-4 text-gray-500" />;
+            case "OWNER": return <ShieldCheck className="h-4 w-4 text-zinc-500" />;
+            default: return <User className="h-4 w-4 text-zinc-500" />;
         }
     };
 
@@ -195,7 +195,7 @@ export default function SessionAccessPage() {
         return (
             <div className="flex items-center justify-center p-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-muted-foreground">Loading sessions...</span>
+                <span className="ml-2 text-muted-foreground">Carregando sessões...</span>
             </div>
         );
     }
@@ -206,10 +206,11 @@ export default function SessionAccessPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                        <Lock className="h-5 w-5 sm:h-6 sm:w-6" /> Session Access
+                        <Lock className="h-5 w-5 sm:h-6 sm:w-6" />  Acesso às sessões
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Share your WhatsApp sessions with other users
+                        
+                        Compartilhe suas sessões de WhatsApp com outros usuários
                     </p>
                 </div>
             </div>
@@ -217,26 +218,28 @@ export default function SessionAccessPage() {
             {/* Session Selector */}
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Select Session</CardTitle>
+                    <CardTitle className="text-base">Selecionar sessão</CardTitle>
                     <CardDescription>
-                        Choose a session you own to manage its shared access
+                        
+                        Escolha uma sessão sua para gerenciar o acesso compartilhado
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {sessions.length === 0 ? (
                         <p className="text-sm text-muted-foreground">
-                            You don&apos;t have any sessions. Create a session first.
+                            
+                            Você não tem nenhuma sessão. Crie uma sessão primeiro.
                         </p>
                     ) : (
                         <Select value={selectedSession} onValueChange={setSelectedSession}>
                             <SelectTrigger className="w-full sm:w-[360px]">
-                                <SelectValue placeholder="Select a session" />
+                                <SelectValue placeholder="Selecione uma sessão" />
                             </SelectTrigger>
                             <SelectContent>
                                 {sessions.map(s => (
                                     <SelectItem key={s.sessionId} value={s.sessionId}>
                                         <div className="flex items-center gap-2">
-                                            <span className={`h-2 w-2 rounded-full ${s.status === "CONNECTED" ? "bg-green-500" : "bg-gray-400"}`} />
+                                            <span className={`h-2 w-2 rounded-full ${s.status === "CONNECTED" ? "bg-green-500" : "bg-zinc-400"}`} />
                                             {s.name} <span className="text-muted-foreground">({s.sessionId})</span>
                                         </div>
                                     </SelectItem>
@@ -252,20 +255,21 @@ export default function SessionAccessPage() {
                 <Card className="border-2 border-primary/20">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
-                            <UserPlus className="h-4 w-4" /> Grant Access
+                            <UserPlus className="h-4 w-4" />  Conceder acesso
                         </CardTitle>
                         <CardDescription>
-                            Enter the email address of the user you want to give access to
+                            
+                            Informe o e-mail do usuário a quem deseja dar acesso
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleGrantAccess} className="flex flex-col sm:flex-row gap-3">
                             <div className="flex-1 space-y-1.5">
-                                <Label htmlFor="email" className="sr-only">Email</Label>
+                                <Label htmlFor="email" className="sr-only">E-mail</Label>
                                 <Input
                                     id="email"
                                     type="email"
-                                    placeholder="user@example.com"
+                                    placeholder="usuario@exemplo.com"
                                     value={email}
                                     onChange={e => setEmail(e.target.value)}
                                     required
@@ -274,9 +278,9 @@ export default function SessionAccessPage() {
                             </div>
                             <Button type="submit" disabled={submitting || !email.trim()}>
                                 {submitting ? (
-                                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Granting...</>
+                                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" />  Concedendo...</>
                                 ) : (
-                                    <><UserPlus className="h-4 w-4 mr-2" /> Grant Access</>
+                                    <><UserPlus className="h-4 w-4 mr-2" />  Conceder acesso</>
                                 )}
                             </Button>
                         </form>
@@ -289,21 +293,22 @@ export default function SessionAccessPage() {
                 <Card>
                     <CardHeader className="pb-3">
                         <CardTitle className="text-base flex items-center gap-2">
-                            <Users className="h-4 w-4" /> Users with Access
-                            <Badge variant="outline" className="ml-auto">{accessList.length} user{accessList.length !== 1 ? "s" : ""}</Badge>
+                            <Users className="h-4 w-4" />  Usuários com acesso
+                            <Badge variant="outline" className="ml-auto">{accessList.length}  usuário{accessList.length !== 1 ? "s" : ""}</Badge>
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {accessLoading ? (
                             <div className="flex items-center justify-center py-8">
                                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
+                                <span className="ml-2 text-sm text-muted-foreground">Carregando...</span>
                             </div>
                         ) : accessList.length === 0 ? (
                             <div className="text-center py-8">
                                 <Shield className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
                                 <p className="text-sm text-muted-foreground">
-                                    No users have been granted access to this session yet.
+                                    
+                                    Nenhum usuário recebeu acesso a esta sessão ainda.
                                 </p>
                             </div>
                         ) : (
@@ -314,12 +319,12 @@ export default function SessionAccessPage() {
                                         className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
                                     >
                                         <div className="flex items-center gap-3 min-w-0">
-                                            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-blue-500/20 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
+                                            <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-zinc-500/20 flex items-center justify-center text-sm font-bold text-primary flex-shrink-0">
                                                 {entry.user.name?.charAt(0)?.toUpperCase() || entry.user.email.charAt(0).toUpperCase()}
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="font-medium text-sm truncate">
-                                                    {entry.user.name || "User"}
+                                                    {entry.user.name || "Usuário"}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground truncate">
                                                     {entry.user.email}
@@ -339,7 +344,7 @@ export default function SessionAccessPage() {
                                                 variant="ghost"
                                                 className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0"
                                                 onClick={() => setRevokeTarget(entry)}
-                                                title="Revoke access"
+                                                title="Revogar acesso"
                                             >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
@@ -356,18 +361,18 @@ export default function SessionAccessPage() {
             <AlertDialog open={!!revokeTarget} onOpenChange={(open) => !open && setRevokeTarget(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Revoke Access?</AlertDialogTitle>
+                        <AlertDialogTitle>Revogar acesso?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to revoke access for{" "}
-                            <strong>{revokeTarget?.user.name || revokeTarget?.user.email}</strong>?
-                            They will no longer be able to view or use this session.
-                            This action can be undone by granting access again.
+                            
+                            Tem certeza de que deseja revogar o acesso de{" "}
+                            <strong>{revokeTarget?.user.name || revokeTarget?.user.email}</strong>? Essa pessoa não poderá mais ver nem usar esta sessão. A ação pode ser desfeita concedendo o acesso novamente.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmRevoke} className="bg-red-600 hover:bg-red-700">
-                            Revoke Access
+                            
+                            Revogar acesso
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

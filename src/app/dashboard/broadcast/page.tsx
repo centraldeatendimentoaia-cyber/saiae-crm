@@ -54,6 +54,33 @@ export default function BroadcastPage() {
     const { sessionId } = useSession();
     const [contacts, setContacts] = useState("");
     const [message, setMessage] = useState("");
+
+    const [aiObjective, setAiObjective] = useState("");
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiCopies, setAiCopies] = useState<string[]>([]);
+
+    const generateCopies = async () => {
+        if (aiObjective.trim().length < 3) {
+            toast.error("Descreva o que você quer comunicar");
+            return;
+        }
+        setAiLoading(true);
+        setAiCopies([]);
+        try {
+            const res = await fetch("/api/ai/copy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ objective: aiObjective }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.status) throw new Error(data.error || "Falha ao gerar o texto");
+            setAiCopies(data.copies);
+        } catch (e: any) {
+            toast.error(e.message || "Falha ao gerar o texto");
+        } finally {
+            setAiLoading(false);
+        }
+    };
     const [delay, setDelay] = useState([2000]);
     const [loading, setLoading] = useState(false);
     const [broadcastProgress, setBroadcastProgress] = useState<BroadcastProgress | null>(null);
@@ -138,8 +165,8 @@ export default function BroadcastPage() {
     };
 
     const handleSend = async () => {
-        if (!sessionId) return toast.error("No active session found");
-        if (!message.trim()) return toast.error("Message cannot be empty");
+        if (!sessionId) return toast.error("Nenhuma sessão ativa encontrada");
+        if (!message.trim()) return toast.error("A mensagem não pode estar vazia");
         setLoading(true);
         setBroadcastProgress(null);
 
@@ -150,7 +177,7 @@ export default function BroadcastPage() {
             });
 
             if (recipients.length === 0) {
-                toast.error("No recipients specified");
+                toast.error("Nenhum destinatário informado");
                 setLoading(false);
                 return;
             }
@@ -175,7 +202,7 @@ export default function BroadcastPage() {
             }
         } catch (e) {
             console.error(e);
-            toast.error("Error sending broadcast");
+            toast.error("Erro ao enviar o disparo");
             setLoading(false);
         }
     };
@@ -192,16 +219,16 @@ export default function BroadcastPage() {
     };
 
     const tabs = [
-        { id: "new" as const, label: "New Broadcast", icon: Send },
-        { id: "history" as const, label: "History", icon: History },
+        { id: "new" as const, label: "Novo disparo", icon: Send },
+        { id: "history" as const, label: "Histórico", icon: History },
     ];
 
     return (
         <SessionGuard>
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-xl sm:text-3xl font-bold tracking-tight">Broadcast / Blast</h2>
-                    <p className="text-muted-foreground text-sm mt-1">Send bulk messages to multiple recipients at once.</p>
+                    <h2 className="text-xl sm:text-3xl font-bold tracking-tight">Disparo em massa</h2>
+                    <p className="text-muted-foreground text-sm mt-1">Envie mensagens em massa para vários destinatários de uma vez.</p>
                 </div>
 
                 {/* Tabs */}
@@ -228,20 +255,20 @@ export default function BroadcastPage() {
                             {/* Recipients Card */}
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Recipients</CardTitle>
-                                    <CardDescription>Enter phone numbers separated by comma or new line.</CardDescription>
+                                    <CardTitle>Destinatários</CardTitle>
+                                    <CardDescription>Informe os números de telefone separados por vírgula ou quebra de linha.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label>Target Numbers (e.g., 628123456789)</Label>
+                                        <Label>Números de destino (ex.: 5511999999999)</Label>
                                         <Textarea
-                                            placeholder={"628123456789\n628987654321"}
+                                            placeholder={"5511999999999\n5511988888888"}
                                             className="min-h-[200px] font-mono text-sm"
                                             value={contacts}
                                             onChange={e => setContacts(e.target.value)}
                                             disabled={loading}
                                         />
-                                        <p className="text-xs text-muted-foreground">{recipientCount} numbers identified</p>
+                                        <p className="text-xs text-muted-foreground">{recipientCount}  números identificados</p>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -249,23 +276,65 @@ export default function BroadcastPage() {
                             {/* Message Card */}
                             <Card>
                                 <CardHeader>
-                                    <CardTitle>Message Content</CardTitle>
+                                    <CardTitle>Conteúdo da mensagem</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label>Message</Label>
+                                        <Label>Mensagem</Label>
                                         <Textarea
-                                            placeholder="Type your message here..."
+                                            placeholder="Digite sua mensagem aqui..."
                                             className="min-h-[150px]"
                                             value={message}
                                             onChange={e => setMessage(e.target.value)}
                                             disabled={loading}
                                         />
+                                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                                            <span className="text-xs text-muted-foreground">Inserir:</span>
+                                            <Button type="button" size="sm" variant="outline" disabled={loading}
+                                                onClick={() => setMessage(m => (m ? m + " " : "") + "{primeironome}")}>
+                                                {"{primeironome}"}
+                                            </Button>
+                                            <Button type="button" size="sm" variant="outline" disabled={loading}
+                                                onClick={() => setMessage(m => (m ? m + " " : "") + "{nome}")}>
+                                                {"{nome}"}
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Cada cliente recebe o próprio nome (ex.: "Oi, {"{primeironome}"}!" vira "Oi, Maria!"). Se o nome não for conhecido, a variável some sozinha. Para escolher um texto reserva, use {"{primeironome|cliente}"}.
+                                        </p>
+                                    </div>
+
+                                    <div className="space-y-3 border border-border p-4">
+                                        <p className="kicker">Gerar texto com IA</p>
+                                        <div className="flex gap-2">
+                                            <input
+                                                className="flex-1 border-0 border-b border-input bg-transparent py-2 text-sm outline-none focus:border-foreground"
+                                                placeholder="Ex.: promoção de hidratação em outubro para clientes antigas"
+                                                value={aiObjective}
+                                                onChange={e => setAiObjective(e.target.value)}
+                                                onKeyDown={e => { if (e.key === "Enter") generateCopies(); }}
+                                                disabled={aiLoading || loading}
+                                            />
+                                            <Button type="button" size="sm" variant="secondary" onClick={generateCopies} disabled={aiLoading || loading}>
+                                                {aiLoading ? "Gerando..." : "Gerar"}
+                                            </Button>
+                                        </div>
+                                        {aiCopies.map((c, i) => (
+                                            <button
+                                                key={i}
+                                                type="button"
+                                                onClick={() => setMessage(c)}
+                                                className="block w-full border border-border p-3 text-left text-sm whitespace-pre-wrap hover:border-foreground transition-colors"
+                                            >
+                                                {c}
+                                                <span className="kicker mt-2 block">Clique para usar esta versão</span>
+                                            </button>
+                                        ))}
                                     </div>
 
                                     <div className="space-y-4 pt-4">
                                         <div className="space-y-2">
-                                            <Label>Delay: {(delay[0] / 1000).toFixed(1)}s</Label>
+                                            <Label>Intervalo: {(delay[0] / 1000).toFixed(1)}s</Label>
                                             <Slider
                                                 defaultValue={[2000]}
                                                 min={1000}
@@ -275,7 +344,7 @@ export default function BroadcastPage() {
                                                 onValueChange={setDelay}
                                                 disabled={loading}
                                             />
-                                            <p className="text-xs text-muted-foreground">Delay antar pesan (+ random).</p>
+                                            <p className="text-xs text-muted-foreground">Intervalo entre mensagens (+ aleatório).</p>
                                         </div>
 
                                         <Button
@@ -284,7 +353,7 @@ export default function BroadcastPage() {
                                             disabled={loading || !sessionId || recipientCount === 0 || !message.trim()}
                                         >
                                             {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                                            {loading ? "Broadcasting..." : "Start Broadcast"}
+                                            {loading ? "Disparando..." : "Iniciar disparo"}
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -296,16 +365,16 @@ export default function BroadcastPage() {
                             <Card className={`border-2 transition-colors ${
                                 broadcastProgress.status === "completed"
                                     ? (broadcastProgress.failed === 0 ? "border-green-500/30 bg-green-50/30 dark:bg-green-950/10" : "border-yellow-500/30 bg-yellow-50/30 dark:bg-yellow-950/10")
-                                    : "border-blue-500/30 bg-blue-50/30 dark:bg-blue-950/10"
+                                    : "border-zinc-500/30 bg-zinc-50/30 dark:bg-zinc-950/10"
                             }`}>
                                 <CardHeader className="pb-3">
                                     <CardTitle className="flex items-center gap-2 text-lg">
                                         {broadcastProgress.status === "running" ? (
-                                            <><Radio className="h-5 w-5 text-blue-500 animate-pulse" /><span>Broadcast In Progress</span></>
+                                            <><Radio className="h-5 w-5 text-zinc-500 animate-pulse" /><span>Disparo em andamento</span></>
                                         ) : broadcastProgress.failed === 0 ? (
-                                            <><CheckCircle2 className="h-5 w-5 text-green-500" /><span>Broadcast Completed</span></>
+                                            <><CheckCircle2 className="h-5 w-5 text-green-500" /><span>Disparo concluído</span></>
                                         ) : (
-                                            <><AlertTriangle className="h-5 w-5 text-yellow-500" /><span>Broadcast Completed with Errors</span></>
+                                            <><AlertTriangle className="h-5 w-5 text-yellow-500" /><span>Disparo concluído com erros</span></>
                                         )}
                                     </CardTitle>
                                     <CardDescription>ID: {broadcastProgress.broadcastId}</CardDescription>
@@ -313,7 +382,7 @@ export default function BroadcastPage() {
                                 <CardContent className="space-y-4">
                                     <div className="space-y-2">
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Progress</span>
+                                            <span className="text-muted-foreground">Progresso</span>
                                             <span className="font-mono font-medium">
                                                 {broadcastProgress.sent + broadcastProgress.failed} / {broadcastProgress.total} ({broadcastProgress.progress || 0}%)
                                             </span>
@@ -325,13 +394,13 @@ export default function BroadcastPage() {
                                         <div className="bg-background rounded-lg p-3 text-center border">
                                             <div className="text-2xl font-bold text-green-600">{broadcastProgress.sent}</div>
                                             <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <CheckCircle2 className="h-3 w-3" /> Sent
+                                                <CheckCircle2 className="h-3 w-3" />  Enviadas
                                             </div>
                                         </div>
                                         <div className="bg-background rounded-lg p-3 text-center border">
                                             <div className="text-2xl font-bold text-red-500">{broadcastProgress.failed}</div>
                                             <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <XCircle className="h-3 w-3" /> Failed
+                                                <XCircle className="h-3 w-3" />  Falhas
                                             </div>
                                         </div>
                                         <div className="bg-background rounded-lg p-3 text-center border">
@@ -339,15 +408,15 @@ export default function BroadcastPage() {
                                                 {broadcastProgress.total - broadcastProgress.sent - broadcastProgress.failed}
                                             </div>
                                             <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <Clock className="h-3 w-3" /> Pending
+                                                <Clock className="h-3 w-3" />  Pendentes
                                             </div>
                                         </div>
                                     </div>
 
                                     {broadcastProgress.status === "running" && broadcastProgress.current && (
                                         <div className="flex items-center gap-2 text-sm px-3 py-2 bg-muted/50 rounded-lg">
-                                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-blue-500" />
-                                            <span className="text-muted-foreground">Now sending:</span>
+                                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-500" />
+                                            <span className="text-muted-foreground">Enviando agora:</span>
                                             <span className="font-mono font-medium">{formatJid(broadcastProgress.current)}</span>
                                         </div>
                                     )}
@@ -355,7 +424,7 @@ export default function BroadcastPage() {
                                     {broadcastProgress.status === "completed" && broadcastProgress.errors && broadcastProgress.errors.length > 0 && (
                                         <div className="space-y-2">
                                             <h4 className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
-                                                <XCircle className="h-4 w-4" /> Failed ({broadcastProgress.errors.length})
+                                                <XCircle className="h-4 w-4" />  Falhas ({broadcastProgress.errors.length})
                                             </h4>
                                             <div className="max-h-40 overflow-y-auto bg-red-50 dark:bg-red-950/30 rounded-lg p-2 space-y-1">
                                                 {broadcastProgress.errors.map((err, i) => (
@@ -378,9 +447,10 @@ export default function BroadcastPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <History className="h-5 w-5" />
-                                Broadcast History
+                                
+                                Histórico de disparos
                             </CardTitle>
-                            <CardDescription>History of sent broadcasts, stored permanently.</CardDescription>
+                            <CardDescription>Histórico dos disparos enviados, armazenado permanentemente.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             {historyLoading ? (
@@ -389,7 +459,7 @@ export default function BroadcastPage() {
                                 </div>
                             ) : history.length === 0 ? (
                                 <div className="text-center py-8 text-muted-foreground">
-                                    <p className="text-sm">Belum ada broadcast.</p>
+                                    <p className="text-sm">Nenhum disparo realizado ainda.</p>
                                 </div>
                             ) : (
                                 <div className="space-y-2">
@@ -404,7 +474,7 @@ export default function BroadcastPage() {
                                                         ? <CheckCircle2 className="h-8 w-8 text-green-500" />
                                                         : <AlertTriangle className="h-8 w-8 text-yellow-500" />
                                                 ) : (
-                                                    <Radio className="h-8 w-8 text-blue-500 animate-pulse" />
+                                                    <Radio className="h-8 w-8 text-zinc-500 animate-pulse" />
                                                 )}
                                             </div>
 
@@ -426,7 +496,7 @@ export default function BroadcastPage() {
 
                                             {/* View button */}
                                             <Button variant="ghost" size="sm" className="shrink-0" onClick={() => openDetail(log)}>
-                                                <Eye className="h-4 w-4 mr-1" /> Detail
+                                                <Eye className="h-4 w-4 mr-1" />  Detalhes
                                             </Button>
                                         </div>
                                     ))}
@@ -443,9 +513,10 @@ export default function BroadcastPage() {
                             <DialogTitle className="flex items-center gap-2">
                                 {selectedLog?.status === "completed"
                                     ? <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                    : <Radio className="h-5 w-5 text-blue-500 animate-pulse" />
+                                    : <Radio className="h-5 w-5 text-zinc-500 animate-pulse" />
                                 }
-                                Broadcast Detail
+                                
+                                Detalhes do disparo
                             </DialogTitle>
                         </DialogHeader>
 
@@ -459,11 +530,11 @@ export default function BroadcastPage() {
                                 <div className="grid grid-cols-3 gap-3">
                                     <div className="bg-muted/30 rounded-lg p-3 text-center">
                                         <div className="text-xl font-bold text-green-600">{selectedLog.sent}</div>
-                                        <div className="text-xs text-muted-foreground">Sent</div>
+                                        <div className="text-xs text-muted-foreground">Enviadas</div>
                                     </div>
                                     <div className="bg-muted/30 rounded-lg p-3 text-center">
                                         <div className="text-xl font-bold text-red-500">{selectedLog.failed}</div>
-                                        <div className="text-xs text-muted-foreground">Failed</div>
+                                        <div className="text-xs text-muted-foreground">Falhas</div>
                                     </div>
                                     <div className="bg-muted/30 rounded-lg p-3 text-center">
                                         <div className="text-xl font-bold">{selectedLog.total}</div>
@@ -473,20 +544,20 @@ export default function BroadcastPage() {
 
                                 {/* Message */}
                                 <div className="bg-muted/30 rounded-lg p-3">
-                                    <p className="text-xs text-muted-foreground mb-1">Message:</p>
+                                    <p className="text-xs text-muted-foreground mb-1">Mensagem:</p>
                                     <p className="text-sm whitespace-pre-wrap break-words">{selectedLog.message}</p>
                                 </div>
 
                                 {/* Time */}
                                 <div className="flex gap-4 text-xs text-muted-foreground">
-                                    <span>Started: {formatTime(selectedLog.startedAt)}</span>
-                                    {selectedLog.completedAt && <span>Completed: {formatTime(selectedLog.completedAt)}</span>}
+                                    <span>Iniciado em: {formatTime(selectedLog.startedAt)}</span>
+                                    {selectedLog.completedAt && <span>Concluído em: {formatTime(selectedLog.completedAt)}</span>}
                                 </div>
 
                                 {/* Recipients list */}
                                 {selectedLog.recipients && selectedLog.recipients.length > 0 && (
                                     <div className="flex-1 overflow-y-auto min-h-0">
-                                        <h4 className="text-sm font-semibold mb-2">Recipients ({selectedLog.recipients.length})</h4>
+                                        <h4 className="text-sm font-semibold mb-2">Destinatários ({selectedLog.recipients.length})</h4>
                                         <div className="space-y-1">
                                             {selectedLog.recipients.map(r => (
                                                 <div key={r.id}

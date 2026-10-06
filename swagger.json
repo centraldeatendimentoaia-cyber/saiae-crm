@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "WA-AKG API Documentation",
+    "title": "Saiaê API Documentation",
     "version": "1.2.0",
     "description": "\n# WhatsApp AI Gateway - Complete API Reference\n\nProfessional WhatsApp Gateway with **64 API endpoints** for complete WhatsApp automation.\n\n## 🔐 Authentication\nAll endpoints require authentication via:\n1. **API Key Header**: `X-API-Key: your-api-key`\n2. **Session Cookie**: `next-auth.session-token` (automatically sent by browser)\n\n## 📋 Common Parameters\n- **sessionId**: Unique session identifier (e.g., \"mysession-01\")\n- **jid**: WhatsApp JID format:\n  - Personal: `628123456789@s.whatsapp.net`\n  - Group: `120363123456789@g.us`\n\n## 📊 Rate Limits\n- Phone check: Max 50 numbers per request\n- Broadcast: 10-20s random delay between messages\n- Message history: Max 100 messages\n                "
   },
@@ -1542,7 +1542,7 @@
                       "sticker": {
                         "url": "https://example.com/sticker.webp",
                         "pack": "My Stickers",
-                        "author": "WA-AKG"
+                        "author": "Saiaê"
                       }
                     }
                   }
@@ -1581,7 +1581,7 @@
                       "id": "3EB01234567890"
                     },
                     "message": {
-                      "conversation": "Hello from WA-AKG!"
+                      "conversation": "Hello from Saiaê!"
                     },
                     "messageTimestamp": "1678901234"
                   }
@@ -2933,7 +2933,7 @@
                   },
                   "pack": {
                     "type": "string",
-                    "description": "Sticker pack name (default: WA-AKG)"
+                    "description": "Sticker pack name (default: Saiaê)"
                   },
                   "author": {
                     "type": "string",
@@ -6968,7 +6968,7 @@
                     },
                     "appName": {
                       "type": "string",
-                      "example": "WA-AKG"
+                      "example": "Saiaê"
                     },
                     "logoUrl": {
                       "type": "string",

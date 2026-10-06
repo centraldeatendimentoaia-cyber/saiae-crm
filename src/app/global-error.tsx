@@ -26,13 +26,16 @@ export default function GlobalError({
           {/* Text Content */}
           <div className="relative text-center mb-10 w-full" suppressHydrationWarning>
             <h1 className="text-5xl font-black tracking-tight text-destructive mb-3 drop-shadow-sm" suppressHydrationWarning>
-              Fatal Error
+              
+              Erro fatal
             </h1>
             <h2 className="text-xl font-bold text-foreground mb-4" suppressHydrationWarning>
-              Sistem Mengalami Kendala Kritis
+              
+              O sistema encontrou um problema crítico
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto" suppressHydrationWarning>
-              Aplikasi mengalami kesalahan pada konfigurasi dasar. Silakan muat ulang sistem.
+              
+              O aplicativo teve um erro na configuração básica. Recarregue o sistema.
             </p>
           </div>
 
@@ -43,7 +46,7 @@ export default function GlobalError({
               className="w-full flex-1 flex items-center justify-center gap-2 h-12 bg-destructive hover:bg-destructive/90 text-destructive-foreground font-medium rounded-xl transition-all shadow-lg shadow-destructive/20 active:scale-95 duration-150"
             >
               <RotateCcw className="size-4" />
-              <span>Muat Ulang Aplikasi</span>
+              <span>Recarregar aplicativo</span>
             </button>
           </div>
 

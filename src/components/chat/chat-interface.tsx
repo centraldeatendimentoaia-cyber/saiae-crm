@@ -10,7 +10,8 @@ export function ChatInterface({ sessionId }: ChatInterfaceProps) {
     if (!sessionId) {
         return (
             <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
-                No active WhatsApp session selected. Please select a session from the top bar.
+                
+                Nenhuma sessão de WhatsApp ativa selecionada. Selecione uma sessão na barra superior.
             </div>
         );
     }

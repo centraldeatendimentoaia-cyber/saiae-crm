@@ -13,7 +13,7 @@ export default async function ChatWithJidPage({
     const { jid: rawJid } = await params;
     const session = await auth();
 
-    if (!session?.user?.id) return <div>Unauthorized</div>;
+    if (!session?.user?.id) return <div>Não autorizado</div>;
 
     let clean = rawJid.replace(/\D/g, '');
     if (clean.startsWith('0')) clean = '62' + clean.substring(1);

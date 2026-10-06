@@ -5,18 +5,18 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive transition-[color,box-shadow] overflow-hidden",
+  "inline-flex items-center justify-center gap-1 rounded-full h-7 px-3 text-[13px] font-bold w-fit whitespace-nowrap shrink-0 [&>svg]:size-4 [&>svg]:pointer-events-none",
   {
     variants: {
       variant: {
-        default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
-        destructive:
-          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
-        outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // Etiqueta de destaque: tinta + mostarda, canto balão
+        default: "rounded-balao h-auto bg-foreground text-brand uppercase tracking-[0.04em] text-xs py-1.5 px-3 [a&]:hover:bg-foreground/90",
+        secondary: "bg-muted text-secondary-foreground [a&]:hover:bg-muted/70",
+        destructive: "bg-err-bg text-err-tx",
+        outline: "border border-input bg-card text-foreground [a&]:hover:bg-muted",
+        success: "bg-ok-bg text-ok-tx",
+        warning: "bg-warn-bg text-warn-tx",
+        info: "bg-info-bg text-info-tx",
       },
     },
     defaultVariants: {

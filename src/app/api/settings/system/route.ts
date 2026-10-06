@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
             where: { id: "default" }
         });
 
-        return NextResponse.json({ status: true, message: "System config fetched", data: config || { appName: "WA-AKG", faviconUrl: "/favicon.ico" } });
+        return NextResponse.json({ status: true, message: "System config fetched", data: config || { appName: "Saiaê", faviconUrl: "/favicon.ico" } });
     } catch (error) {
         return NextResponse.json({ status: false, message: "Failed to fetch settings", error: "Failed to fetch settings" }, { status: 500 });
     }
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
         const config = await prisma.systemConfig.upsert({
             where: { id: "default" },
             update: { appName, logoUrl, faviconUrl, timezone, enableRegistration: enableRegistration ?? true },
-            create: { id: "default", appName, logoUrl: logoUrl || "", faviconUrl: faviconUrl || "/favicon.ico", timezone: timezone || "Asia/Jakarta", enableRegistration: enableRegistration ?? true }
+            create: { id: "default", appName, logoUrl: logoUrl || "", faviconUrl: faviconUrl || "/favicon.ico", timezone: timezone || "America/Sao_Paulo", enableRegistration: enableRegistration ?? true }
         });
 
         return NextResponse.json({ status: true, message: "System settings updated", data: config });

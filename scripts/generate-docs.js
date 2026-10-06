@@ -47,7 +47,7 @@ function generateExample(schema, root, depth = 0) {
         case 'number': return 0;
         case 'integer': return 0;
         case 'boolean': return true;
-        case 'object': return { text: "Hello from WA-AKG!" };
+        case 'object': return { text: "Hello from Saiaê!" };
         default: return null;
     }
 }
@@ -117,7 +117,7 @@ function generateFieldsTable(schema, root, requiredFields) {
 }
 
 let md = '';
-md += `# WA-AKG API Documentation\n\n`;
+md += `# Saiaê API Documentation\n\n`;
 md += `# WhatsApp AI Gateway — Complete API Reference\n\n`;
 md += `Professional WhatsApp Gateway REST API with **${Object.keys(swagger.paths).length} routes** for complete WhatsApp automation.\n\n`;
 

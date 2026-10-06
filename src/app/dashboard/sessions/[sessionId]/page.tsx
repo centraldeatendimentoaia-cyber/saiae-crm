@@ -56,7 +56,7 @@ export default function SessionDetailPage() {
             const res = await fetch(`/api/sessions/${sessionId}`);
             if (!res.ok) {
                 if (res.status === 404) {
-                    toast.error("Session not found");
+                    toast.error("Sessão não encontrada");
                     router.push("/dashboard/sessions");
                     return;
                 }
@@ -71,7 +71,7 @@ export default function SessionDetailPage() {
             setUptime(data.uptime || 0);
         } catch (error) {
             console.error(error);
-            toast.error("Failed to load session details");
+            toast.error("Falha ao carregar os detalhes da sessão");
         } finally {
             setLoading(false);
         }
@@ -165,7 +165,7 @@ export default function SessionDetailPage() {
 
     const handlePairingRequest = async () => {
         if (!phoneNumber) {
-            toast.error("Please enter a phone number");
+            toast.error("Informe um número de telefone");
             return;
         }
         setIsPairing(true);
@@ -175,20 +175,20 @@ export default function SessionDetailPage() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text);
-        toast.success("Copied to clipboard");
+        toast.success("Copiado para a área de transferência");
     };
 
     const deleteSession = async () => {
         try {
             const res = await fetch(`/api/sessions/${sessionId}/settings`, { method: 'DELETE' });
             if (res.ok) {
-                toast.success("Session deleted");
+                toast.success("Sessão excluída");
                 router.push("/dashboard/sessions");
             } else {
-                toast.error("Failed to delete");
+                toast.error("Falha ao excluir");
             }
         } catch (e) {
-            toast.error("Error deleting session");
+            toast.error("Erro ao excluir a sessão");
         }
     };
 
@@ -201,19 +201,19 @@ export default function SessionDetailPage() {
         return `${d}d ${h}h ${m}m ${s}s`;
     };
 
-    if (loading) return <div className="p-8">Loading...</div>;
-    if (!session) return <div className="p-8">Session not found</div>;
+    if (loading) return <div className="p-8">Carregando...</div>;
+    if (!session) return <div className="p-8">Sessão não encontrada</div>;
 
     return (
         <div className="max-w-4xl mx-auto space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
                 <Button variant="ghost" asChild className="self-start">
                     <Link href="/dashboard/sessions">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Sessions
+                        <ArrowLeft className="mr-2 h-4 w-4" />  Voltar às sessões
                     </Link>
                 </Button>
                 <h1 className="text-xl sm:text-2xl font-bold truncate">
-                    {session.name} <span className="text-gray-400 font-normal text-xs sm:text-sm block sm:inline mt-1 sm:mt-0">({session.sessionId})</span>
+                    {session.name} <span className="text-zinc-400 font-normal text-xs sm:text-sm block sm:inline mt-1 sm:mt-0">({session.sessionId})</span>
                 </h1>
             </div>
 
@@ -222,7 +222,8 @@ export default function SessionDetailPage() {
                 <Card className="md:col-span-2">
                     <CardHeader>
                         <CardTitle className="flex items-center justify-between">
-                            Session Status
+                            
+                            Status da sessão
                             <div className={`px-3 py-1 rounded-full text-xs font-bold ${session.status === 'CONNECTED' ? 'bg-green-100 text-green-700' :
                                 session.status === 'STOPPED' ? 'bg-red-100 text-red-700' :
                                     'bg-yellow-100 text-yellow-700'
@@ -230,16 +231,16 @@ export default function SessionDetailPage() {
                                 {session.status}
                             </div>
                         </CardTitle>
-                        <CardDescription>Real-time connection status and uptime.</CardDescription>
+                        <CardDescription>Status da conexão e tempo de atividade em tempo real.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-gray-50 rounded-lg">
-                                <span className="text-sm text-gray-500 block">Uptime</span>
+                            <div className="p-4 bg-zinc-50 rounded-lg">
+                                <span className="text-sm text-zinc-500 block">Tempo ativo</span>
                                 <span className="text-xl font-mono font-medium">{formatUptime(uptime)}</span>
                             </div>
-                            <div className="p-4 bg-gray-50 rounded-lg">
-                                <span className="text-sm text-gray-500 block">Connected As</span>
+                            <div className="p-4 bg-zinc-50 rounded-lg">
+                                <span className="text-sm text-zinc-500 block">Conectado como</span>
                                 <span className="text-lg font-medium truncate">{session.me?.name || session.me?.id || "-"}</span>
                             </div>
                         </div>
@@ -247,25 +248,25 @@ export default function SessionDetailPage() {
                         {/* System Resource Extension */}
                         {session.status === 'CONNECTED' && systemMetrics && (
                             <div className="mt-4 pt-4 border-t">
-                                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Activity className="h-4 w-4" /> System Health</h4>
+                                <h4 className="text-sm font-semibold mb-3 flex items-center gap-2"><Activity className="h-4 w-4" />  Saúde do sistema</h4>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div className="bg-slate-50 p-3 rounded border text-center relative overflow-hidden">
-                                        <Wifi className="h-4 w-4 text-slate-400 absolute top-2 right-2" />
-                                        <div className="text-xs text-slate-500">Ping state</div>
+                                    <div className="bg-zinc-50 p-3 rounded border text-center relative overflow-hidden">
+                                        <Wifi className="h-4 w-4 text-zinc-400 absolute top-2 right-2" />
+                                        <div className="text-xs text-zinc-500">Estado do ping</div>
                                         <div className="font-bold text-green-600 mt-1">{systemMetrics.ping}</div>
                                     </div>
-                                    <div className="bg-slate-50 p-3 rounded border text-center">
-                                        <div className="text-xs text-slate-500">Store Contacts</div>
-                                        <div className="font-bold text-slate-700 mt-1">{systemMetrics.store?.contacts || 0}</div>
+                                    <div className="bg-zinc-50 p-3 rounded border text-center">
+                                        <div className="text-xs text-zinc-500">Contatos salvos</div>
+                                        <div className="font-bold text-zinc-700 mt-1">{systemMetrics.store?.contacts || 0}</div>
                                     </div>
-                                    <div className="bg-slate-50 p-3 rounded border text-center">
-                                        <div className="text-xs text-slate-500">Store Chats</div>
-                                        <div className="font-bold text-slate-700 mt-1">{systemMetrics.store?.chats || 0}</div>
+                                    <div className="bg-zinc-50 p-3 rounded border text-center">
+                                        <div className="text-xs text-zinc-500">Conversas salvas</div>
+                                        <div className="font-bold text-zinc-700 mt-1">{systemMetrics.store?.chats || 0}</div>
                                     </div>
-                                    <div className="bg-slate-50 p-3 rounded border text-center relative">
-                                        <MemoryStick className="h-4 w-4 text-slate-400 absolute top-2 right-2 opacity-50" />
-                                        <div className="text-xs text-slate-500">Store Msgs</div>
-                                        <div className="font-bold text-slate-700 mt-1">{systemMetrics.store?.messages || 0}</div>
+                                    <div className="bg-zinc-50 p-3 rounded border text-center relative">
+                                        <MemoryStick className="h-4 w-4 text-zinc-400 absolute top-2 right-2 opacity-50" />
+                                        <div className="text-xs text-zinc-500">Mensagens salvas</div>
+                                        <div className="font-bold text-zinc-700 mt-1">{systemMetrics.store?.messages || 0}</div>
                                     </div>
                                 </div>
                             </div>
@@ -274,11 +275,11 @@ export default function SessionDetailPage() {
                         {qrCode && (
                             <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg bg-white relative group">
                                 <QRCodeSVG value={qrCode} size={256} />
-                                <p className="mt-4 text-sm text-gray-500 animate-pulse">Scan with WhatsApp to connect</p>
+                                <p className="mt-4 text-sm text-zinc-500 animate-pulse">Escaneie com o WhatsApp para conectar</p>
 
                                 <div className="mt-6 pt-6 border-t w-full">
                                     <div className="flex flex-col items-center gap-3">
-                                        <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Or link with phone number</div>
+                                        <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Ou vincule com o número de telefone</div>
                                         <div className="flex flex-col w-full max-w-sm gap-2 mt-1">
                                             <div className="flex gap-2">
                                                 <Input
@@ -288,35 +289,36 @@ export default function SessionDetailPage() {
                                                     className="font-mono"
                                                 />
                                                 <Button onClick={handlePairingRequest} disabled={isPairing || !phoneNumber}>
-                                                    Link
+                                                    
+                                                    Vincular
                                                 </Button>
                                             </div>
-                                            <p className="text-[10px] text-muted-foreground text-center">Use country code without + or spaces (e.g., 628123456789)</p>
+                                            <p className="text-[10px] text-muted-foreground text-center">Use o código do país sem + nem espaços (ex.: 5511999999999)</p>
                                         </div>
                                         {pairingCode && (
-                                            <div className="mt-4 p-4 bg-slate-900 rounded-lg w-full max-w-[320px] text-center border-2 border-slate-700 shadow-xl relative group/code">
-                                                <div className="text-[10px] text-slate-400 uppercase tracking-[0.2em] mb-2 font-semibold">Your Pairing Code</div>
+                                            <div className="mt-4 p-4 bg-zinc-900 rounded-lg w-full max-w-[320px] text-center border-2 border-zinc-700 shadow-xl relative group/code">
+                                                <div className="text-[10px] text-zinc-400 uppercase tracking-[0.2em] mb-2 font-semibold">Seu código de pareamento</div>
                                                 <div
-                                                    className="text-3xl font-mono font-bold text-white tracking-[0.3em] flex justify-center cursor-pointer hover:text-blue-400 transition-colors py-2"
+                                                    className="text-3xl font-mono font-bold text-white tracking-[0.3em] flex justify-center cursor-pointer hover:text-zinc-400 transition-colors py-2"
                                                     onClick={() => copyToClipboard(pairingCode)}
-                                                    title="Click to copy"
+                                                    title="Clique para copiar"
                                                 >
                                                     {pairingCode.toUpperCase().replace('-', '').split('').map((char, i) => (
                                                         <span key={i} className="flex items-center">
                                                             {char}
-                                                            {i === 3 && <span className="mx-2 text-slate-600 opacity-50">-</span>}
+                                                            {i === 3 && <span className="mx-2 text-zinc-600 opacity-50">-</span>}
                                                         </span>
                                                     ))}
                                                 </div>
                                                 <Button
                                                     size="icon"
                                                     variant="ghost"
-                                                    className="absolute top-2 right-2 h-7 w-7 text-slate-500 hover:text-white"
+                                                    className="absolute top-2 right-2 h-7 w-7 text-zinc-500 hover:text-white"
                                                     onClick={() => copyToClipboard(pairingCode)}
                                                 >
                                                     <Copy className="h-3.5 w-3.5" />
                                                 </Button>
-                                                <div className="text-[9px] text-slate-500 mt-2 italic">Enter this code on your phone</div>
+                                                <div className="text-[9px] text-zinc-500 mt-2 italic">Digite este código no seu celular</div>
                                             </div>
                                         )}
                                     </div>
@@ -329,8 +331,8 @@ export default function SessionDetailPage() {
                 {/* Actions Panel */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Controls</CardTitle>
-                        <CardDescription>Manage the active session.</CardDescription>
+                        <CardTitle>Controles</CardTitle>
+                        <CardDescription>Gerencie a sessão ativa.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <Button
@@ -339,7 +341,7 @@ export default function SessionDetailPage() {
                             onClick={() => performAction('start')}
                             disabled={session.status === 'CONNECTED' || session.status === 'SCAN_QR'}
                         >
-                            <Play className="mr-2 h-4 w-4" /> Start Session
+                            <Play className="mr-2 h-4 w-4" />  Iniciar sessão
                         </Button>
 
                         <Button
@@ -348,7 +350,7 @@ export default function SessionDetailPage() {
                             onClick={() => performAction('restart')}
                             disabled={!session.hasInstance && session.status !== 'CONNECTED'}
                         >
-                            <RotateCcw className="mr-2 h-4 w-4" /> Restart Session
+                            <RotateCcw className="mr-2 h-4 w-4" />  Reiniciar sessão
                         </Button>
 
                         <Button
@@ -357,7 +359,7 @@ export default function SessionDetailPage() {
                             onClick={() => performAction('stop')}
                             disabled={session.status === 'STOPPED'}
                         >
-                            <Square className="mr-2 h-4 w-4" /> Stop Session
+                            <Square className="mr-2 h-4 w-4" />  Parar sessão
                         </Button>
 
                         <div className="border-t my-4 pt-4 space-y-3">
@@ -367,7 +369,7 @@ export default function SessionDetailPage() {
                                 onClick={() => performAction('logout')}
                                 disabled={session.status !== 'CONNECTED'}
                             >
-                                <LogOut className="mr-2 h-4 w-4" /> Logout
+                                <LogOut className="mr-2 h-4 w-4" />  Desconectar
                             </Button>
 
                             <AlertDialog>
@@ -376,21 +378,22 @@ export default function SessionDetailPage() {
                                         variant="destructive"
                                         className="w-full justify-start"
                                     >
-                                        <Trash2 className="mr-2 h-4 w-4" /> Delete Session
+                                        <Trash2 className="mr-2 h-4 w-4" />  Excluir sessão
                                     </Button>
                                 </AlertDialogTrigger>
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
-                                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                        <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                            This action cannot be undone. This will permanently delete the session
-                                            and remove your connection data from the server.
+                                            
+                                            Esta ação não pode ser desfeita. A sessão será excluída permanentemente e os dados de conexão serão removidos do servidor.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                         <AlertDialogAction onClick={deleteSession} className="bg-red-600 hover:bg-red-700">
-                                            Delete
+                                            
+                                            Excluir
                                         </AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>

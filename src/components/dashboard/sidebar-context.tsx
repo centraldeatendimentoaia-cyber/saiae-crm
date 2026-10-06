@@ -21,6 +21,8 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const saved = localStorage.getItem("sidebar-collapsed");
         if (saved === "true") setIsCollapsed(true);
+        // Sem preferência salva: em telas médias (tablet) começa recolhido, só com ícones
+        else if (saved === null && window.innerWidth < 1280) setIsCollapsed(true);
     }, []);
 
     const toggleCollapse = () => {

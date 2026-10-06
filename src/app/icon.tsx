@@ -14,8 +14,8 @@ export const contentType = "image/png";
 // Image generation
 export default async function Icon() {
     // Default config
-    let letter = "W";
-    let color = "#16a34a"; // green-600
+    let letter = "s";
+    let color = "#FFC21A";
 
     try {
         // Fetch system config
@@ -25,7 +25,7 @@ export default async function Icon() {
         });
 
         if (config?.appName) {
-            letter = config.appName.charAt(0).toUpperCase();
+            letter = "s";
         }
     } catch (e) {
         console.error("Failed to fetch favicon config", e);
@@ -44,8 +44,8 @@ export default async function Icon() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "white",
-                    borderRadius: "20%", // Rounded square looks more app-like
+                    color: "#18171C",
+                    borderRadius: "20%",
                     fontFamily: 'sans-serif'
                 }}
             >

@@ -253,7 +253,7 @@ model BotConfig {
   enabled       Boolean  @default(true)
   
   // Bot Command Access
-  botName       String   @default("WA-AKG Bot")
+  botName       String   @default("Saiaê Bot")
   botMode       AccessMode @default(OWNER)
   botAllowedJids Json?     // Array of JIDs ["628123@s.whatsapp.net"]
   botBlockedJids Json?     // Array of JIDs ["628123@s.whatsapp.net"] for BLACKLIST mode
@@ -291,7 +291,7 @@ model BotConfig {
 
 model SystemConfig {
   id                 String   @id @default("default") // Singleton ID
-  appName            String   @default("WA-AKG")
+  appName            String   @default("Saiaê")
   logoUrl            String?
   faviconUrl         String?
   timezone           String   @default("Asia/Jakarta")
@@ -389,4 +389,15 @@ model BroadcastRecipient {
   broadcastLog    BroadcastLog @relation(fields: [broadcastLogId], references: [id], onDelete: Cascade)
 
   @@index([broadcastLogId])
+}
+
+// Controle de conversas lidas no painel (para o contador de não lidas)
+model ChatRead {
+  id         String   @id @default(cuid())
+  sessionId  String   // Session.id (cuid)
+  jid        String
+  lastReadAt DateTime @default(now())
+
+  @@unique([sessionId, jid])
+  @@index([sessionId])
 }

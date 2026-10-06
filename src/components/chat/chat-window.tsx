@@ -105,7 +105,7 @@ function useDateLabel() {
 }
 
 function handleDownload(url: string, fileName: string) {
-    toast.info("Downloading...");
+    toast.info("Baixando...");
     fetch(url).then(res => { if (!res.ok) throw new Error(); return res.blob(); }).then(blob => {
         const dlUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -113,7 +113,7 @@ function handleDownload(url: string, fileName: string) {
         document.body.appendChild(link);
         link.click(); link.remove();
         window.URL.revokeObjectURL(dlUrl);
-    }).catch(() => toast.error("Download failed!"));
+    }).catch(() => toast.error("Falha no download!"));
 }
 
 // ─── Context Menu ──────────────────
@@ -133,10 +133,10 @@ function ContextMenu({ state, onClose, onReply, onDelete }: { state: ContextMenu
     }, [onClose]);
 
     const items = [
-        { label: "Reply", icon: CornerUpLeft, action: () => { onReply(state.msg); onClose(); } },
-        { label: "Copy", icon: Copy, action: () => { navigator.clipboard.writeText(state.msg.content || "").then(() => toast.success("Copied!")).catch(() => {}); onClose(); } },
-        { label: "Delete", icon: Trash2, action: () => { onDelete(state.msg); onClose(); }, dangerous: true },
-        { label: "Info", icon: Info, action: () => { toast.info(`ID: ${state.msg.keyId}\nStatus: ${state.msg.status}\nTime: ${new Date(state.msg.timestamp).toLocaleString()}`); onClose(); } },
+        { label: "Responder", icon: CornerUpLeft, action: () => { onReply(state.msg); onClose(); } },
+        { label: "Copiar", icon: Copy, action: () => { navigator.clipboard.writeText(state.msg.content || "").then(() => toast.success("Copiado!")).catch(() => {}); onClose(); } },
+        { label: "Excluir", icon: Trash2, action: () => { onDelete(state.msg); onClose(); }, dangerous: true },
+        { label: "Informação", icon: Info, action: () => { toast.info(`ID: ${state.msg.keyId}\nStatus: ${state.msg.status}\nTime: ${new Date(state.msg.timestamp).toLocaleString()}`); onClose(); } },
     ];
 
     // Adjust position to not overflow viewport
@@ -286,8 +286,8 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             }
             // ? : show shortcuts
             if (e.key === "?" && !e.ctrlKey && !e.metaKey && !e.shiftKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
-                toast.success("Shortcuts", {
-                    description: "Enter: Send\nShift+Enter: New line\nEsc: Cancel reply\n?: Show this help"
+                toast.success("Atalhos", {
+                    description: "Enter: enviar Shift+Enter: nova linha Esc: cancelar resposta ?: mostrar esta ajuda"
                 });
             }
         };
@@ -311,7 +311,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
         try {
             toast.info(`Sending ${file.name}...`);
             await sendMediaMessage(formData);
-            toast.success("Sent!");
+            toast.success("Enviado!");
             setTimeout(() => fetchMessages(), 800);
         } catch (error: any) { toast.error(error.message || "Failed to send media"); }
     };
@@ -368,7 +368,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             {isDragging && (
                 <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary flex items-center justify-center flex-col gap-3 rounded-lg m-2">
                     <Paperclip className="h-8 w-8 text-primary" />
-                    <p className="text-lg font-semibold text-primary">Drop files here</p>
+                    <p className="text-lg font-semibold text-primary">Solte os arquivos aqui</p>
                 </div>
             )}
 
@@ -376,23 +376,24 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             <AlertDialog open={!!deleteConfirmMsg} onOpenChange={(open) => { if (!open) setDeleteConfirmMsg(null); }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete message?</AlertDialogTitle>
+                        <AlertDialogTitle>Excluir mensagem?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will delete the message for everyone. This action cannot be undone.
+                            
+                            Isso apagará a mensagem para todos. Esta ação não pode ser desfeita.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                             onClick={() => {
                                 const msg = deleteConfirmMsg;
                                 if (!msg) return;
                                 fetch(`/api/messages/${sessionId}/${jid}/${msg.keyId}`, { method: "DELETE" })
-                                    .then(() => { setMessages(p => p.filter(m => m.keyId !== msg.keyId)); toast.success("Deleted"); })
-                                    .catch(() => toast.error("Delete failed"));
+                                    .then(() => { setMessages(p => p.filter(m => m.keyId !== msg.keyId)); toast.success("Excluída"); })
+                                    .catch(() => toast.error("Falha ao excluir"));
                                 setDeleteConfirmMsg(null);
                             }}
-                        >Delete</AlertDialogAction>
+                        >Excluir</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -401,7 +402,8 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             {loadingMore && (
                 <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 bg-background/80 backdrop-blur-sm px-3 py-1 rounded-full shadow-sm border text-xs flex items-center gap-2">
                     <div className="h-3 w-3 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-                    Loading older...
+                    
+                    Carregando mensagens antigas...
                 </div>
             )}
 
@@ -413,7 +415,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                     </Button>
                 )}
                 <Avatar className="h-9 w-9 shrink-0">
-                    <AvatarFallback className="text-xs font-medium bg-gradient-to-br from-primary/20 to-blue-500/20 text-primary">
+                    <AvatarFallback className="text-xs font-medium bg-gradient-to-br from-primary/20 to-zinc-500/20 text-primary">
                         {displayName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                 </Avatar>
@@ -435,11 +437,11 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                     )}
                     {!hasMore && messages.length > 0 && (
                         <div className="text-center py-4">
-                            <span className="text-[10px] font-medium text-muted-foreground bg-background/80 px-3 py-1 rounded-full border border-border/30">Beginning of conversation</span>
+                            <span className="text-[10px] font-medium text-muted-foreground bg-background/80 px-3 py-1 rounded-full border border-border/30">Início da conversa</span>
                         </div>
                     )}
                     {messages.length === 0 && !loading && (
-                        <div className="flex-1 flex items-center justify-center py-16"><p className="text-sm text-muted-foreground">No messages yet</p></div>
+                        <div className="flex-1 flex items-center justify-center py-16"><p className="text-sm text-muted-foreground">Nenhuma mensagem ainda</p></div>
                     )}
                     {messages.map((msg, idx) => {
                         const showDate = idx === 0 || getDateLabel(msg.timestamp) !== getDateLabel(messages[idx - 1].timestamp);
@@ -457,7 +459,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                                     {msg.fromMe && (
                                         <button onClick={() => { setReplyingTo(msg); scrollToBottom(true); }}
                                             className="self-center p-1.5 text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 cursor-pointer shrink-0 order-first"
-                                            title="Reply">
+                                            title="Responder">
                                             <CornerUpLeft className="h-3.5 w-3.5" />
                                         </button>
                                     )}
@@ -486,22 +488,22 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                                                             target.classList.remove("bg-primary/10");
                                                         }, 1500);
                                                     } else {
-                                                        toast.info("Original message not loaded in view");
+                                                        toast.info("Mensagem original não carregada");
                                                     }
                                                 }}
                                             >
                                                 <span className="font-semibold block text-[10px]">
-                                                    {msg.quoted.fromMe ? "You" : (msg.quoted.pushName || msg.quoted.senderJid?.split('@')[0] || "Contact")}
+                                                    {msg.quoted.fromMe ? "Você" : (msg.quoted.pushName || msg.quoted.senderJid?.split('@')[0] || "Contato")}
                                                 </span>
                                                 <span className="line-clamp-2 block break-all text-xs">
-                                                    {msg.quoted.content || "Media"}
+                                                    {msg.quoted.content || "Mídia"}
                                                 </span>
                                             </div>
                                         )}
                                         {/* IMAGE */}
                                         {msg.type === 'IMAGE' && msg.mediaUrl && (
                                             <div className="relative group/media">
-                                                <LazyMedia src={msg.mediaUrl} alt="Image" />
+                                                <LazyMedia src={msg.mediaUrl} alt="Imagem" />
                                                 <Button size="icon" variant="secondary" className="absolute top-2 right-2 h-8 w-8 rounded-full opacity-0 group-hover/media:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm"
                                                     onClick={() => handleDownload(msg.mediaUrl!, `IMAGE-${msg.keyId}.jpg`)}><Download className="h-4 w-4" /></Button>
                                             </div>
@@ -524,7 +526,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                                         {/* STICKER */}
                                         {msg.type === 'STICKER' && msg.mediaUrl && (
                                             <div className="relative group/media mb-1">
-                                                <img src={msg.mediaUrl} alt="Sticker" className="max-h-32 object-contain rounded-lg" loading="lazy" />
+                                                <img src={msg.mediaUrl} alt="Figurinha" className="max-h-32 object-contain rounded-lg" loading="lazy" />
                                                 <Button size="icon" variant="secondary" className="absolute -top-1 -right-1 h-6 w-6 rounded-full opacity-0 group-hover/media:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm"
                                                     onClick={() => handleDownload(msg.mediaUrl!, `STICKER-${msg.keyId}.webp`)}><Download className="h-3 w-3" /></Button>
                                             </div>
@@ -534,7 +536,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                                             <div className={cn("flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg mb-1", msg.fromMe ? "bg-white/15" : "bg-muted/50")}>
                                                 <div className="flex items-center gap-2 truncate min-w-0">
                                                     <FileText className="h-3.5 w-3.5 shrink-0" />
-                                                    <span className="text-xs font-medium truncate">{msg.type} Message</span>
+                                                    <span className="text-xs font-medium truncate">{msg.type}  Mensagem</span>
                                                 </div>
                                                 {msg.mediaUrl && <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full shrink-0" onClick={() => handleDownload(msg.mediaUrl!, `${msg.type}-${msg.keyId}`)}><Download className="h-3.5 w-3.5" /></Button>}
                                             </div>
@@ -551,7 +553,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                                     {!msg.fromMe && (
                                         <button onClick={() => { setReplyingTo(msg); scrollToBottom(true); }}
                                             className="self-center p-1.5 text-muted-foreground/40 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 cursor-pointer shrink-0"
-                                            title="Reply">
+                                            title="Responder">
                                             <CornerUpLeft className="h-3.5 w-3.5" />
                                         </button>
                                     )}
@@ -567,7 +569,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             {newMsgBadge && (
                 <button onClick={() => { scrollToBottom(true); setNewMsgBadge(false); }}
                     className="absolute bottom-[90px] right-6 z-20 flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all animate-bounce">
-                    <ArrowDown className="h-4 w-4" /> New messages
+                    <ArrowDown className="h-4 w-4" />  Novas mensagens
                 </button>
             )}
 
@@ -581,10 +583,10 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                         </PopoverTrigger>
                         <PopoverContent className="w-44 p-1.5" side="top" align="start">
                             <div className="flex flex-col gap-0.5">
-                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('image')}><ImageIcon className="h-3.5 w-3.5 text-blue-500" /> Image</Button>
-                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('video')}><Video className="h-3.5 w-3.5 text-purple-500" /> Video</Button>
-                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('audio')}><Music className="h-3.5 w-3.5 text-orange-500" /> Audio</Button>
-                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('document')}><FileText className="h-3.5 w-3.5 text-emerald-500" /> Document</Button>
+                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('image')}><ImageIcon className="h-3.5 w-3.5 text-zinc-500" />  Imagem</Button>
+                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('video')}><Video className="h-3.5 w-3.5 text-zinc-500" />  Vídeo</Button>
+                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('audio')}><Music className="h-3.5 w-3.5 text-orange-500" />  Áudio</Button>
+                                <Button variant="ghost" size="sm" className="justify-start gap-2 h-8 text-xs" onClick={() => triggerUpload('document')}><FileText className="h-3.5 w-3.5 text-emerald-500" />  Documento</Button>
                             </div>
                         </PopoverContent>
                     </Popover>
@@ -594,7 +596,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                         {replyingTo && (
                             <div className="mb-2 flex items-start gap-2 px-2 py-1.5 rounded-lg bg-muted/50 border-l-2 border-amber-500 text-xs animate-in slide-in-from-bottom-1 overflow-hidden">
                                 <div className="flex-1 min-w-0 overflow-hidden">
-                                    <span className="font-semibold text-amber-500 block text-[10px]">Replying to {replyingTo.fromMe ? "you" : (replyingTo.pushName || jid.split('@')[0])}</span>
+                                    <span className="font-semibold text-amber-500 block text-[10px]">Respondendo a {replyingTo.fromMe ? "você" : (replyingTo.pushName || jid.split('@')[0])}</span>
                                     <span className="text-muted-foreground truncate block w-full">{replyingTo.content || `[${replyingTo.type}]`}</span>
                                 </div>
                                 <button onClick={() => setReplyingTo(null)} className="p-0.5 text-muted-foreground hover:text-foreground shrink-0"><X className="h-3 w-3" /></button>
@@ -602,7 +604,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                         )}
                         <div className="flex items-end gap-2 p-1 rounded-2xl border border-border/30 bg-background">
                             <textarea ref={inputRef} value={input} onChange={(e) => { setInput(e.target.value); const el = e.target; el.style.height = "auto"; el.style.height = Math.min(el.scrollHeight, 120) + "px"; }}
-                                onKeyDown={handleKeyDown} placeholder="Type a message..." rows={1} style={{ minHeight: "36px", maxHeight: "120px" }}
+                                onKeyDown={handleKeyDown} placeholder="Digite uma mensagem..." rows={1} style={{ minHeight: "36px", maxHeight: "120px" }}
                                 className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm text-foreground placeholder-muted-foreground focus:outline-none leading-normal" />
                         </div>
                     </div>

@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "wa-akg",
+      name: "saiae-crm",
       script: "npx",
       args: "tsx src/server/index.ts",
       interpreter: "none", // Avoid PM2 trying to run npx as a Node.js script directly

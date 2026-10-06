@@ -59,6 +59,25 @@ export class ChatService {
             })
         ]);
 
+        // Não lidas: mensagens recebidas depois da última leitura registrada no painel.
+        // Sem registro, vale o marco inicial (mensagens antigas contam como lidas).
+        const baseline = new Date(process.env.UNREAD_BASELINE || "2026-10-06T00:00:00Z");
+        const reads = await prisma.chatRead.findMany({
+            where: { sessionId: dbSessionId, jid: { in: jids } },
+            select: { jid: true, lastReadAt: true }
+        });
+        const readMap = new Map(reads.map(r => [r.jid, r.lastReadAt]));
+        const unreadRows = await prisma.message.groupBy({
+            by: ["remoteJid", "timestamp"],
+            where: { sessionId: dbSessionId, fromMe: false, remoteJid: { in: jids }, timestamp: { gt: baseline } },
+            _count: { _all: true }
+        });
+        const unreadMap = new Map<string, number>();
+        for (const row of unreadRows) {
+            const since = readMap.get(row.remoteJid) || baseline;
+            if (row.timestamp > since) unreadMap.set(row.remoteJid, (unreadMap.get(row.remoteJid) || 0) + row._count._all);
+        }
+
         // Build lookup map
         const infoMap = new Map<string, { name: string | null; notify: string | null; profilePic: string | null }>();
         contacts.forEach(c => infoMap.set(c.jid, { name: c.name, notify: c.notify, profilePic: c.profilePic }));
@@ -77,6 +96,7 @@ export class ChatService {
                 name: info?.name || null,
                 notify: info?.notify || null,
                 profilePic: info?.profilePic || null,
+                unread: unreadMap.get(msg.remoteJid) || 0,
                 lastMessage: {
                     content: msg.content,
                     timestamp: msg.timestamp instanceof Date
@@ -254,8 +274,8 @@ export class ChatService {
                 if (!res.ok) throw new Error(`Failed to fetch sticker media`);
                 const buffer = await res.arrayBuffer();
                 const sticker = new Sticker(Buffer.from(buffer), {
-                    pack: msgPayload.sticker.pack || "WA-AKG Bot",
-                    author: msgPayload.sticker.author || "WA-AKG",
+                    pack: msgPayload.sticker.pack || "Saiaê Bot",
+                    author: msgPayload.sticker.author || "Saiaê",
                     type: "full",
                     quality: 50
                 });
@@ -396,8 +416,8 @@ export class ChatService {
             content = { document: buffer, mimetype, fileName, ...messageOptions };
         } else if (type === 'sticker') {
             const sticker = new Sticker(buffer, {
-                pack: "WA-AKG Bot",
-                author: "WA-AKG",
+                pack: "Saiaê Bot",
+                author: "Saiaê",
                 type: "full",
                 quality: 50
             });

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# 🚀 WA-AKG Auto Deployment & Startup Script
+# 🚀 Saiaê Auto Deployment & Startup Script
 # ==============================================================================
 
 # Text Colors
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}====================================================${NC}"
-echo -e "${BLUE}       ⚡ WA-AKG PM2 AUTO STARTUP SCRIPT ⚡        ${NC}"
+echo -e "${BLUE}       ⚡ Saiaê PM2 AUTO STARTUP SCRIPT ⚡        ${NC}"
 echo -e "${BLUE}====================================================${NC}"
 
 # Step 1: Check for .env file & Security Auditing
@@ -157,11 +157,11 @@ if ! command -v pm2 &> /dev/null; then
 fi
 
 # Check if application is already running in PM2
-if pm2 show wa-akg &> /dev/null; then
-    echo -e "${YELLOW}🔄 Application 'wa-akg' is already running. Reloading to apply changes...${NC}"
-    pm2 reload wa-akg
+if pm2 show saiae-crm &> /dev/null; then
+    echo -e "${YELLOW}🔄 Application 'saiae-crm' is already running. Reloading to apply changes...${NC}"
+    pm2 reload saiae-crm
 else
-    echo -e "${GREEN}🚀 Starting 'wa-akg' process using ecosystem.config.js...${NC}"
+    echo -e "${GREEN}🚀 Starting 'saiae-crm' process using ecosystem.config.js...${NC}"
     pm2 start ecosystem.config.js
 fi
 
@@ -171,14 +171,14 @@ if [ $? -ne 0 ]; then
 fi
 
 echo -e "\n${GREEN}====================================================${NC}"
-echo -e "${GREEN}       🎉 WA-AKG DEPLOYED SUCCESSFULLY! 🎉         ${NC}"
+echo -e "${GREEN}       🎉 Saiaê DEPLOYED SUCCESSFULLY! 🎉         ${NC}"
 echo -e "${GREEN}====================================================${NC}"
 echo -e "\n${BLUE}Useful PM2 Commands:${NC}"
 echo -e "  - View status:           ${YELLOW}pm2 status${NC}"
-echo -e "  - View real-time logs:   ${YELLOW}pm2 logs wa-akg${NC}"
+echo -e "  - View real-time logs:   ${YELLOW}pm2 logs saiae-crm${NC}"
 echo -e "  - Monitor resources:     ${YELLOW}pm2 monit${NC}"
-echo -e "  - Stop gateway service:  ${YELLOW}pm2 stop wa-akg${NC}"
-echo -e "  - Restart service:       ${YELLOW}pm2 restart wa-akg${NC}"
+echo -e "  - Stop gateway service:  ${YELLOW}pm2 stop saiae-crm${NC}"
+echo -e "  - Restart service:       ${YELLOW}pm2 restart saiae-crm${NC}"
 
 echo -e "\n${BLUE}Useful Project Script Commands:${NC}"
 echo -e "  - Run Dev Mode:          ${YELLOW}npm run dev${NC}"

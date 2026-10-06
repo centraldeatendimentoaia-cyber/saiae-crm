@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Bot, ArrowRight, Loader2 } from "lucide-react";
 import Link from 'next/link';
+import { BrandLogo } from "@/components/brand-logo";
 
 const formSchema = z.object({
     name: z.string().min(2, "Name must be at least 2 characters"),
@@ -24,7 +25,7 @@ const formSchema = z.object({
     password: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
+    message: "As senhas não coincidem",
     path: ["confirmPassword"],
 });
 
@@ -80,13 +81,12 @@ export default function RegisterPage() {
     if (success) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-background relative overflow-hidden">
-                <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
                 <div className="glass-panel p-10 rounded-3xl flex flex-col items-center text-center max-w-sm animate-in zoom-in duration-500">
-                    <div className="h-16 w-16 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-emerald-500/30">
+                    <div className="h-16 w-16 bg-zinc-500 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-zinc-500/30">
                         <Bot className="h-8 w-8 text-white" />
                     </div>
-                    <h2 className="text-2xl font-bold text-foreground mb-2">Registration Successful!</h2>
-                    <p className="text-muted-foreground">Redirecting you to the login page...</p>
+                    <h2 className="text-2xl font-bold text-foreground mb-2">Cadastro realizado com sucesso!</h2>
+                    <p className="text-muted-foreground">Redirecionando para a tela de login...</p>
                 </div>
             </div>
         );
@@ -94,22 +94,15 @@ export default function RegisterPage() {
 
     return (
         <div className="flex items-center justify-center min-h-screen relative overflow-hidden bg-background py-12">
-            {/* Background Orbs */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
-                <div className="absolute top-0 right-0 translate-x-1/3 -translate-y-1/4 w-[40rem] h-[40rem] bg-emerald-500/10 rounded-full blur-[120px]" />
-                <div className="absolute bottom-0 left-0 -translate-x-1/4 translate-y-1/4 w-[30rem] h-[30rem] bg-primary/20 rounded-full blur-[100px]" />
-            </div>
 
             <div className="relative z-10 w-full max-w-md p-4 animate-in fade-in zoom-in-95 duration-500">
                 <div className="flex flex-col items-center mb-8">
-                    <div className="relative flex h-16 w-16 mb-4 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-primary text-white shadow-lg shadow-primary/30">
-                        <Bot className="h-8 w-8" />
-                    </div>
-                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Create Account</h1>
-                    <p className="text-muted-foreground mt-2">Join WA-AKG today</p>
+                    <BrandLogo className="h-24 mb-6" />
+                    <h1 className="text-3xl font-bold tracking-tight text-foreground">Criar conta</h1>
+                    <p className="text-muted-foreground mt-2">Junte-se à Saiaê</p>
                 </div>
 
-                <div className="glass-panel rounded-3xl p-8 shadow-2xl shadow-black/5 dark:shadow-black/40">
+                <div className="bg-card rounded-[24px] p-8">
                     {error && (
                         <div className="mb-6 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm text-center font-medium animate-in shake duration-300">
                             {error}
@@ -123,11 +116,11 @@ export default function RegisterPage() {
                                 name="name"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-foreground/80">Full Name</FormLabel>
+                                        <FormLabel className="text-foreground/80">Nome completo</FormLabel>
                                         <FormControl>
                                             <Input
-                                                placeholder="John Doe"
-                                                className="h-12 px-4 rounded-xl bg-background/50 border-white/20 dark:border-white/10 focus-visible:ring-primary/50 transition-all font-medium"
+                                                placeholder="Maria Silva"
+                                                className="font-medium"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -140,11 +133,11 @@ export default function RegisterPage() {
                                 name="email"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-foreground/80">Email</FormLabel>
+                                        <FormLabel className="text-foreground/80">E-mail</FormLabel>
                                         <FormControl>
                                             <Input
-                                                placeholder="name@example.com"
-                                                className="h-12 px-4 rounded-xl bg-background/50 border-white/20 dark:border-white/10 focus-visible:ring-primary/50 transition-all font-medium"
+                                                placeholder="nome@exemplo.com"
+                                                className="font-medium"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -157,12 +150,12 @@ export default function RegisterPage() {
                                 name="password"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-foreground/80">Password</FormLabel>
+                                        <FormLabel className="text-foreground/80">Senha</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="password"
                                                 placeholder="••••••••"
-                                                className="h-12 px-4 rounded-xl bg-background/50 border-white/20 dark:border-white/10 focus-visible:ring-primary/50 transition-all font-medium"
+                                                className="font-medium"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -175,12 +168,12 @@ export default function RegisterPage() {
                                 name="confirmPassword"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel className="text-foreground/80">Confirm Password</FormLabel>
+                                        <FormLabel className="text-foreground/80">Confirmar senha</FormLabel>
                                         <FormControl>
                                             <Input
                                                 type="password"
                                                 placeholder="••••••••"
-                                                className="h-12 px-4 rounded-xl bg-background/50 border-white/20 dark:border-white/10 focus-visible:ring-primary/50 transition-all font-medium"
+                                                className="font-medium"
                                                 {...field}
                                             />
                                         </FormControl>
@@ -196,23 +189,26 @@ export default function RegisterPage() {
                                 disabled={loading}
                             >
                                 {loading ? (
-                                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Account...</>
+                                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" />  Criando conta...</>
                                 ) : (
-                                    <>Register <ArrowRight className="ml-2 h-5 w-5" /></>
+                                    <>Cadastrar <ArrowRight className="ml-2 h-5 w-5" /></>
                                 )}
                             </Button>
                         </form>
                     </Form>
 
                     <div className="mt-6 text-xs text-center text-muted-foreground leading-relaxed">
-                        By registering, you agree to our <Link href="/terms" className="underline hover:text-foreground">Terms of Service</Link> and <Link href="/privacy" className="underline hover:text-foreground">Privacy Policy</Link>.
+                        
+                        Ao se cadastrar, você concorda com nossos <Link href="/terms" className="underline hover:text-foreground">Termos de Serviço</Link>  e <Link href="/privacy" className="underline hover:text-foreground">Política de Privacidade</Link>.
                     </div>
                 </div>
 
                 <div className="mt-8 text-center text-sm text-muted-foreground">
-                    Already have an account?{" "}
-                    <Link href="/auth/login" className="font-semibold text-primary hover:text-primary/80 transition-colors">
-                        Sign in
+                    
+                    Já tem uma conta?{" "}
+                    <Link href="/auth/login" className="font-semibold text-foreground underline underline-offset-4 hover:text-foreground/70 transition-colors">
+                        
+                        Entrar
                     </Link>
                 </div>
             </div>

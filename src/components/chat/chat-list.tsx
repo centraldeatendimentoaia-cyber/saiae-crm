@@ -11,7 +11,7 @@ import { MessageSquarePlus, Search, MessageCircle, X, Tag, MoreHorizontal, Corne
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { getChatsStatus } from "@/app/dashboard/chat/actions";
+import { getChatsStatus, markChatRead} from "@/app/dashboard/chat/actions";
 import { useSocket } from "./socket-context";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ interface ChatContact {
     name: string | null;
     notify: string | null;
     profilePic: string | null;
+    unread?: number;
     lastMessage?: {
         content: string | null;
         timestamp: string;
@@ -113,7 +114,7 @@ function LabelAssignPopover({ sessionId, jid, children }: { sessionId: string; j
                 toast.success(isAssigned ? "Label removed" : "Label assigned");
             }
         } catch (e) {
-            toast.error("Failed to update label");
+            toast.error("Falha ao atualizar a etiqueta");
         }
     };
 
@@ -121,11 +122,11 @@ function LabelAssignPopover({ sessionId, jid, children }: { sessionId: string; j
         <Popover onOpenChange={(open) => { openRef.current = open; if (open) fetchLabels(); }}>
             <PopoverTrigger asChild>{children}</PopoverTrigger>
             <PopoverContent className="w-56 p-1.5" side="right" align="start">
-                <div className="text-xs font-semibold text-muted-foreground px-2 py-1.5">Assign labels</div>
+                <div className="text-xs font-semibold text-muted-foreground px-2 py-1.5">Atribuir etiquetas</div>
                 {loading ? (
                     <div className="flex items-center justify-center py-4"><Skeleton className="h-4 w-24" /></div>
                 ) : labels.length === 0 ? (
-                    <p className="text-xs text-muted-foreground px-2 py-2">No labels. Create one in Labels page.</p>
+                    <p className="text-xs text-muted-foreground px-2 py-2">Nenhuma etiqueta. Crie uma na página de Etiquetas.</p>
                 ) : (
                     <div className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
                         {labels.map(label => (
@@ -159,8 +160,8 @@ function ChatContextMenu({ state, onClose, sessionId, onSelect }: { state: CtxMe
     }, [onClose]);
 
     const items = [
-        { label: "Open chat", icon: MessageCircle, action: () => { onSelect(state.jid, state.name); onClose(); } },
-        { label: "Copy JID", icon: Info, action: () => { navigator.clipboard.writeText(state.jid).then(() => toast.success("JID copied!")); onClose(); } },
+        { label: "Abrir conversa", icon: MessageCircle, action: () => { onSelect(state.jid, state.name); onClose(); } },
+        { label: "Copiar JID", icon: Info, action: () => { navigator.clipboard.writeText(state.jid).then(() => toast.success("JID copiado!")); onClose(); } },
     ];
 
     const style: React.CSSProperties = { position: "fixed", top: state.y, left: state.x, zIndex: 9999 };
@@ -198,7 +199,7 @@ function ChatRow({
                 className={cn(
                     "relative w-full flex items-center gap-3 px-3 py-2.5 transition-colors duration-150 border-b border-border/10 group overflow-hidden cursor-pointer",
                     isSelected
-                        ? "bg-primary/8 border-l-2 border-l-primary"
+                        ? "bg-muted border-l-2 border-l-brand"
                         : "hover:bg-muted/40 border-l-2 border-l-transparent"
                 )}
                 onClick={() => onSelect(chat.jid, displayName)}
@@ -206,14 +207,14 @@ function ChatRow({
             >
                 <Avatar className="h-10 w-10 flex-shrink-0">
                     <AvatarImage src={chat.profilePic || ""} />
-                    <AvatarFallback className="text-xs font-medium bg-gradient-to-br from-primary/20 to-blue-500/20 text-primary">
+                    <AvatarFallback className="text-xs font-medium bg-gradient-to-br from-primary/20 to-zinc-500/20 text-primary">
                         {displayName.slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                 </Avatar>
 
                 <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex justify-between items-baseline gap-2 overflow-hidden">
-                        <h4 className={cn("text-sm truncate flex items-center gap-1.5", isSelected ? "font-semibold text-primary" : "font-medium text-foreground")}>
+                        <h4 className={cn("text-sm truncate flex items-center gap-1.5", (isSelected || (chat.unread ?? 0) > 0) ? "font-bold text-foreground" : "font-medium text-foreground")}>
                             {displayName}
                             {/* Label dots — always visible */}
                             {labelDots.length > 0 && (
@@ -225,10 +226,17 @@ function ChatRow({
                             )}
                         </h4>
                         {chat.lastMessage && (
-                            <span className="text-[10px] text-muted-foreground flex-shrink-0">{getTimeLabel(chat.lastMessage.timestamp)}</span>
+                            <span className={cn("text-[11px] flex-shrink-0", (chat.unread ?? 0) > 0 ? "font-bold text-foreground" : "text-muted-foreground")}>{getTimeLabel(chat.lastMessage.timestamp)}</span>
                         )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{getMessagePreview(chat)}</p>
+                    <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className={cn("text-xs truncate", (chat.unread ?? 0) > 0 ? "font-semibold text-foreground" : "text-muted-foreground")}>{getMessagePreview(chat)}</p>
+                        {(chat.unread ?? 0) > 0 && (
+                            <span className="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-brand text-brand-foreground text-[11px] font-bold flex items-center justify-center tabular-nums" aria-label={`${chat.unread} não lidas`}>
+                                {chat.unread! > 99 ? "99+" : chat.unread}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Label button on hover */}
@@ -274,6 +282,15 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
     const chatsRef = useRef<ChatContact[]>(chats);
     chatsRef.current = chats;
     const fetchingRef = useRef(false);
+    const selectedJidRef = useRef<string | undefined>(selectedJid);
+    selectedJidRef.current = selectedJid;
+
+    // Abrir uma conversa a marca como lida e zera o contador
+    useEffect(() => {
+        if (!selectedJid || !sessionId) return;
+        setChats(prev => prev.map(c => (c.jid === selectedJid && c.unread ? { ...c, unread: 0 } : c)));
+        markChatRead(sessionId, selectedJid).catch(() => {});
+    }, [selectedJid, sessionId]);
 
     const fetchChats = useCallback(async (cursor?: string, append = false) => {
         if (fetchingRef.current) return;
@@ -323,7 +340,14 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                     const jid = msg.remoteJid;
                     const idx = updated.findIndex(c => c.jid === jid);
                     if (idx !== -1) {
-                        updated[idx] = { ...updated[idx], lastMessage: { content: msg.content, timestamp: msg.timestamp, type: msg.type } };
+                        const isOpen = selectedJidRef.current === jid;
+                        const isIncoming = !msg.fromMe;
+                        updated[idx] = {
+                            ...updated[idx],
+                            unread: isIncoming && !isOpen ? (updated[idx].unread || 0) + 1 : (isOpen ? 0 : updated[idx].unread),
+                            lastMessage: { content: msg.content, timestamp: msg.timestamp, type: msg.type }
+                        };
+                        if (isIncoming && isOpen) markChatRead(sessionId, jid).catch(() => {});
                     } else { needsReload = true; }
                 });
                 updated.sort((a, b) => {
@@ -418,7 +442,8 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
             <div className="shrink-0 px-3 pt-3 pb-2 space-y-2 border-b border-border/10">
                 <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-base text-foreground">
-                        Chats
+                        
+                        Conversas
                         {chats.length > 0 && <span className="ml-1.5 text-xs font-normal text-muted-foreground">({chats.length})</span>}
                     </h3>
                     <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg"
@@ -429,20 +454,20 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
 
                 <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input placeholder="Search chats..." value={searchInput}
+                    <Input placeholder="Buscar conversas..." value={searchInput}
                         onChange={(e) => handleSearchChange(e.target.value)}
                         className="h-8 pl-8 text-sm bg-muted/50 border-0 rounded-lg focus-visible:ring-1" />
                 </div>
 
                 {isNewChatOpen && (
                     <div className="p-2.5 bg-muted/30 rounded-lg space-y-2 border border-border/40">
-                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Phone Number</Label>
+                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Número de telefone</Label>
                         <div className="flex gap-1.5">
                             <Input placeholder="628123456789" value={newChatNumber}
                                 onChange={(e) => setNewChatNumber(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleStartNewChat()}
                                 className="h-8 text-sm" />
-                            <Button size="sm" className="h-8 px-3" onClick={handleStartNewChat}>Go</Button>
+                            <Button size="sm" className="h-8 px-3" onClick={handleStartNewChat}>Ir</Button>
                         </div>
                     </div>
                 )}
@@ -455,7 +480,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                         <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
                             <MessageCircle className="h-6 w-6 text-muted-foreground/50" />
                         </div>
-                        <p className="text-sm text-muted-foreground">{searchQuery ? "No chats match your search" : "No chats yet"}</p>
+                        <p className="text-sm text-muted-foreground">{searchQuery ? "Nenhuma conversa corresponde à busca" : "Nenhuma conversa ainda"}</p>
                     </div>
                 ) : (
                     <Virtuoso style={{ height: "100%" }} data={filteredChats}
@@ -463,7 +488,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                         endReached={handleEndReached} increaseViewportBy={200}
                         components={{ Footer: () => hasMore && !loading ? (
                             <div className="py-4 text-center">
-                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Scroll for more</span>
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Role para ver mais</span>
                             </div>
                         ) : null }} />
                 )}

@@ -2,7 +2,7 @@
 
 API_KEY="wag_TESTAPIKEY123"
 # Production/Dev URL
-BASE_URL="https://wa-akg-dev.aikeigroup.net/api"
+BASE_URL="https://saiae-crm-dev.aikeigroup.net/api"
 
 echo "Testing APIs against: $BASE_URL"
 echo "Using API Key: $API_KEY"

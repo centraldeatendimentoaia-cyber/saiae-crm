@@ -26,7 +26,7 @@ export function SearchFilter({ onSearch, onSort, sortOptions, placeholder = "Sea
                 <div className="w-full sm:w-[200px]">
                     <Select onValueChange={onSort}>
                         <SelectTrigger>
-                            <SelectValue placeholder="Sort by" />
+                            <SelectValue placeholder="Ordenar por" />
                         </SelectTrigger>
                         <SelectContent>
                             {sortOptions.map((opt) => (

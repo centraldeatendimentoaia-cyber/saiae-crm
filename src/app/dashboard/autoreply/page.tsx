@@ -96,7 +96,7 @@ export default function AutoReplyPage() {
     const handleCreate = async () => {
         if (!sessionId) return;
         if (!keyword.trim() || (!response.trim() && !mediaUrl.trim())) {
-            toast.error("Keyword and either response or media URL are required");
+            toast.error("Palavra-chave e resposta (ou URL de mídia) são obrigatórias");
             return;
         }
 
@@ -113,7 +113,7 @@ export default function AutoReplyPage() {
                 mediaType: mediaType || null
             });
 
-            toast.success("Auto-reply rule created");
+            toast.success("Regra de resposta automática criada");
             setIsCreateOpen(false);
             fetchRules();
             resetForm();
@@ -130,7 +130,7 @@ export default function AutoReplyPage() {
         try {
             // Using direct Server Action
             await deleteAutoReply(sessionId, ruleId);
-            toast.success("Auto-reply deleted");
+            toast.success("Resposta automática excluída");
             fetchRules();
         } catch (error: any) {
             console.error(error);
@@ -161,7 +161,7 @@ export default function AutoReplyPage() {
     const handleUpdate = async () => {
         if (!sessionId || !editId) return;
         if (!editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim())) {
-            toast.error("Keyword and either response or media URL are required");
+            toast.error("Palavra-chave e resposta (ou URL de mídia) são obrigatórias");
             return;
         }
 
@@ -177,7 +177,7 @@ export default function AutoReplyPage() {
                 mediaType: editMediaType || null
             });
 
-            toast.success("Auto-reply rule updated");
+            toast.success("Regra de resposta automática atualizada");
             setIsEditOpen(false);
             fetchRules();
         } catch (error: any) {
@@ -193,8 +193,8 @@ export default function AutoReplyPage() {
             <div className="max-w-5xl space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Auto Replies Builder</h1>
-                    <p className="text-muted-foreground">Setup rules to automatically respond to incoming messages.</p>
+                    <h1 className="text-2xl font-bold tracking-tight">Respostas Automáticas</h1>
+                    <p className="text-muted-foreground">Configure regras para responder automaticamente às mensagens recebidas.</p>
                 </div>
 
                 <Dialog open={isCreateOpen} onOpenChange={(open) => {
@@ -204,93 +204,94 @@ export default function AutoReplyPage() {
                     <DialogTrigger asChild>
                         <Button>
                             <Plus className="w-4 h-4 mr-2" />
-                            New Rule
+                            
+                            Nova regra
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
-                            <DialogTitle>Create Auto-Reply Rule</DialogTitle>
-                            <DialogDescription>Add a new keyword-based response.</DialogDescription>
+                            <DialogTitle>Criar regra de resposta automática</DialogTitle>
+                            <DialogDescription>Adicione uma nova resposta baseada em palavra-chave.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Keyword</Label>
+                                    <Label>Palavra-chave</Label>
                                     <Input 
                                         value={keyword} 
                                         onChange={(e) => setKeyword(e.target.value)} 
-                                        placeholder="e.g. !help, ping" 
+                                        placeholder="ex.: !ajuda, ping" 
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Match Type</Label>
+                                    <Label>Tipo de correspondência</Label>
                                     <Select value={matchType} onValueChange={setMatchType}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="EXACT">Exact Match</SelectItem>
-                                            <SelectItem value="CONTAINS">Contains</SelectItem>
-                                            <SelectItem value="STARTS_WITH">Starts With</SelectItem>
-                                            <SelectItem value="REGEX">Regex Pattern</SelectItem>
+                                            <SelectItem value="EXACT">Correspondência exata</SelectItem>
+                                            <SelectItem value="CONTAINS">Contém</SelectItem>
+                                            <SelectItem value="STARTS_WITH">Começa com</SelectItem>
+                                            <SelectItem value="REGEX">Expressão regular</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Select Trigger Audience</Label>
+                                <Label>Selecione o público do gatilho</Label>
                                 <Select value={triggerType} onValueChange={setTriggerType}>
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="ALL">Everyone & Groups</SelectItem>
-                                        <SelectItem value="PRIVATE">Private Chats Only</SelectItem>
-                                        <SelectItem value="GROUP">Group Chats Only</SelectItem>
+                                        <SelectItem value="ALL">Todos e grupos</SelectItem>
+                                        <SelectItem value="PRIVATE">Somente conversas privadas</SelectItem>
+                                        <SelectItem value="GROUP">Somente grupos</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Reply Message (Optional)</Label>
+                                <Label>Mensagem de resposta (opcional)</Label>
                                 <Textarea 
                                     value={response} 
                                     onChange={(e) => setResponse(e.target.value)} 
-                                    placeholder="Thank you for your message! Our team will get back to you shortly." 
+                                    placeholder="Obrigado pela sua mensagem! Nossa equipe retornará em breve." 
                                     className="min-h-[120px]"
                                 />
-                                <p className="text-xs text-muted-foreground">You can use standard WhatsApp formatting (*bold*, _italic_, ~strikethrough~)</p>
+                                <p className="text-xs text-muted-foreground">Você pode usar a formatação padrão do WhatsApp (*negrito*, _itálico_, ~riscado~)</p>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Media URL (Optional)</Label>
+                                    <Label>URL da mídia (opcional)</Label>
                                     <Input 
                                         value={mediaUrl} 
                                         onChange={(e) => setMediaUrl(e.target.value)} 
-                                        placeholder="https://example.com/image.jpg" 
+                                        placeholder="https://exemplo.com/imagem.jpg" 
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Media Type</Label>
+                                    <Label>Tipo de mídia</Label>
                                     <Select value={mediaType} onValueChange={setMediaType}>
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="image">Image</SelectItem>
-                                            <SelectItem value="video">Video</SelectItem>
-                                            <SelectItem value="document">Document</SelectItem>
+                                            <SelectItem value="image">Imagem</SelectItem>
+                                            <SelectItem value="video">Vídeo</SelectItem>
+                                            <SelectItem value="document">Documento</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
                             <Button onClick={handleCreate} disabled={submitting || !keyword.trim() || (!response.trim() && !mediaUrl.trim())}>
-                                {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Save Rule"}
+                                {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Salvar regra"}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -305,9 +306,9 @@ export default function AutoReplyPage() {
                 <Card className="border-dashed shadow-none bg-muted/30">
                     <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                         <BotMessageSquare className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                        <h3 className="text-lg font-semibold">No auto-replies configured</h3>
-                        <p className="text-muted-foreground mb-4">You haven't set up any automated responses yet.</p>
-                        <Button variant="outline" onClick={() => setIsCreateOpen(true)}>Create your first rule</Button>
+                        <h3 className="text-lg font-semibold">Nenhuma resposta automática configurada</h3>
+                        <p className="text-muted-foreground mb-4">Você ainda não configurou nenhuma resposta automática.</p>
+                        <Button variant="outline" onClick={() => setIsCreateOpen(true)}>Crie sua primeira regra</Button>
                     </CardContent>
                 </Card>
             ) : (
@@ -337,15 +338,17 @@ export default function AutoReplyPage() {
                                             </AlertDialogTrigger>
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>Delete Rule?</AlertDialogTitle>
+                                                    <AlertDialogTitle>Excluir regra?</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        Are you sure you want to delete the auto-reply for keyword <strong>{rule.keyword}</strong>? This action cannot be undone.
+                                                        
+                                                        Tem certeza de que deseja excluir a resposta automática da palavra-chave <strong>{rule.keyword}</strong>? Esta ação não pode ser desfeita.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                                     <AlertDialogAction onClick={() => handleDelete(rule.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                        Delete
+                                                        
+                                                        Excluir
                                                     </AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
@@ -358,8 +361,8 @@ export default function AutoReplyPage() {
                                     {rule.response}
                                 </div>
                                 {rule.isMedia && (
-                                    <div className="mt-3 text-xs flex items-center gap-1 text-blue-600 bg-blue-50 px-2 py-1 rounded w-fit">
-                                        <ImageIcon className="w-3 h-3" /> Includes Media Attachment
+                                    <div className="mt-3 text-xs flex items-center gap-1 text-zinc-600 bg-zinc-50 px-2 py-1 rounded w-fit">
+                                        <ImageIcon className="w-3 h-3" />  Inclui anexo de mídia
                                     </div>
                                 )}
                             </CardContent>
@@ -375,87 +378,87 @@ export default function AutoReplyPage() {
             }}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
-                        <DialogTitle>Edit Auto-Reply Rule</DialogTitle>
-                        <DialogDescription>Modify the keyword-based response rule.</DialogDescription>
+                        <DialogTitle>Editar regra de resposta automática</DialogTitle>
+                        <DialogDescription>Modifique a regra de resposta por palavra-chave.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Keyword</Label>
+                                <Label>Palavra-chave</Label>
                                 <Input 
                                     value={editKeyword} 
                                     onChange={(e) => setEditKeyword(e.target.value)} 
-                                    placeholder="e.g. !help, ping" 
+                                    placeholder="ex.: !ajuda, ping" 
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>Match Type</Label>
+                                <Label>Tipo de correspondência</Label>
                                 <Select value={editMatchType} onValueChange={setEditMatchType}>
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="EXACT">Exact Match</SelectItem>
-                                        <SelectItem value="CONTAINS">Contains</SelectItem>
-                                        <SelectItem value="STARTS_WITH">Starts With</SelectItem>
-                                        <SelectItem value="REGEX">Regex Pattern</SelectItem>
+                                        <SelectItem value="EXACT">Correspondência exata</SelectItem>
+                                        <SelectItem value="CONTAINS">Contém</SelectItem>
+                                        <SelectItem value="STARTS_WITH">Começa com</SelectItem>
+                                        <SelectItem value="REGEX">Expressão regular</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Select Trigger Audience</Label>
+                            <Label>Selecione o público do gatilho</Label>
                             <Select value={editTriggerType} onValueChange={setEditTriggerType}>
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">Everyone & Groups</SelectItem>
-                                    <SelectItem value="PRIVATE">Private Chats Only</SelectItem>
-                                    <SelectItem value="GROUP">Group Chats Only</SelectItem>
+                                    <SelectItem value="ALL">Todos e grupos</SelectItem>
+                                    <SelectItem value="PRIVATE">Somente conversas privadas</SelectItem>
+                                    <SelectItem value="GROUP">Somente grupos</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Reply Message (Optional)</Label>
+                            <Label>Mensagem de resposta (opcional)</Label>
                             <Textarea 
                                 value={editResponse} 
                                 onChange={(e) => setEditResponse(e.target.value)} 
-                                placeholder="Response text..." 
+                                placeholder="Texto da resposta..." 
                                 className="min-h-[120px]"
                             />
-                            <p className="text-xs text-muted-foreground">You can use standard WhatsApp formatting (*bold*, _italic_, ~strikethrough~)</p>
+                            <p className="text-xs text-muted-foreground">Você pode usar a formatação padrão do WhatsApp (*negrito*, _itálico_, ~riscado~)</p>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Media URL (Optional)</Label>
+                                <Label>URL da mídia (opcional)</Label>
                                 <Input 
                                     value={editMediaUrl} 
                                     onChange={(e) => setEditMediaUrl(e.target.value)} 
-                                    placeholder="https://example.com/image.jpg" 
+                                    placeholder="https://exemplo.com/imagem.jpg" 
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>Media Type</Label>
+                                <Label>Tipo de mídia</Label>
                                 <Select value={editMediaType} onValueChange={setEditMediaType}>
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="image">Image</SelectItem>
-                                        <SelectItem value="video">Video</SelectItem>
-                                        <SelectItem value="document">Document</SelectItem>
+                                        <SelectItem value="image">Imagem</SelectItem>
+                                        <SelectItem value="video">Vídeo</SelectItem>
+                                        <SelectItem value="document">Documento</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
                         <Button onClick={handleUpdate} disabled={submitting || !editKeyword.trim() || (!editResponse.trim() && !editMediaUrl.trim())}>
-                            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Save Changes"}
+                            {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : "Salvar alterações"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

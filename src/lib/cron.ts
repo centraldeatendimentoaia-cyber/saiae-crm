@@ -1,4 +1,5 @@
 import cron from "node-cron";
+import { personalizeFor } from "@/lib/personalize";
 import cronParser from "cron-parser";
 import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
@@ -60,12 +61,12 @@ export function initScheduler() {
                         }
                         await instance.socket.sendMessage(msg.jid, payload);
                     } else {
-                        await instance.socket.sendMessage(msg.jid, { text: msg.content || "" });
+                        await instance.socket.sendMessage(msg.jid, { text: msg.content ? await personalizeFor(msg.session.sessionId, msg.jid, msg.content) : "" });
                     }
 
                     // Update status or compute next sendAt if recurring
                     if (msg.cronExpression) {
-                        const interval = cronParser.parse(msg.cronExpression, { tz: "Asia/Jakarta" });
+                        const interval = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
                         const nextDate = interval.next().toDate();
                         await prisma.scheduledMessage.update({
                             where: { id: msg.id },
@@ -86,7 +87,7 @@ export function initScheduler() {
                             data: { status: "FAILED" } // Failed to send
                         });
                     } else {
-                        const interval = cronParser.parse(msg.cronExpression, { tz: "Asia/Jakarta" });
+                        const interval = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
                         await prisma.scheduledMessage.update({
                             where: { id: msg.id },
                             data: { sendAt: interval.next().toDate() }

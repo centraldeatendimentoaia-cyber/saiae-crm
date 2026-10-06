@@ -53,7 +53,7 @@ export default function SchedulerPage() {
     const [messages, setMessages] = useState<ScheduledMessage[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const [systemTimezone, setSystemTimezone] = useState("Asia/Jakarta");
+    const [systemTimezone, setSystemTimezone] = useState("America/Sao_Paulo");
     const [activeTab, setActiveTab] = useState("pending");
 
     // Form state
@@ -125,7 +125,7 @@ export default function SchedulerPage() {
                 setMessages([]);
             }
         } catch (error) {
-            toast.error("Failed to fetch scheduled messages");
+            toast.error("Falha ao carregar as mensagens agendadas");
         } finally {
             setLoading(false);
         }
@@ -206,7 +206,7 @@ export default function SchedulerPage() {
 
     const handleSaveSchedule = async () => {
         if (!selectedSessionId || !newJid || (!newContent && !newMediaUrl)) {
-            toast.error("Please fill required fields (JID, Content/Media)");
+            toast.error("Preencha os campos obrigatórios (JID, conteúdo/mídia)");
             return;
         }
 
@@ -214,7 +214,7 @@ export default function SchedulerPage() {
         if (isRecurring === "recurring") {
             if (recurrenceType === "days") {
                 if (!newSendTime) {
-                    toast.error("Please specify a Time of Day");
+                    toast.error("Informe o horário do dia");
                     return;
                 }
                 // Construct a valid local date-time string
@@ -225,7 +225,7 @@ export default function SchedulerPage() {
             }
         } else {
             if (!newSendAt) {
-                toast.error("Please specify Send At");
+                toast.error("Informe a data e hora de envio");
                 return;
             }
         }
@@ -254,7 +254,7 @@ export default function SchedulerPage() {
             });
 
             if (res.ok) {
-                toast.success("Message scheduled");
+                toast.success("Mensagem agendada");
                 setShowForm(false);
                 setNewJid("");
                 setNewContent("");
@@ -265,16 +265,16 @@ export default function SchedulerPage() {
                 setNewJidType("personal");
                 fetchMessages(selectedSessionId, activeTab);
             } else {
-                toast.error("Failed to schedule message");
+                toast.error("Falha ao agendar a mensagem");
             }
         } catch (error) {
-            toast.error("An error occurred");
+            toast.error("Ocorreu um erro");
         }
     };
 
     const handleUpdateSchedule = async () => {
         if (!selectedSessionId || !editId || !editJid || (!editContent && !editMediaUrl)) {
-            toast.error("Please fill required fields");
+            toast.error("Preencha os campos obrigatórios");
             return;
         }
 
@@ -282,7 +282,7 @@ export default function SchedulerPage() {
         if (editIsRecurring === "recurring") {
             if (editRecurrenceType === "days") {
                 if (!editSendTime) {
-                    toast.error("Please specify a Time of Day");
+                    toast.error("Informe o horário do dia");
                     return;
                 }
                 finalSendAt = `${moment().format('YYYY-MM-DD')}T${editSendTime}:00`;
@@ -291,7 +291,7 @@ export default function SchedulerPage() {
             }
         } else {
             if (!editSendAt) {
-                toast.error("Please specify Send At");
+                toast.error("Informe a data e hora de envio");
                 return;
             }
         }
@@ -320,14 +320,14 @@ export default function SchedulerPage() {
             });
 
             if (res.ok) {
-                toast.success("Schedule updated");
+                toast.success("Agendamento atualizado");
                 setIsEditOpen(false);
                 fetchMessages(selectedSessionId, activeTab);
             } else {
-                toast.error("Failed to update schedule");
+                toast.error("Falha ao atualizar o agendamento");
             }
         } catch (error) {
-            toast.error("An error occurred");
+            toast.error("Ocorreu um erro");
         }
     };
 
@@ -336,13 +336,13 @@ export default function SchedulerPage() {
         try {
             const res = await fetch(`/api/scheduler/${selectedSessionId}/${deleteId}`, { method: "DELETE" });
             if (res.ok) {
-                toast.success("Schedule deleted");
+                toast.success("Agendamento excluído");
                 fetchMessages(selectedSessionId, activeTab);
             } else {
-                toast.error("Failed to delete schedule");
+                toast.error("Falha ao excluir o agendamento");
             }
         } catch (error) {
-            toast.error("Failed to delete schedule");
+            toast.error("Falha ao excluir o agendamento");
         } finally {
             setDeleteId(null);
         }
@@ -363,62 +363,62 @@ export default function SchedulerPage() {
         sendAtStr: string, setSendAtStr: any,
         sendTimeStr: string, setSendTimeStr: any
     ) => (
-        <div className="space-y-4 border p-4 rounded-md bg-slate-50 mt-4">
-            <Label className="font-semibold text-base">Schedule Type</Label>
+        <div className="space-y-4 border p-4 rounded-md bg-zinc-50 mt-4">
+            <Label className="font-semibold text-base">Tipo de agendamento</Label>
             <RadioGroup value={isRec} onValueChange={setRec} className="flex gap-4">
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="once" id={`r-once-${type}`} />
-                    <Label htmlFor={`r-once-${type}`}>One-time</Label>
+                    <Label htmlFor={`r-once-${type}`}>Único</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="recurring" id={`r-rec-${type}`} />
-                    <Label htmlFor={`r-rec-${type}`}>Recurring</Label>
+                    <Label htmlFor={`r-rec-${type}`}>Recorrente</Label>
                 </div>
             </RadioGroup>
 
             {isRec === "once" && (
-                <div className="space-y-2 mt-4 pt-4 border-t border-slate-200">
-                    <Label>Send At (Date & Time)</Label>
+                <div className="space-y-2 mt-4 pt-4 border-t border-zinc-200">
+                    <Label>Enviar em (data e hora)</Label>
                     <Input type="datetime-local" value={sendAtStr} onChange={e => setSendAtStr(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">The exact date and time this message will be sent.</p>
+                    <p className="text-xs text-muted-foreground">A data e hora exatas em que esta mensagem será enviada.</p>
                 </div>
             )}
 
             {isRec === "recurring" && (
-                <div className="space-y-4 pt-4 mt-2 border-t border-slate-200">
-                    <Label className="font-medium">Repeat Interval</Label>
+                <div className="space-y-4 pt-4 mt-2 border-t border-zinc-200">
+                    <Label className="font-medium">Intervalo de repetição</Label>
                     <Select value={type} onValueChange={setType}>
                         <SelectTrigger>
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="minutes">Every X Minutes</SelectItem>
-                            <SelectItem value="hours">Every X Hours</SelectItem>
-                            <SelectItem value="days">Specific Days of Week</SelectItem>
-                            <SelectItem value="cron">Custom Cron</SelectItem>
+                            <SelectItem value="minutes">A cada X minutos</SelectItem>
+                            <SelectItem value="hours">A cada X horas</SelectItem>
+                            <SelectItem value="days">Dias específicos da semana</SelectItem>
+                            <SelectItem value="cron">Cron personalizado</SelectItem>
                         </SelectContent>
                     </Select>
 
                     {type === "minutes" && (
                         <div className="flex items-center gap-2">
-                            <Label>Every</Label>
+                            <Label>A cada</Label>
                             <Input type="number" min={1} value={mins} onChange={e => setMins(parseInt(e.target.value) || 1)} className="w-20" />
-                            <Label>Minutes</Label>
+                            <Label>Minutos</Label>
                         </div>
                     )}
 
                     {type === "hours" && (
                         <div className="flex items-center gap-2">
-                            <Label>Every</Label>
+                            <Label>A cada</Label>
                             <Input type="number" min={1} value={hrs} onChange={e => setHrs(parseInt(e.target.value) || 1)} className="w-20" />
-                            <Label>Hours</Label>
+                            <Label>Horas</Label>
                         </div>
                     )}
 
                     {type === "days" && (
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label>Select Days</Label>
+                                <Label>Selecione os dias</Label>
                                 <div className="flex flex-wrap gap-4">
                                     {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
                                         <div key={d} className="flex items-center space-x-2">
@@ -435,8 +435,8 @@ export default function SchedulerPage() {
                                     ))}
                                 </div>
                             </div>
-                            <div className="space-y-2 pt-2 border-t border-slate-200">
-                                <Label>Time of Day</Label>
+                            <div className="space-y-2 pt-2 border-t border-zinc-200">
+                                <Label>Horário do dia</Label>
                                 <Input type="time" value={sendTimeStr} onChange={e => setSendTimeStr(e.target.value)} className="w-32" />
                             </div>
                         </div>
@@ -444,14 +444,15 @@ export default function SchedulerPage() {
 
                     {type === "cron" && (
                         <div className="space-y-2">
-                            <Label>Cron Expression</Label>
+                            <Label>Expressão cron</Label>
                             <Input value={cron} onChange={e => setCron(e.target.value)} placeholder="0 12 * * *" />
                         </div>
                     )}
                     
                     {type !== "days" && (
                         <p className="text-xs text-muted-foreground mt-2">
-                            The schedule will be evaluated starting from the current time.
+                            
+                            O agendamento será avaliado a partir do horário atual.
                         </p>
                     )}
                 </div>
@@ -465,54 +466,55 @@ export default function SchedulerPage() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                         <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                            <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" /> Scheduler
+                            <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />  Agendador
                         </h1>
                         <p className="text-sm text-muted-foreground">
-                            {selectedSessionId ? "Schedule messages for active session." : "Select a session from the top bar."}
+                            {selectedSessionId ? "Agende mensagens para a sessão ativa." : "Selecione uma sessão na barra superior."}
                         </p>
                     </div>
 
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => selectedSessionId && fetchMessages(selectedSessionId, activeTab)} disabled={loading || !selectedSessionId}>
                             <RefreshCw className={`h-4 w-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
-                            Refresh
+                            
+                            Atualizar
                         </Button>
                         <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowForm(!showForm)} disabled={!selectedSessionId}>
-                            <Plus className="h-4 w-4 mr-1 sm:mr-2" /> Schedule
+                            <Plus className="h-4 w-4 mr-1 sm:mr-2" />  Agendar
                         </Button>
                     </div>
                 </div>
 
                 <SearchFilter
-                    placeholder="Search schedules..."
+                    placeholder="Buscar agendamentos..."
                     onSearch={setSearchTerm}
                 />
 
                 {showForm && (
                     <Card className="border-2 border-primary/20">
                         <CardHeader>
-                            <CardTitle>Schedule New Message</CardTitle>
+                            <CardTitle>Agendar nova mensagem</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <Label>Recipient JID</Label>
+                                    <Label>JID do destinatário</Label>
                                     <RadioGroup value={newJidType} onValueChange={setNewJidType} className="flex gap-4">
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="personal" id="new-personal" />
-                                            <Label htmlFor="new-personal" className="cursor-pointer">Personal</Label>
+                                            <Label htmlFor="new-personal" className="cursor-pointer">Pessoal</Label>
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="group" id="new-group" />
-                                            <Label htmlFor="new-group" className="cursor-pointer">Group</Label>
+                                            <Label htmlFor="new-group" className="cursor-pointer">Grupo</Label>
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="newsletter" id="new-newsletter" />
-                                            <Label htmlFor="new-newsletter" className="cursor-pointer">Newsletter</Label>
+                                            <Label htmlFor="new-newsletter" className="cursor-pointer">Canal</Label>
                                         </div>
                                     </RadioGroup>
                                 </div>
-                                <Input value={newJid} onChange={e => setNewJid(e.target.value)} placeholder={newJidType === 'group' ? "120363... (Group ID)" : newJidType === 'newsletter' ? "120363... (Channel ID)" : "62812345678"} />
+                                <Input value={newJid} onChange={e => setNewJid(e.target.value)} placeholder={newJidType === 'group' ? "120363... (ID do grupo)" : newJidType === 'newsletter' ? "120363... (ID do canal)" : "62812345678"} />
                             </div>
                             
                             {renderRecurrenceForm(
@@ -527,30 +529,30 @@ export default function SchedulerPage() {
                             )}
 
                             <div className="space-y-2 mt-4">
-                                <Label>Message (Optional)</Label>
-                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Hello!" />
+                                <Label>Mensagem (opcional)</Label>
+                                <Textarea value={newContent} onChange={e => setNewContent(e.target.value)} placeholder="Olá!" />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Media URL (Optional)</Label>
+                                    <Label>URL da mídia (opcional)</Label>
                                     <Input value={newMediaUrl} onChange={e => setNewMediaUrl(e.target.value)} placeholder="https://..." />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Media Type</Label>
+                                    <Label>Tipo de mídia</Label>
                                     <Select value={newMediaType} onValueChange={setNewMediaType}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="image">Image</SelectItem>
-                                            <SelectItem value="video">Video</SelectItem>
-                                            <SelectItem value="document">Document</SelectItem>
+                                            <SelectItem value="image">Imagem</SelectItem>
+                                            <SelectItem value="video">Vídeo</SelectItem>
+                                            <SelectItem value="document">Documento</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 mt-4">
-                                <Button variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-                                <Button onClick={handleSaveSchedule} disabled={(!newContent && !newMediaUrl) || !newJid}>Schedule</Button>
+                                <Button variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
+                                <Button onClick={handleSaveSchedule} disabled={(!newContent && !newMediaUrl) || !newJid}>Agendar</Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -558,11 +560,11 @@ export default function SchedulerPage() {
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList className="mb-4">
-                        <TabsTrigger value="pending">Pending Queue</TabsTrigger>
-                        <TabsTrigger value="history">History Logs</TabsTrigger>
+                        <TabsTrigger value="pending">Fila pendente</TabsTrigger>
+                        <TabsTrigger value="history">Histórico</TabsTrigger>
                     </TabsList>
                     <TabsContent value="pending" className="mt-0">
-                        {loading ? <div className="text-center p-8">Loading...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-slate-50">No pending messages.</div> : (
+                        {loading ? <div className="text-center p-8">Carregando...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-zinc-50">Nenhuma mensagem pendente.</div> : (
                             <div className="grid gap-4">
                                 {filteredMessages.map(msg => (
                                     <Card key={msg.id}>
@@ -570,16 +572,16 @@ export default function SchedulerPage() {
                                             <div>
                                                 <div className="font-bold flex items-center gap-2">
                                                     {msg.jid.split('@')[0]}
-                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-purple-100 text-purple-800">Group</span> : null}
-                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Channel</span> : null}
+                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Grupo</span> : null}
+                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Canal</span> : null}
                                                     <span className="text-xs px-2 py-0.5 rounded font-normal bg-yellow-100 text-yellow-800">{msg.status}</span>
-                                                    {msg.cronExpression && <span className="text-xs px-2 py-0.5 rounded font-normal bg-blue-100 text-blue-800">Recurring</span>}
+                                                    {msg.cronExpression && <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Recorrente</span>}
                                                 </div>
-                                                <div className="text-sm font-medium mt-1">{msg.content || "[Media Only]"}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">Next Run: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
+                                                <div className="text-sm font-medium mt-1">{msg.content || "[Somente mídia]"}</div>
+                                                <div className="text-xs text-muted-foreground mt-1">Próxima execução: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
                                             </div>
                                             <div className="flex gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(msg)}>Edit</Button>
+                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(msg)}>Editar</Button>
                                                 <Button variant="ghost" size="icon" onClick={() => setDeleteId(msg.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
                                             </div>
                                         </CardContent>
@@ -589,7 +591,7 @@ export default function SchedulerPage() {
                         )}
                     </TabsContent>
                     <TabsContent value="history" className="mt-0">
-                        {loading ? <div className="text-center p-8">Loading...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-slate-50">No history found.</div> : (
+                        {loading ? <div className="text-center p-8">Carregando...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-zinc-50">Nenhum histórico encontrado.</div> : (
                             <div className="grid gap-4">
                                 {filteredMessages.map(msg => (
                                     <Card key={msg.id} className="opacity-80">
@@ -597,12 +599,12 @@ export default function SchedulerPage() {
                                             <div>
                                                 <div className="font-bold flex items-center gap-2">
                                                     {msg.jid.split('@')[0]}
-                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-purple-100 text-purple-800">Group</span> : null}
-                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Channel</span> : null}
-                                                    {msg.status === 'SENT' ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Sent</span> : <span className="text-xs px-2 py-0.5 rounded font-normal bg-red-100 text-red-800 flex items-center gap-1"><XCircle className="w-3 h-3"/> Failed</span>}
+                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Grupo</span> : null}
+                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Canal</span> : null}
+                                                    {msg.status === 'SENT' ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/>  Enviadas</span> : <span className="text-xs px-2 py-0.5 rounded font-normal bg-red-100 text-red-800 flex items-center gap-1"><XCircle className="w-3 h-3"/>  Falhas</span>}
                                                 </div>
-                                                <div className="text-sm font-medium mt-1">{msg.content || "[Media Only]"}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">Processed: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
+                                                <div className="text-sm font-medium mt-1">{msg.content || "[Somente mídia]"}</div>
+                                                <div className="text-xs text-muted-foreground mt-1">Processado em: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
                                             </div>
                                             <div className="flex gap-2">
                                                 <Button variant="ghost" size="icon" onClick={() => setDeleteId(msg.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
@@ -618,12 +620,12 @@ export default function SchedulerPage() {
                 <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Record?</AlertDialogTitle>
-                            <AlertDialogDescription>Are you sure you want to delete this schedule record?</AlertDialogDescription>
+                            <AlertDialogTitle>Excluir registro?</AlertDialogTitle>
+                            <AlertDialogDescription>Tem certeza de que deseja excluir este registro de agendamento?</AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmDelete} className="bg-red-600">Delete</AlertDialogAction>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={confirmDelete} className="bg-red-600">Excluir</AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>
@@ -631,28 +633,28 @@ export default function SchedulerPage() {
                 <Dialog open={isEditOpen} onOpenChange={o => !o && setIsEditOpen(false)}>
                     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle>Edit Schedule</DialogTitle>
+                            <DialogTitle>Editar agendamento</DialogTitle>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <Label>Recipient JID</Label>
+                                    <Label>JID do destinatário</Label>
                                     <RadioGroup value={editJidType} onValueChange={setEditJidType} className="flex gap-4">
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="personal" id="edit-personal" />
-                                            <Label htmlFor="edit-personal" className="cursor-pointer">Personal</Label>
+                                            <Label htmlFor="edit-personal" className="cursor-pointer">Pessoal</Label>
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="group" id="edit-group" />
-                                            <Label htmlFor="edit-group" className="cursor-pointer">Group</Label>
+                                            <Label htmlFor="edit-group" className="cursor-pointer">Grupo</Label>
                                         </div>
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="newsletter" id="edit-newsletter" />
-                                            <Label htmlFor="edit-newsletter" className="cursor-pointer">Newsletter</Label>
+                                            <Label htmlFor="edit-newsletter" className="cursor-pointer">Canal</Label>
                                         </div>
                                     </RadioGroup>
                                 </div>
-                                <Input value={editJid} onChange={e => setEditJid(e.target.value)} placeholder={editJidType === 'group' ? "120363... (Group ID)" : editJidType === 'newsletter' ? "120363... (Channel ID)" : "62812345678"} />
+                                <Input value={editJid} onChange={e => setEditJid(e.target.value)} placeholder={editJidType === 'group' ? "120363... (ID do grupo)" : editJidType === 'newsletter' ? "120363... (ID do canal)" : "62812345678"} />
                             </div>
                             
                             {renderRecurrenceForm(
@@ -667,30 +669,30 @@ export default function SchedulerPage() {
                             )}
 
                             <div className="space-y-2 mt-4">
-                                <Label>Message (Optional)</Label>
+                                <Label>Mensagem (opcional)</Label>
                                 <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>Media URL (Optional)</Label>
+                                    <Label>URL da mídia (opcional)</Label>
                                     <Input value={editMediaUrl} onChange={e => setEditMediaUrl(e.target.value)} />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Media Type</Label>
+                                    <Label>Tipo de mídia</Label>
                                     <Select value={editMediaType} onValueChange={setEditMediaType}>
                                         <SelectTrigger><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="image">Image</SelectItem>
-                                            <SelectItem value="video">Video</SelectItem>
-                                            <SelectItem value="document">Document</SelectItem>
+                                            <SelectItem value="image">Imagem</SelectItem>
+                                            <SelectItem value="video">Vídeo</SelectItem>
+                                            <SelectItem value="document">Documento</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button variant="ghost" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-                            <Button onClick={handleUpdateSchedule} disabled={(!editContent && !editMediaUrl) || !editJid}>Save Changes</Button>
+                            <Button variant="ghost" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleUpdateSchedule} disabled={(!editContent && !editMediaUrl) || !editJid}>Salvar alterações</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>

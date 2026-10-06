@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { waManager } from "./manager";
 import { logger } from "@/lib/logger";
+import { personalizeFor } from "@/lib/personalize";
 
 const checkScheduledMessages = async () => {
     try {
@@ -24,6 +25,7 @@ const checkScheduledMessages = async () => {
             if (instance?.socket) {
                 try {
                     let content: any = {};
+                    const finalText = msg.content ? await personalizeFor(msg.sessionId, msg.jid, msg.content) : msg.content;
                     if (msg.mediaUrl) {
                         const url = msg.mediaUrl;
                         const type = msg.mediaType || 'image'; // Default to image if null
@@ -33,14 +35,14 @@ const checkScheduledMessages = async () => {
                         const buffer = Buffer.from(await res.arrayBuffer());
 
                         if (type === 'video') {
-                            content = { video: buffer, caption: msg.content };
+                            content = { video: buffer, caption: finalText };
                         } else if (type === 'document') {
-                            content = { document: buffer, caption: msg.content, fileName: url.split('/').pop() || 'file', mimetype: 'application/octet-stream' };
+                            content = { document: buffer, caption: finalText, fileName: url.split('/').pop() || 'file', mimetype: 'application/octet-stream' };
                         } else {
-                            content = { image: buffer, caption: msg.content };
+                            content = { image: buffer, caption: finalText };
                         }
                     } else {
-                        content = { text: msg.content };
+                        content = { text: finalText };
                     }
 
                     await instance.socket.sendMessage(msg.jid, content);

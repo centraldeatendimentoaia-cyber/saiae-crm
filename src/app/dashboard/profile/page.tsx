@@ -54,7 +54,7 @@ export default function ProfilePage() {
             }
         } catch (error) {
             console.error("Fetch profile error:", error);
-            toast.error("An error occurred while fetching profile");
+            toast.error("Ocorreu um erro ao carregar o perfil");
         } finally {
             setLoading(false);
         }
@@ -72,14 +72,14 @@ export default function ProfilePage() {
             const data = await res.json();
             
             if (res.ok) {
-                toast.success("Profile name updated successfully");
+                toast.success("Nome do perfil atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, name: nameForm } : null);
             } else {
                 toast.error(data.message || "Failed to update profile name");
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error updating profile name");
+            toast.error("Erro ao atualizar o nome do perfil");
         } finally {
             setUpdatingName(false);
         }
@@ -97,14 +97,14 @@ export default function ProfilePage() {
             const data = await res.json();
             
             if (res.ok) {
-                toast.success("About/Status updated successfully");
+                toast.success("Recado/status atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, status: statusForm } : null);
             } else {
                 toast.error(data.message || "Failed to update status");
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error updating status");
+            toast.error("Erro ao atualizar o status");
         } finally {
             setUpdatingStatus(false);
         }
@@ -126,14 +126,14 @@ export default function ProfilePage() {
             const data = await res.json();
             
             if (res.ok) {
-                toast.success("Profile picture updated");
+                toast.success("Foto de perfil atualizada");
                 fetchProfile(); // Re-fetch to get the new picture URL
             } else {
                 toast.error(data.message || "Failed to upload picture");
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error uploading picture");
+            toast.error("Erro ao enviar a foto");
         } finally {
             setUpdatingPic(false);
             if (fileInputRef.current) {
@@ -152,14 +152,14 @@ export default function ProfilePage() {
             const data = await res.json();
             
             if (res.ok) {
-                toast.success("Profile picture removed");
+                toast.success("Foto de perfil removida");
                 setProfile(prev => prev ? { ...prev, pictureUrl: "" } : null);
             } else {
                 toast.error(data.message || "Failed to remove picture");
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error removing picture");
+            toast.error("Erro ao remover a foto");
         } finally {
             setUpdatingPic(false);
         }
@@ -172,9 +172,10 @@ export default function ProfilePage() {
                     <UserCircle className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-bold tracking-tight">No Session Selected</h2>
+                    <h2 className="text-xl font-bold tracking-tight">Nenhuma sessão selecionada</h2>
                     <p className="text-muted-foreground mt-2 max-w-sm">
-                        Please select an active WhatsApp session from the sidebar to manage its profile.
+                        
+                        Selecione uma sessão de WhatsApp ativa na barra lateral para gerenciar o perfil.
                     </p>
                 </div>
             </div>
@@ -184,8 +185,8 @@ export default function ProfilePage() {
     return (
         <div className="max-w-4xl space-y-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">WhatsApp Profile</h1>
-                <p className="text-muted-foreground">Manage your WhatsApp account presence directly from the dashboard.</p>
+                <h1 className="text-2xl font-bold tracking-tight">Perfil do WhatsApp</h1>
+                <p className="text-muted-foreground">Gerencie a presença da sua conta de WhatsApp direto pelo painel.</p>
             </div>
 
             {loading ? (
@@ -197,12 +198,12 @@ export default function ProfilePage() {
                     {/* Profile Picture Card */}
                     <Card className="md:col-span-1">
                         <CardHeader>
-                            <CardTitle>Profile Picture</CardTitle>
+                            <CardTitle>Foto de perfil</CardTitle>
                         </CardHeader>
                         <CardContent className="flex flex-col items-center space-y-6">
                             <div className="relative group">
                                 <Avatar className="h-40 w-40 border-4 border-background shadow-md">
-                                    <AvatarImage src={profile?.pictureUrl || ""} alt="Profile Picture" className="object-cover" />
+                                    <AvatarImage src={profile?.pictureUrl || ""} alt="Foto de perfil" className="object-cover" />
                                     <AvatarFallback className="bg-muted text-muted-foreground">
                                         <User className="h-16 w-16" />
                                     </AvatarFallback>
@@ -229,7 +230,8 @@ export default function ProfilePage() {
                                     disabled={updatingPic}
                                 >
                                     <Camera className="w-4 h-4 mr-2" />
-                                    Change Photo
+                                    
+                                    Alterar foto
                                 </Button>
                                 {(profile?.pictureUrl && profile.pictureUrl !== "") && (
                                     <Button 
@@ -239,7 +241,8 @@ export default function ProfilePage() {
                                         disabled={updatingPic}
                                     >
                                         <Trash2 className="w-4 h-4 mr-2" />
-                                        Remove Photo
+                                        
+                                        Remover foto
                                     </Button>
                                 )}
                             </div>
@@ -250,45 +253,46 @@ export default function ProfilePage() {
                     <div className="md:col-span-2 space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Profile Info</CardTitle>
-                                <CardDescription>Update your WhatsApp identity and about section.</CardDescription>
+                                <CardTitle>Informações do perfil</CardTitle>
+                                <CardDescription>Atualize sua identidade e o recado do WhatsApp.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-6">
                                 <div className="space-y-3">
-                                    <Label>WhatsApp Name (Pushname)</Label>
+                                    <Label>Nome do WhatsApp</Label>
                                     <div className="flex gap-2">
                                         <Input 
                                             value={nameForm} 
                                             onChange={(e) => setNameForm(e.target.value)} 
-                                            placeholder="Enter profile name" 
+                                            placeholder="Informe o nome do perfil" 
                                         />
                                         <Button onClick={handleUpdateName} disabled={updatingName || nameForm === profile?.name}>
-                                            {updatingName ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save"}
+                                            {updatingName ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
                                         </Button>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">This is the name visible to your contacts.</p>
+                                    <p className="text-xs text-muted-foreground">Este é o nome visível para seus contatos.</p>
                                 </div>
 
                                 <Card className="border-none shadow-none p-0 mt-4">
                                 <div className="space-y-3 pt-4 border-t border-border">
-                                    <Label>About</Label>
+                                    <Label>Recado</Label>
                                     <div className="space-y-3">
                                         <Textarea 
                                             value={statusForm} 
                                             onChange={(e) => setStatusForm(e.target.value)} 
-                                            placeholder="Available" 
+                                            placeholder="Disponível" 
                                             className="resize-none h-24"
                                             maxLength={139}
                                         />
                                         <div className="flex justify-between items-center">
-                                            <span className="text-xs text-muted-foreground">{statusForm.length}/139 characters</span>
+                                            <span className="text-xs text-muted-foreground">{statusForm.length}/139 caracteres</span>
                                             <Button onClick={handleUpdateStatus} disabled={updatingStatus || statusForm === profile?.status}>
                                                 {updatingStatus ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                                                Update About
+                                                
+                                                Atualizar recado
                                             </Button>
                                         </div>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-2">Update your WhatsApp 'About' section.</p>
+                                    <p className="text-xs text-muted-foreground mt-2">Atualize o recado do seu WhatsApp.</p>
                                 </div>
                                 </Card>
                             </CardContent>

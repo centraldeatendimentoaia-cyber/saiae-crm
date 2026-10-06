@@ -76,7 +76,7 @@ export function Navbar({ appName }: NavbarProps) {
                 toast.info(notification.title, {
                     description: notification.message,
                     action: notification.href ? {
-                        label: "View",
+                        label: "Ver",
                         onClick: () => router.push(notification.href!)
                     } : undefined,
                 });
@@ -123,11 +123,11 @@ export function Navbar({ appName }: NavbarProps) {
                     const notification = notifications.find(n => n.id === id);
                     return notification && !notification.read ? Math.max(0, prev - 1) : prev;
                 });
-                toast.success("Notification deleted");
+                toast.success("Notificação excluída");
             }
         } catch (e) {
             console.error("Failed to delete notification");
-            toast.error("Failed to delete notification");
+            toast.error("Falha ao excluir a notificação");
         }
     };
 
@@ -138,7 +138,7 @@ export function Navbar({ appName }: NavbarProps) {
     };
 
     return (
-        <header className="bg-background/40 backdrop-blur-2xl border-b border-border/50 h-16 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 w-full shadow-sm">
+        <header className="bg-background/90 backdrop-blur-md border-b border-border h-16 flex items-center justify-between px-4 sm:px-6 sticky top-0 z-30 w-full">
             <div className="flex items-center gap-3">
                 <MobileNav appName={appName} />
             </div>
@@ -151,27 +151,29 @@ export function Navbar({ appName }: NavbarProps) {
                 <Popover open={isOpen} onOpenChange={setIsOpen}>
                     <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="relative hover:bg-muted/50 rounded-full h-10 w-10">
-                            <Bell className={`h-5 w-5 transition-colors ${unreadCount > 0 ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`} />
+                            <Bell className={`h-5 w-5 transition-colors ${unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`} />
                             {unreadCount > 0 && (
-                                <span className="absolute top-1.5 right-2.5 h-2.5 w-2.5 bg-red-500 rounded-full animate-pulse border-2 border-background" />
+                                <span className="absolute top-1.5 right-2.5 h-2.5 w-2.5 bg-brand rounded-full border-2 border-background" />
                             )}
                         </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-80 p-0 rounded-2xl border border-border/50 shadow-2xl glass-panel" align="end">
+                    <PopoverContent className="w-80 p-0 rounded-[20px] border border-border shadow-xl bg-card" align="end">
                         <div className="p-4 border-b border-border/50 flex justify-between items-center bg-background/50">
                             <div>
-                                <h4 className="font-semibold leading-none text-foreground">Notifications</h4>
+                                <h4 className="font-semibold leading-none text-foreground">Notificações</h4>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    {unreadCount > 0 ? `You have ${unreadCount} unread updates.` : "No new notifications."}
+                                    {unreadCount > 0 ? `You have ${unreadCount} unread updates.` : "Nenhuma notificação nova."}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1">
                                 <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => { router.push("/dashboard/inbox"); setIsOpen(false); }}>
-                                    See all
+                                    
+                                    Ver todas
                                 </Button>
                                 {unreadCount > 0 && (
                                     <Button variant="ghost" size="sm" onClick={() => markAsRead()} className="h-auto py-1 px-2 text-xs">
-                                        Mark all read
+                                        
+                                        Marcar todas como lidas
                                     </Button>
                                 )}
                             </div>
@@ -179,36 +181,36 @@ export function Navbar({ appName }: NavbarProps) {
                         <div className="max-h-[300px] overflow-y-auto">
                             {notifications.length === 0 ? (
                                 <div className="min-h-[150px] flex flex-col items-center justify-center text-center p-4">
-                                    <div className="bg-slate-100 p-3 rounded-full mb-3">
-                                        <Inbox className="h-6 w-6 text-slate-400" />
+                                    <div className="bg-zinc-100 p-3 rounded-full mb-3">
+                                        <Inbox className="h-6 w-6 text-zinc-400" />
                                     </div>
-                                    <p className="text-sm font-medium">No new notifications</p>
-                                    <p className="text-xs text-muted-foreground max-w-[180px]">We'll notify you when something important arrives.</p>
+                                    <p className="text-sm font-medium">Nenhuma notificação nova</p>
+                                    <p className="text-xs text-muted-foreground max-w-[180px]">Avisaremos quando chegar algo importante.</p>
                                 </div>
                             ) : (
                                 <div className="divide-y">
                                     {notifications.map(n => (
                                         <div
                                             key={n.id}
-                                            className={`p-4 hover:bg-slate-50 transition-colors ${!n.read ? 'bg-blue-50/50' : ''}`}
+                                            className={`p-4 hover:bg-zinc-50 transition-colors ${!n.read ? 'bg-zinc-50/50' : ''}`}
                                         >
                                             <div className="flex justify-between items-start gap-3">
                                                 <div
                                                     className="flex-1 space-y-1 cursor-pointer"
                                                     onClick={() => handleNotificationClick(n)}
                                                 >
-                                                    <p className={`text-sm font-medium leading-none ${!n.read ? 'text-blue-700' : 'text-slate-900'}`}>
+                                                    <p className={`text-sm font-medium leading-none ${!n.read ? 'text-zinc-700' : 'text-zinc-900'}`}>
                                                         {n.title}
                                                     </p>
                                                     <p className="text-xs text-muted-foreground whitespace-normal break-words">
                                                         {n.message}
                                                     </p>
-                                                    <p className="text-[10px] text-slate-400">
+                                                    <p className="text-[10px] text-zinc-400">
                                                         {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    {!n.read && <span className="h-2 w-2 bg-blue-500 rounded-full flex-shrink-0" />}
+                                                    {!n.read && <span className="h-2 w-2 bg-zinc-500 rounded-full flex-shrink-0" />}
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"

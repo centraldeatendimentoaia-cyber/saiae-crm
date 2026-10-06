@@ -1,21 +1,21 @@
 <div align="center">
 
-# 🚀 WA-AKG: The Ultimate WhatsApp Gateway & Dashboard
+# 🚀 Saiaê: The Ultimate WhatsApp Gateway & Dashboard
 
 [![WhatsApp Bot](https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://wa.me/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io/)
-[![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=for-the-badge)](https://github.com/mrifqidaffaaditya/WA-AKG/releases)
-[![Main Branch](https://img.shields.io/badge/Branch-Main-green?style=for-the-badge&logo=git)](https://github.com/mrifqidaffaaditya/WA-AKG)
+[![Version](https://img.shields.io/badge/Version-1.6.2-blue?style=for-the-badge)](#)
+[![Main Branch](https://img.shields.io/badge/Branch-Main-green?style=for-the-badge&logo=git)](#)
 
-[![Active Apps](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi-wa-akg.aikeigroup.net%2Fapi%2Factive-apps&query=%24.activeCount&style=flat-square&color=25D366&logo=whatsapp&logoColor=white&label=)](https://api-wa-akg.aikeigroup.net/)
+[![Active Apps](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi-saiae-crm.aikeigroup.net%2Fapi%2Factive-apps&query=%24.activeCount&style=flat-square&color=25D366&logo=whatsapp&logoColor=white&label=)](#)
 
 **A professional, multi-session WhatsApp Gateway, Dashboard, and Automation System.**  
 Built with **Next.js 15**, **React**, and **Baileys** for high-performance messaging automation and real-time WhatsApp Bot Gateway services.
 
 > [!TIP]
-> **Looking for the latest features?** Check out the [beta branch](https://github.com/mrifqidaffaaditya/WA-AKG/tree/beta) or our [pre-releases](https://github.com/mrifqidaffaaditya/WA-AKG/releases) for experimental sources.
+> **Looking for the latest features?** Check out the [beta branch](#) or our [pre-releases](#) for experimental sources.
 
 [Features](#-key-features) • [User Guide](docs/USER_GUIDE.md) • [API Documentation](docs/API_DOCUMENTATION.md) • [Database Setup](docs/DATABASE_SETUP.md) • [Installation](#-quick-installation)
 
@@ -25,7 +25,7 @@ Built with **Next.js 15**, **React**, and **Baileys** for high-performance messa
 
 ## 📖 Complete Documentation
 
-WA-AKG comes with extensive documentation designed for both developers and users.
+Saiaê comes with extensive documentation designed for both developers and users.
 
 - **[Master Project Documentation](docs/PROJECT_DOCUMENTATION.md)**: Architecture, database, and logic flow.
 - **[API Documentation](docs/API_DOCUMENTATION.md)**: Comprehensive OpenAPI / Swagger guide for all **109+ endpoints**.
@@ -34,15 +34,15 @@ WA-AKG comes with extensive documentation designed for both developers and users
 
 ---
 
-## 🌟 Why WA-AKG WhatsApp API Gateway?
+## 🌟 Why Saiaê WhatsApp API Gateway?
 
-WA-AKG transforms your WhatsApp into a fully programmable RESTful API. It's designed for scale, reliability, and ease of use, making it the perfect bridge between your business logic and WhatsApp's global reach. Excellent for developing a **WhatsApp Bot**, Automation, or Customer Service Gateway.
+Saiaê transforms your WhatsApp into a fully programmable RESTful API. It's designed for scale, reliability, and ease of use, making it the perfect bridge between your business logic and WhatsApp's global reach. Excellent for developing a **WhatsApp Bot**, Automation, or Customer Service Gateway.
 
 ### 🏗️ How it Works
 
 ```mermaid
 graph LR
-    User([User / App]) -->|REST API| API[WA-AKG Gateway]
+    User([User / App]) -->|REST API| API[Saiaê Gateway]
     API -->|Baileys| WhatsApp[[WhatsApp Server]]
     API -->|Real-time| DB[(Prisma / DB)]
     WhatsApp -.->|Webhook| API
@@ -92,14 +92,14 @@ graph LR
 
 ## 🧩 Integrations: Native n8n Support
 
-WA-AKG natively supports **n8n**! You can build complex, no-code/low-code WhatsApp automation workflows using our official community nodes.
+Saiaê natively supports **n8n**! You can build complex, no-code/low-code WhatsApp automation workflows using our official community nodes.
 
-[![n8n nodes](https://img.shields.io/badge/n8n-nodes--wa--akg-EA4B71?style=for-the-badge&logo=n8n&logoColor=white)](https://www.npmjs.com/package/n8n-nodes-wa-akg)
+[![n8n nodes](https://img.shields.io/badge/n8n-nodes--wa--akg-EA4B71?style=for-the-badge&logo=n8n&logoColor=white)](https://www.npmjs.com/package/n8n-nodes-saiae-crm)
 
 - **Action Node**: Full control over messaging, groups, sessions, contacts, and labels directly from your n8n workflows.
 - **Trigger Node**: Instantly catch real-time webhooks (Message Received, Group Joined, etc.) and trigger your workflows automatically.
 
-👉 **[View on npm (n8n-nodes-wa-akg)](https://www.npmjs.com/package/n8n-nodes-wa-akg)**
+👉 **[View on npm (n8n-nodes-saiae-crm)](https://www.npmjs.com/package/n8n-nodes-saiae-crm)**
 
 ---
 
@@ -114,8 +114,8 @@ WA-AKG natively supports **n8n**! You can build complex, no-code/low-code WhatsA
 ### 2. Setup
 ```bash
 # Clone and install
-git clone https://github.com/mrifqidaffaaditya/WA-AKG.git
-cd WA-AKG
+git clone #
+cd Saiaê
 npm install
 
 # Configure environment
@@ -138,7 +138,7 @@ npm run dev
 We recommend deploying with **PM2** to run the app in the background and ensure it restarts automatically if the server rebooted or crashed.
 
 #### Option A: Automatic Setup Script (Easiest)
-We provide a built-in [start.sh](file:///home/aditya/project/WA-AKG/start.sh) script that automates everything: checking the configuration, installing dependencies, syncing the database schema, compiling production assets, and starting or reloading PM2:
+We provide a built-in [start.sh](file:///home/aditya/project/Saiaê/start.sh) script that automates everything: checking the configuration, installing dependencies, syncing the database schema, compiling production assets, and starting or reloading PM2:
 ```bash
 ./start.sh
 ```
@@ -150,16 +150,16 @@ We provide a built-in [start.sh](file:///home/aditya/project/WA-AKG/start.sh) sc
    ```
 
 2. **Start with PM2**:
-   Using the built-in [ecosystem.config.js](file:///home/aditya/project/WA-AKG/ecosystem.config.js) configuration file:
+   Using the built-in [ecosystem.config.js](file:///home/aditya/project/Saiaê/ecosystem.config.js) configuration file:
    ```bash
    pm2 start ecosystem.config.js
    ```
 
 3. **Manage the process**:
    - View status: `pm2 status`
-   - View logs: `pm2 logs wa-akg`
-   - Stop process: `pm2 stop wa-akg`
-   - Restart process: `pm2 restart wa-akg`
+   - View logs: `pm2 logs saiae-crm`
+   - Stop process: `pm2 stop saiae-crm`
+   - Restart process: `pm2 restart saiae-crm`
 
 4. **Enable auto-start on server boot**:
    ```bash
@@ -189,7 +189,7 @@ Although **PM2 is highly recommended**, you can also deploy using Docker Compose
 
 ## 📚 API Reference Overview
 
-WA-AKG provides a comprehensive REST API to integrate WhatsApp Messaging directly into your applications. Full details in [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md).
+Saiaê provides a comprehensive REST API to integrate WhatsApp Messaging directly into your applications. Full details in [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md).
 
 > [!TIP]
 > Use the built-in **Swagger UI** for interactive exploration at `/docs`.
@@ -210,7 +210,7 @@ curl -X POST http://localhost:3000/api/messages/session_01/62812345678@s.whatsap
   -H "X-API-Key: your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "message": { "text": "Hello from WA-AKG!" }
+    "message": { "text": "Hello from Saiaê!" }
   }'
 ```
 
@@ -241,6 +241,6 @@ curl -X POST http://localhost:3000/api/messages/session_01/62812345678@s.whatsap
 ---
 
 <div align="center">
-  Built with ❤️ by <a href="https://github.com/mrifqidaffaaditya">Aditya</a>  
+  Built with ❤️ by <a href="https://github.com/saiae">Aditya</a>  
   Licensed under <a href="LICENSE">MIT</a>
 </div>

@@ -1,6 +1,6 @@
-# 🔄 WA-AKG Update Guide
+# 🔄 Saiaê Update Guide
 
-Keep your **WA-AKG** instance up-to-date with the latest features, security patches, and performance improvements.
+Keep your **Saiaê** instance up-to-date with the latest features, security patches, and performance improvements.
 
 ---
 
@@ -9,7 +9,7 @@ Keep your **WA-AKG** instance up-to-date with the latest features, security patc
 Follow these steps to update your application safely.
 
 ### Option A: Automatic Update (Recommended)
-If you are deploying with PM2 and using the built-in [start.sh](file:///home/aditya/project/WA-AKG/start.sh) script, updating is as simple as:
+If you are deploying with PM2 and using the built-in [start.sh](file:///home/aditya/project/Saiaê/start.sh) script, updating is as simple as:
 ```bash
 git pull
 ./start.sh
@@ -45,7 +45,7 @@ npm run db:push
 npm run build
 
 # Restart your process using PM2
-pm2 restart wa-akg
+pm2 restart saiae-crm
 ```
 
 ---

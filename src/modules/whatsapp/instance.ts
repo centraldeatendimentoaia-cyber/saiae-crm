@@ -6,6 +6,7 @@ import makeWASocket, {
     ConnectionState
 } from "@whiskeysockets/baileys";
 import { prisma } from "@/lib/prisma";
+import { backfillContactNames } from "@/lib/personalize";
 import { usePrismaAuthState } from "./auth/usePrismaAuthState";
 import { Server } from "socket.io";
 import pino from "pino";
@@ -85,6 +86,43 @@ export class WhatsAppInstance {
         bindContactSync(this.socket, this.sessionId);
 
         this.socket.ev.on("creds.update", saveCreds);
+
+        // Sincroniza etiquetas do WhatsApp Business para o painel
+        const LABEL_COLORS = ["#ff9485","#64c4ff","#ffd429","#dbf0d8","#ff9dff","#c3a5ff","#22c9a8","#ff6b6b","#7ec8e3","#f4a261","#8ac926","#e76f51","#6a4c93","#1982c4","#ffca3a","#ff595e","#8ac6d1","#b5838d","#a7c957","#9a8c98"];
+        this.socket.ev.on("labels.edit" as any, async (label: any) => {
+            try {
+                const id = `${this.sessionId}:${label.id}`;
+                if (label.deleted) {
+                    await prisma.label.deleteMany({ where: { id } });
+                    return;
+                }
+                const color = Number(label.color) || 0;
+                const data = { name: label.name || `Etiqueta ${label.id}`, color, colorHex: LABEL_COLORS[color % LABEL_COLORS.length] };
+                await prisma.label.upsert({ where: { id }, update: data, create: { id, sessionId: this.sessionId, ...data } });
+            } catch (e) {
+                logger.error("Instance", "Label sync failed:", e);
+            }
+        });
+        this.socket.ev.on("labels.association" as any, async (ev: any) => {
+            try {
+                const assoc = ev?.association;
+                if (!assoc || assoc.type !== "chat") return;
+                const labelId = `${this.sessionId}:${assoc.labelId}`;
+                if (ev.type === "add") {
+                    const exists = await prisma.label.findUnique({ where: { id: labelId } });
+                    if (!exists) return;
+                    await prisma.chatLabel.upsert({
+                        where: { labelId_chatJid: { labelId, chatJid: assoc.chatId } },
+                        update: {},
+                        create: { labelId, chatJid: assoc.chatId },
+                    });
+                } else {
+                    await prisma.chatLabel.deleteMany({ where: { labelId, chatJid: assoc.chatId } });
+                }
+            } catch (e) {
+                logger.error("Instance", "Label association sync failed:", e);
+            }
+        });
 
         this.socket.ev.on("connection.update", async (update) => {
             await this.handleConnectionUpdate(update);
@@ -207,6 +245,19 @@ export class WhatsAppInstance {
                 this.startTime = new Date();
 
                 this.io?.to(this.sessionId).emit("connection.update", { status: "CONNECTED", qr: null });
+
+                // Força a ressincronização do estado do app para trazer as etiquetas
+                setTimeout(() => {
+                    (this.socket as any)?.resyncAppState?.(["regular", "regular_low", "regular_high"], true)
+                        .catch((e: any) => logger.error("Instance", "Label resync failed:", e?.message || e));
+                }, 8000);
+
+                try {
+                    const dbSession = await prisma.session.findUnique({ where: { sessionId: this.sessionId }, select: { id: true } });
+                    if (dbSession) await backfillContactNames(dbSession.id);
+                } catch (e) {
+                    logger.error("Instance", "Contact name backfill failed:", e);
+                }
 
                 try {
                     await syncGroups(this.socket as WASocket, this.sessionId);

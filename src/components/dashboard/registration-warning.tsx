@@ -14,13 +14,13 @@ export function RegistrationWarning({ role, registrationEnabled }: RegistrationW
         if (role === "SUPERADMIN" && registrationEnabled) {
             // Delay toast slightly to wait for `<Toaster>` provider mount in layout
             const timer = setTimeout(() => {
-                toast("Public Registration is Enabled", {
-                    description: "Anyone can register to this instance. If this is unintended, disable it in System Settings to prevent unauthorized access.",
+                toast("O cadastro público está ativado", {
+                    description: "Qualquer pessoa pode se cadastrar nesta instância. Se não for intencional, desative nas Configurações do Sistema para evitar acessos indevidos.",
                     icon: <ShieldAlert className="text-amber-500 w-5 h-5" />,
                     duration: 8000,
                     position: "top-center",
                     action: {
-                        label: "Settings",
+                        label: "Configurações",
                         onClick: () => window.location.href = "/dashboard/settings"
                     }
                 });

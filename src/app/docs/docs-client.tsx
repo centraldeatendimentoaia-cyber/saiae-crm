@@ -31,12 +31,12 @@ function CopyButton({ code }: { code: string }) {
         navigator.clipboard.writeText(code).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
-        }).catch(() => toast.error("Copy failed"));
+        }).catch(() => toast.error("Falha ao copiar"));
     }, [code]);
     return (
-        <button onClick={handleCopy} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors cursor-pointer">
+        <button onClick={handleCopy} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer">
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? "Copied!" : "Copy"}
+            {copied ? "Copiado!" : "Copiar"}
         </button>
     );
 }
@@ -126,30 +126,30 @@ export function DocsClient({ content, toc }: DocsClientProps) {
         <div className="space-y-1">
             <button
                 onClick={() => section.items.length > 0 ? onToggle(section.id) : onScroll(section.id, isMobile)}
-                className="flex items-center justify-between w-full text-left font-semibold text-gray-900 hover:text-blue-600 transition-colors py-2 group" // Increased touch target py-2
+                className="flex items-center justify-between w-full text-left font-semibold text-zinc-900 hover:text-zinc-600 transition-colors py-2 group" // Increased touch target py-2
             >
                 <span className="truncate pr-2">{section.title}</span>
                 {section.items.length > 0 && (
                     <ChevronRight
-                        className={`h-4 w-4 flex-shrink-0 text-gray-400 transition-transform duration-200 group-hover:text-blue-500 ${isOpen ? "rotate-90" : ""}`}
+                        className={`h-4 w-4 flex-shrink-0 text-zinc-400 transition-transform duration-200 group-hover:text-zinc-500 ${isOpen ? "rotate-90" : ""}`}
                     />
                 )}
             </button>
 
             {isOpen && (
-                <div className="space-y-1 ml-2 border-l-2 border-slate-100 pl-2"> {/* Removed heavy animate-in for performance */}
+                <div className="space-y-1 ml-2 border-l-2 border-zinc-100 pl-2"> {/* Removed heavy animate-in for performance */}
                     {section.items.map((item) => (
                         <button
                             key={item.id}
                             onClick={() => onScroll(item.id, isMobile)}
-                            className="block text-left w-full text-sm text-gray-500 hover:text-blue-600 hover:bg-slate-50 py-2 px-2 rounded transition-colors truncate" // Increased touch target py-2
+                            className="block text-left w-full text-sm text-zinc-500 hover:text-zinc-600 hover:bg-zinc-50 py-2 px-2 rounded transition-colors truncate" // Increased touch target py-2
                             title={item.text}
                         >
                             {item.text}
                         </button>
                     ))}
                     {section.items.length === 0 && (
-                        <p className="text-xs text-gray-300 italic px-2 py-1">No subsections</p>
+                        <p className="text-xs text-zinc-300 italic px-2 py-1">Sem subseções</p>
                     )}
                 </div>
             )}
@@ -171,7 +171,7 @@ export function DocsClient({ content, toc }: DocsClientProps) {
                     />
                 ))
             ) : (
-                <p className="text-sm text-gray-400 text-center py-4">No results found</p>
+                <p className="text-sm text-zinc-400 text-center py-4">Nenhum resultado encontrado</p>
             )}
         </nav>
     );
@@ -179,13 +179,13 @@ export function DocsClient({ content, toc }: DocsClientProps) {
     return (
         <div className="flex-1 max-w-7xl mx-auto w-full flex items-start relative px-4 sm:px-6 lg:px-8">
             {/* Sidebar (Desktop) */}
-            <aside className="hidden lg:block w-72 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto border-r border-gray-100 pr-6 mt-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+            <aside className="hidden lg:block w-72 sticky top-20 h-[calc(100vh-6rem)] overflow-y-auto border-r border-zinc-100 pr-6 mt-8 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
                 <div className="mb-8 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                     <input
                         type="text"
-                        placeholder="Filter documentation..."
-                        className="w-full pl-9 pr-4 py-2.5 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-400"
+                        placeholder="Filtrar documentação..."
+                        className="w-full pl-9 pr-4 py-2.5 text-sm bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-500/20 focus:border-zinc-500 transition-all placeholder:text-zinc-400"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -197,22 +197,22 @@ export function DocsClient({ content, toc }: DocsClientProps) {
             <div className="lg:hidden fixed bottom-4 right-4 z-50">
                 <Sheet open={openMobileMenu} onOpenChange={setOpenMobileMenu}>
                     <SheetTrigger asChild>
-                        <Button size="icon" className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg shadow-blue-600/20 bg-blue-600 hover:bg-blue-700 text-white transition-transform hover:scale-105 active:scale-95">
+                        <Button size="icon" className="h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg shadow-zinc-600/20 bg-zinc-600 hover:bg-zinc-700 text-white transition-transform hover:scale-105 active:scale-95">
                             <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
                         </Button>
                     </SheetTrigger>
                     <SheetContent side="left" className="w-[85vw] sm:w-[400px] p-0 flex flex-col"> {/* Adjusted width for mobile */}
-                        <div className="p-6 border-b bg-gray-50/50">
-                            <h2 className="text-lg font-bold text-gray-900">Documentation</h2>
-                            <p className="text-xs text-gray-500 mt-1">Navigate through sections</p>
+                        <div className="p-6 border-b bg-zinc-50/50">
+                            <h2 className="text-lg font-bold text-zinc-900">Documentação</h2>
+                            <p className="text-xs text-zinc-500 mt-1">Navegue pelas seções</p>
                         </div>
                         <div className="p-4 flex-1 overflow-y-auto overscroll-contain"> {/* Added overscroll-contain */}
                             <div className="mb-6 relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search topic..."
-                                    className="w-full pl-9 pr-4 py-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" // Larger text/padding for mobile
+                                    placeholder="Buscar tópico..."
+                                    className="w-full pl-9 pr-4 py-3 text-base bg-zinc-50 border border-zinc-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-500" // Larger text/padding for mobile
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
@@ -225,16 +225,16 @@ export function DocsClient({ content, toc }: DocsClientProps) {
 
             {/* Main Content */}
             <main className="flex-1 min-w-0 py-6 lg:py-8 lg:pl-12 overflow-x-hidden">
-                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 sm:p-4 mb-8 rounded-r-lg">
+                <div className="bg-zinc-50 border-l-4 border-zinc-500 p-3 sm:p-4 mb-8 rounded-r-lg">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <svg className="h-5 w-5 text-zinc-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                             </svg>
                         </div>
                         <div className="ml-3">
-                            <p className="text-sm text-blue-700">
-                                For the most up-to-date API reference and interactive testing, please check the <Link href="/swagger" className="font-medium underline hover:text-blue-600">Swagger UI</Link> or the <Link href="/dashboard/api-docs" className="font-medium underline hover:text-blue-600">Dashboard API Docs</Link>.
+                            <p className="text-sm text-zinc-700">
+                                Para a referência de API mais atualizada e testes interativos, consulte o <Link href="/swagger" className="font-medium underline hover:text-zinc-600">Swagger UI</Link> or the <Link href="/dashboard/api-docs" className="font-medium underline hover:text-zinc-600">Dashboard API Docs</Link>.
                             </p>
                         </div>
                     </div>
@@ -256,9 +256,9 @@ export function DocsClient({ content, toc }: DocsClientProps) {
                                 const match = /language-(\w+)/.exec(className || '');
                                 const codeStr = String(children).replace(/\n$/, '');
                                 return !inline && match ? (
-                                    <div className="rounded-xl overflow-hidden my-6 border border-gray-200 shadow-sm ring-1 ring-gray-900/5 bg-gray-950">
-                                        <div className="bg-gray-50/90 px-4 py-2.5 flex items-center justify-between border-b border-gray-200">
-                                            <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">{match[1]}</span>
+                                    <div className="rounded-xl overflow-hidden my-6 border border-zinc-200 shadow-sm ring-1 ring-zinc-900/5 bg-zinc-950">
+                                        <div className="bg-zinc-50/90 px-4 py-2.5 flex items-center justify-between border-b border-zinc-200">
+                                            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">{match[1]}</span>
                                             <button onClick={() => {
                                                 navigator.clipboard.writeText(codeStr).then(() => {
                                                     const btn = document.activeElement;
@@ -268,32 +268,32 @@ export function DocsClient({ content, toc }: DocsClientProps) {
                                                         setTimeout(() => btn.innerHTML = orig, 2000);
                                                     }
                                                 }).catch(() => {});
-                                            }} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-900 transition-colors cursor-pointer">
+                                            }} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-900 transition-colors cursor-pointer">
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="h-3.5 w-3.5" aria-hidden="true">
                                                     <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
                                                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
                                                 </svg>
-                                                <span className="font-medium">Copy</span>
+                                                <span className="font-medium">Copiar</span>
                                             </button>
                                         </div>
-                                        <pre className="text-gray-100 text-sm leading-loose overflow-x-auto p-5 m-0 selection:bg-gray-700">
+                                        <pre className="text-zinc-100 text-sm leading-loose overflow-x-auto p-5 m-0 selection:bg-zinc-700">
                                             <code className="font-mono">{codeStr}</code>
                                         </pre>
                                     </div>
                                 ) : (
-                                    <code className="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-sm font-mono border border-gray-200 break-all" {...props}>
+                                    <code className="bg-zinc-100 text-zinc-800 px-1.5 py-0.5 rounded text-sm font-mono border border-zinc-200 break-all" {...props}>
                                         {children}
                                     </code>
                                 )
                             },
                             table: ({ node, ...props }) => (
                         <div className="overflow-x-auto my-6 border rounded-lg shadow-sm">
-                                    <table {...props} className="min-w-full divide-y divide-gray-200 text-sm sm:text-base" />
+                                    <table {...props} className="min-w-full divide-y divide-zinc-200 text-sm sm:text-base" />
                                 </div>
                             ),
-                            thead: ({ node, ...props }) => <thead {...props} className="bg-gray-50" />,
-                            th: ({ node, ...props }) => <th {...props} className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" />,
-                            td: ({ node, ...props }) => <td {...props} className="px-3 sm:px-4 py-3 text-sm text-gray-500 break-words whitespace-normal" />,
+                            thead: ({ node, ...props }) => <thead {...props} className="bg-zinc-50" />,
+                            th: ({ node, ...props }) => <th {...props} className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider" />,
+                            td: ({ node, ...props }) => <td {...props} className="px-3 sm:px-4 py-3 text-sm text-zinc-500 break-words whitespace-normal" />,
                             pre: ({ node, ...props }) => <pre {...props} /> // Passthrough to code block handler
                         }}
                     >
@@ -301,8 +301,8 @@ export function DocsClient({ content, toc }: DocsClientProps) {
                     </ReactMarkdown>
                 </article>
 
-                <footer className="mt-20 pt-8 border-t text-center text-sm text-gray-400">
-                    <p>© {new Date().getFullYear()} WA-AKG. All rights reserved.</p>
+                <footer className="mt-20 pt-8 border-t text-center text-sm text-zinc-400">
+                    <p>© {new Date().getFullYear()} Saiaê. Todos os direitos reservados.</p>
                 </footer>
             </main>
         </div>

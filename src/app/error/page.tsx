@@ -18,36 +18,36 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
   '400': {
     icon: <AlertCircle className="size-12 animate-pulse" />,
     title: '400',
-    subtitle: 'Permintaan Tidak Valid',
-    description: 'Server tidak dapat memproses permintaan Anda karena format yang tidak valid.',
+    subtitle: 'Requisição inválida',
+    description: 'O servidor não conseguiu processar sua requisição por causa de um formato inválido.',
     colorTheme: 'amber',
   },
   '401': {
     icon: <Lock className="size-12 animate-pulse" />,
     title: '401',
-    subtitle: 'Akses Ditolak',
-    description: 'Anda harus masuk (login) terlebih dahulu untuk mengakses halaman ini.',
+    subtitle: 'Acesso negado',
+    description: 'Você precisa entrar (login) para acessar esta página.',
     colorTheme: 'rose',
   },
   '403': {
     icon: <ShieldAlert className="size-12 animate-pulse" />,
     title: '403',
-    subtitle: 'Akses Terlarang',
-    description: 'Anda tidak memiliki izin yang cukup untuk mengakses halaman atau sumber daya ini.',
+    subtitle: 'Acesso proibido',
+    description: 'Você não tem permissão suficiente para acessar esta página ou recurso.',
     colorTheme: 'destructive',
   },
   '429': {
     icon: <Hourglass className="size-12 animate-pulse" />,
     title: '429',
-    subtitle: 'Terlalu Banyak Permintaan',
-    description: 'Batas permintaan terlampaui. Harap tunggu beberapa saat sebelum mencoba lagi.',
+    subtitle: 'Muitas requisições',
+    description: 'Limite de requisições excedido. Aguarde alguns instantes antes de tentar novamente.',
     colorTheme: 'indigo',
   },
   '500': {
     icon: <AlertCircle className="size-12 animate-pulse" />,
     title: '500',
-    subtitle: 'Kesalahan Server',
-    description: 'Terjadi kesalahan tak terduga pada server saat memproses permintaan Anda.',
+    subtitle: 'Erro do servidor',
+    description: 'Ocorreu um erro inesperado no servidor ao processar sua requisição.',
     colorTheme: 'destructive',
   },
 };
@@ -66,7 +66,7 @@ function ErrorContent() {
   const config = ERROR_CONFIGS[code] || {
     icon: <HelpCircle className="size-12 animate-pulse" />,
     title: code,
-    subtitle: 'Terjadi Kesalahan',
+    subtitle: 'Ocorreu um erro',
     description: customMessage || 'Terjadi kesalahan atau kendala tak terduga pada aplikasi.',
     colorTheme: 'primary',
   };
@@ -75,7 +75,7 @@ function ErrorContent() {
     amber: { text: 'text-amber-500', bg: 'bg-amber-500', bgSoft: 'bg-amber-500/10', border: 'border-amber-500/20', borderDark: 'border-amber-500', hoverBg: 'hover:bg-amber-500/10', hoverText: 'hover:text-amber-500', from: 'from-amber-500/10', ring: 'ring-amber-500/5', shadow: 'shadow-amber-500/5', btnShadow: 'shadow-amber-500/20' },
     rose: { text: 'text-rose-500', bg: 'bg-rose-500', bgSoft: 'bg-rose-500/10', border: 'border-rose-500/20', borderDark: 'border-rose-500', hoverBg: 'hover:bg-rose-500/10', hoverText: 'hover:text-rose-500', from: 'from-rose-500/10', ring: 'ring-rose-500/5', shadow: 'shadow-rose-500/5', btnShadow: 'shadow-rose-500/20' },
     destructive: { text: 'text-destructive', bg: 'bg-destructive', bgSoft: 'bg-destructive/10', border: 'border-destructive/20', borderDark: 'border-destructive', hoverBg: 'hover:bg-destructive/10', hoverText: 'hover:text-destructive', from: 'from-destructive/10', ring: 'ring-destructive/5', shadow: 'shadow-destructive/5', btnShadow: 'shadow-destructive/20' },
-    indigo: { text: 'text-indigo-500', bg: 'bg-indigo-500', bgSoft: 'bg-indigo-500/10', border: 'border-indigo-500/20', borderDark: 'border-indigo-500', hoverBg: 'hover:bg-indigo-500/10', hoverText: 'hover:text-indigo-500', from: 'from-indigo-500/10', ring: 'ring-indigo-500/5', shadow: 'shadow-indigo-500/5', btnShadow: 'shadow-indigo-500/20' },
+    indigo: { text: 'text-zinc-500', bg: 'bg-zinc-500', bgSoft: 'bg-zinc-500/10', border: 'border-zinc-500/20', borderDark: 'border-zinc-500', hoverBg: 'hover:bg-zinc-500/10', hoverText: 'hover:text-zinc-500', from: 'from-zinc-500/10', ring: 'ring-zinc-500/5', shadow: 'shadow-zinc-500/5', btnShadow: 'shadow-zinc-500/20' },
     primary: { text: 'text-primary', bg: 'bg-primary', bgSoft: 'bg-primary/10', border: 'border-primary/20', borderDark: 'border-primary', hoverBg: 'hover:bg-primary/10', hoverText: 'hover:text-primary', from: 'from-primary/10', ring: 'ring-primary/5', shadow: 'shadow-primary/5', btnShadow: 'shadow-primary/20' },
   };
   
@@ -121,7 +121,7 @@ function ErrorContent() {
             className={`w-full flex-1 flex items-center justify-center gap-2 h-12 ${colorMap.border} ${colorMap.hoverBg} ${colorMap.text} ${colorMap.hoverText} rounded-xl transition-all shadow-sm`}
           >
             <ArrowLeft className="size-4" />
-            <span>Kembali</span>
+            <span>Voltar</span>
           </Button>
           <Button
             asChild
@@ -129,7 +129,7 @@ function ErrorContent() {
           >
             <Link href="/dashboard">
               <Home className="size-4" />
-              <span>Beranda</span>
+              <span>Início</span>
             </Link>
           </Button>
         </div>

@@ -24,7 +24,7 @@ export default function BotSettingsPage() {
     const { sessionId } = useSessionProvider();
 
     const [botConfig, setBotConfig] = useState({
-        botName: "WA-AKG Bot",
+        botName: "Saiaê Bot",
         prefix: "#",
         enableSticker: true,
         enableVideoSticker: true,
@@ -109,13 +109,13 @@ export default function BotSettingsPage() {
             });
 
             if (res.ok) {
-                toast.success("Bot configuration saved");
+                toast.success("Configuração do bot salva");
             } else {
-                toast.error("Failed to save bot configuration");
+                toast.error("Falha ao salvar a configuração do bot");
             }
         } catch (e) {
             console.error(e);
-            toast.error("Error saving bot configuration");
+            toast.error("Erro ao salvar a configuração do bot");
         } finally {
             setBotLoading(false);
         }
@@ -138,13 +138,13 @@ export default function BotSettingsPage() {
             });
 
             if (res.ok) {
-                toast.success("Privacy settings saved");
+                toast.success("Configurações de privacidade salvas");
             } else {
-                toast.error("Failed to save privacy settings");
+                toast.error("Falha ao salvar as configurações de privacidade");
             }
         } catch (e) {
             console.error(e);
-            toast.error("Error saving privacy settings");
+            toast.error("Erro ao salvar as configurações de privacidade");
         } finally {
             setPrivacyLoading(false);
         }
@@ -177,8 +177,8 @@ export default function BotSettingsPage() {
         <SessionGuard>
             <div className="space-y-6">
                 <div>
-                    <h2 className="text-xl sm:text-3xl font-bold tracking-tight">Bot Settings</h2>
-                    <p className="text-muted-foreground text-sm mt-1">Configure bot features and session privacy for the active WhatsApp session.</p>
+                    <h2 className="text-xl sm:text-3xl font-bold tracking-tight">Configurações do Bot</h2>
+                    <p className="text-muted-foreground text-sm mt-1">Configure os recursos do bot e a privacidade da sessão de WhatsApp ativa.</p>
                 </div>
 
                 {/* Bot Mode & Access Section */}
@@ -186,24 +186,25 @@ export default function BotSettingsPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <ShieldCheck className="h-5 w-5 text-primary" />
-                            Bot Mode & Access Control
+                            
+                            Modo do bot e controle de acesso
                         </CardTitle>
-                        <CardDescription>Configure who can interact with the bot and use commands.</CardDescription>
+                        <CardDescription>Defina quem pode interagir com o bot e usar comandos.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
                             <div className="grid gap-2">
-                                <Label>Bot Name</Label>
+                                <Label>Nome do bot</Label>
                                 <Input
-                                    placeholder="WA-AKG Bot"
+                                    placeholder="Saiaê Bot"
                                     value={botConfig.botName}
                                     onChange={(e) => setBotConfig(prev => ({ ...prev, botName: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground">The display name used by the bot in automated responses.</p>
+                                <p className="text-xs text-muted-foreground">O nome exibido pelo bot nas respostas automáticas.</p>
                             </div>
 
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div className="grid gap-2">
-                                    <Label>Command Prefix</Label>
+                                    <Label>Prefixo de comando</Label>
                                     <Input
                                         className="max-w-[100px]"
                                         placeholder="#"
@@ -211,25 +212,25 @@ export default function BotSettingsPage() {
                                         value={botConfig.prefix}
                                         onChange={(e) => setBotConfig(prev => ({ ...prev, prefix: e.target.value }))}
                                     />
-                                    <p className="text-xs text-muted-foreground">The prefix character for bot commands.</p>
+                                    <p className="text-xs text-muted-foreground">O caractere de prefixo dos comandos do bot.</p>
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label>Bot Interaction Mode</Label>
+                                    <Label>Modo de interação do bot</Label>
                                     <Select
                                         value={botConfig.botMode}
                                         onValueChange={(v: any) => setBotConfig(prev => ({ ...prev, botMode: v }))}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select Mode" />
+                                            <SelectValue placeholder="Selecione o modo" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="ALL">Public (Everyone)</SelectItem>
-                                            <SelectItem value="OWNER">Private (Owner Only)</SelectItem>
-                                            <SelectItem value="SPECIFIC">Whitelist (Selected JIDs)</SelectItem>
-                                            <SelectItem value="BLACKLIST">Blacklist (Block JIDs)</SelectItem>
+                                            <SelectItem value="ALL">Público (todos)</SelectItem>
+                                            <SelectItem value="OWNER">Privado (somente o dono)</SelectItem>
+                                            <SelectItem value="SPECIFIC">Lista de permitidos (JIDs selecionados)</SelectItem>
+                                            <SelectItem value="BLACKLIST">Lista de bloqueados (bloquear JIDs)</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                    <p className="text-xs text-muted-foreground">Control who can trigger bot commands.</p>
+                                    <p className="text-xs text-muted-foreground">Controle quem pode acionar os comandos do bot.</p>
                                 </div>
                             </div>
 
@@ -237,7 +238,7 @@ export default function BotSettingsPage() {
                                 <div className="space-y-4 pt-4 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
                                     <Label className="flex items-center gap-2">
                                         <UserCheck className="h-4 w-4" />
-                                        {botConfig.botMode === 'SPECIFIC' ? "Whitelisted Numbers" : "Blacklisted Numbers"}
+                                        {botConfig.botMode === 'SPECIFIC' ? "Números permitidos" : "Números bloqueados"}
                                     </Label>
                                     <div className="flex gap-2">
                                         <Input
@@ -260,7 +261,7 @@ export default function BotSettingsPage() {
                                             </div>
                                         ))}
                                         {(botConfig.botMode === 'SPECIFIC' ? botConfig.botAllowedJids : botConfig.botBlockedJids).length === 0 && (
-                                            <p className="text-xs text-muted-foreground italic">No numbers added yet.</p>
+                                            <p className="text-xs text-muted-foreground italic">Nenhum número adicionado ainda.</p>
                                         )}
                                     </div>
                                 </div>
@@ -269,16 +270,16 @@ export default function BotSettingsPage() {
                             <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-border/50">
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="enable-ping" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Ping Command</span>
-                                        <span className="font-normal text-[10px] text-muted-foreground">Respond to {botConfig.prefix}ping</span>
+                                        <span className="font-medium">Comando ping</span>
+                                        <span className="font-normal text-[10px] text-muted-foreground">Responder ao comando {botConfig.prefix}ping</span>
                                     </Label>
                                     <Switch id="enable-ping" checked={botConfig.enablePing}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, enablePing: c }))} />
                                 </div>
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="enable-uptime" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Uptime Command</span>
-                                        <span className="font-normal text-[10px] text-muted-foreground">Respond to {botConfig.prefix}uptime</span>
+                                        <span className="font-medium">Comando uptime</span>
+                                        <span className="font-normal text-[10px] text-muted-foreground">Responder ao comando {botConfig.prefix}uptime</span>
                                     </Label>
                                     <Switch id="enable-uptime" checked={botConfig.enableUptime}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, enableUptime: c }))} />
@@ -288,7 +289,8 @@ export default function BotSettingsPage() {
                             <div className="pt-2">
                                 <Button className="w-full sm:w-auto" onClick={handleSaveBot} disabled={botLoading || !sessionId}>
                                     {botLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Bot Configuration
+                                    
+                                    Salvar configuração do bot
                                 </Button>
                             </div>
                         </CardContent>
@@ -299,24 +301,25 @@ export default function BotSettingsPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Zap className="h-5 w-5 text-yellow-500" />
-                                Automation & Presence
+                                
+                                Automação e presença
                             </CardTitle>
-                            <CardDescription>Advanced bot automation and presence customization.</CardDescription>
+                            <CardDescription>Automação avançada do bot e personalização de presença.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="always-online" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Always Online</span>
-                                        <span className="font-normal text-[10px] text-muted-foreground">Stay "Online" even when inactive.</span>
+                                        <span className="font-medium">Sempre online</span>
+                                        <span className="font-normal text-[10px] text-muted-foreground">Permanecer "Online" mesmo quando inativo.</span>
                                     </Label>
                                     <Switch id="always-online" checked={botConfig.alwaysOnline}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, alwaysOnline: c }))} />
                                 </div>
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="auto-read" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Auto Read (Blue Ticks)</span>
-                                        <span className="font-normal text-[10px] text-muted-foreground">Automatically mark messages as read.</span>
+                                        <span className="font-medium">Leitura automática (tique azul)</span>
+                                        <span className="font-normal text-[10px] text-muted-foreground">Marcar mensagens como lidas automaticamente.</span>
                                     </Label>
                                     <Switch id="auto-read" checked={botConfig.autoRead}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, autoRead: c }))} />
@@ -326,21 +329,23 @@ export default function BotSettingsPage() {
                             <div className="space-y-2 border-t border-border/50 pt-4">
                                 <Label className="flex items-center gap-2">
                                     <MessageSquarePlus className="h-4 w-4 text-primary" />
-                                    Welcome Message (Beta)
+                                    
+                                    Mensagem de boas-vindas (Beta)
                                 </Label>
                                 <Textarea
-                                    placeholder="Hello! Welcome to our WhatsApp Bot. How can I help you today?"
+                                    placeholder="Olá! Bem-vindo(a)! Como posso ajudar você hoje?"
                                     className="min-h-[100px]"
                                     value={botConfig.welcomeMessage}
                                     onChange={(e) => setBotConfig(prev => ({ ...prev, welcomeMessage: e.target.value }))}
                                 />
-                                <p className="text-[10px] text-muted-foreground">Sent automatically to users when they message this bot for the first time.</p>
+                                <p className="text-[10px] text-muted-foreground">Enviada automaticamente aos usuários quando falam com este bot pela primeira vez.</p>
                             </div>
 
                             <div className="pt-2">
                                 <Button className="w-full sm:w-auto" onClick={handleSaveBot} disabled={botLoading || !sessionId}>
                                     {botLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Automation Settings
+                                    
+                                    Salvar configurações de automação
                                 </Button>
                             </div>
                         </CardContent>
@@ -349,23 +354,23 @@ export default function BotSettingsPage() {
                     {/* Media & Stickers Section */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Media & Stickers</CardTitle>
-                            <CardDescription>Configure how the bot handles media and sticker conversion.</CardDescription>
+                            <CardTitle>Mídia e figurinhas</CardTitle>
+                            <CardDescription>Configure como o bot trata mídias e a conversão em figurinhas.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="grid sm:grid-cols-2 gap-4">
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="enable-sticker" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Image to Sticker</span>
-                                        <span className="font-normal text-xs text-muted-foreground">Auto-convert images</span>
+                                        <span className="font-medium">Imagem para figurinha</span>
+                                        <span className="font-normal text-xs text-muted-foreground">Converter imagens automaticamente</span>
                                     </Label>
                                     <Switch id="enable-sticker" checked={botConfig.enableSticker}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, enableSticker: c }))} />
                                 </div>
                                 <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg">
                                     <Label htmlFor="enable-video-sticker" className="flex flex-col space-y-1 cursor-pointer">
-                                        <span className="font-medium">Video to Sticker</span>
-                                        <span className="font-normal text-xs text-muted-foreground">Auto-convert short videos</span>
+                                        <span className="font-medium">Vídeo para figurinha</span>
+                                        <span className="font-normal text-xs text-muted-foreground">Converter vídeos curtos automaticamente</span>
                                     </Label>
                                     <Switch id="enable-video-sticker" checked={botConfig.enableVideoSticker}
                                         onCheckedChange={c => setBotConfig(prev => ({ ...prev, enableVideoSticker: c }))} />
@@ -373,7 +378,7 @@ export default function BotSettingsPage() {
                             </div>
 
                             <div className="grid gap-2 border-t border-border/50 pt-4">
-                                <Label>Max Sticker Video Duration: <strong>{botConfig.maxStickerDuration}s</strong></Label>
+                                <Label>Duração máxima do vídeo da figurinha: <strong>{botConfig.maxStickerDuration}s</strong></Label>
                                 <Slider
                                     value={[botConfig.maxStickerDuration]}
                                     onValueChange={([v]) => setBotConfig(prev => ({ ...prev, maxStickerDuration: v }))}
@@ -381,24 +386,25 @@ export default function BotSettingsPage() {
                                     max={30}
                                     step={1}
                                 />
-                                <p className="text-xs text-muted-foreground">Maximum video duration (in seconds) allowed for sticker conversion.</p>
+                                <p className="text-xs text-muted-foreground">Duração máxima do vídeo (em segundos) permitida para conversão em figurinha.</p>
                             </div>
 
                             <div className="grid gap-2 border-t border-border/50 pt-4">
-                                <Label>Remove.bg API Key (Optional)</Label>
+                                <Label>Chave da API Remove.bg (opcional)</Label>
                                 <Input
                                     type="password"
-                                    placeholder="Enter your Remove.bg API Key"
+                                    placeholder="Informe sua chave da API Remove.bg"
                                     value={botConfig.removeBgApiKey || ""}
                                     onChange={(e) => setBotConfig(prev => ({ ...prev, removeBgApiKey: e.target.value }))}
                                 />
-                                <p className="text-xs text-muted-foreground">Enables background removal for stickers (use <code className="bg-muted px-1 rounded">nobg</code> caption).</p>
+                                <p className="text-xs text-muted-foreground">Habilita a remoção de fundo nas figurinhas (use <code className="bg-muted px-1 rounded">nobg</code>  na legenda).</p>
                             </div>
 
                             <div className="pt-2">
                                 <Button className="w-full sm:w-auto" onClick={handleSaveBot} disabled={botLoading || !sessionId}>
                                     {botLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Media Settings
+                                    
+                                    Salvar configurações de mídia
                                 </Button>
                             </div>
                         </CardContent>
@@ -409,17 +415,19 @@ export default function BotSettingsPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <AlertCircle className="h-5 w-5 text-orange-500" />
-                                Anti-Ban Protection (Beta)
+                                
+                                Proteção anti-banimento (Beta)
                             </CardTitle>
                             <CardDescription>
-                                Prevent your WhatsApp number from being detected as spam or banned by adding intelligent random delays between outgoing messages. This applies to <strong>all</strong> actions: bot replies, auto-replies, broadcasts, scheduled messages, and API calls for this session.
+                                
+                                Evite que seu número de WhatsApp seja detectado como spam ou banido, adicionando atrasos aleatórios inteligentes entre as mensagens enviadas. Isso vale para <strong>todas</strong>  as ações: respostas do bot, respostas automáticas, disparos, mensagens agendadas e chamadas de API desta sessão.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg bg-orange-500/5 border-orange-500/20">
                                 <Label htmlFor="anti-spam" className="flex flex-col space-y-1">
-                                    <span className="font-semibold text-orange-700 dark:text-orange-400">Enable Anti-Spam Delay</span>
-                                    <span className="font-normal text-xs text-muted-foreground">When enabled, messages will be queued and sent with a random delay if the rate limit is reached. Messages are never rejected — only delayed.</span>
+                                    <span className="font-semibold text-orange-700 dark:text-orange-400">Ativar atraso anti-spam</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Quando ativado, as mensagens entram em fila e são enviadas com atraso aleatório se o limite for atingido. As mensagens nunca são rejeitadas — apenas atrasadas.</span>
                                 </Label>
                                 <Switch id="anti-spam" checked={botConfig.antiSpamEnabled}
                                     onCheckedChange={c => setBotConfig(prev => ({ ...prev, antiSpamEnabled: c }))} />
@@ -428,24 +436,20 @@ export default function BotSettingsPage() {
                             {botConfig.antiSpamEnabled && (
                                 <div className="grid gap-6 animate-in fade-in slide-in-from-top-1 duration-200">
                                     {/* How it works */}
-                                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 space-y-2">
-                                        <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">💡 How it works</p>
+                                    <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 p-4 space-y-2">
+                                        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-400">💡 Como funciona</p>
                                         <p className="text-xs text-muted-foreground leading-relaxed">
-                                            The system tracks how many messages this session sends within a time window.
-                                            If the number of messages exceeds the <strong>threshold</strong> within the <strong>time window</strong>,
-                                            each subsequent message will be <strong>delayed</strong> by a random amount between <strong>Min</strong> and <strong>Max</strong> delay.
-                                            Once the time window resets (old messages expire), messages go back to normal speed.
+                                            
+                                            O sistema conta quantas mensagens esta sessão envia dentro de uma janela de tempo. Se o número de mensagens exceder o <strong>limite</strong>  dentro da <strong>janela de tempo</strong>, cada mensagem seguinte será <strong>atrasada</strong>  por um tempo aleatório entre <strong>mín.</strong>  e <strong>máx.</strong>  de atraso. Quando a janela de tempo é reiniciada (mensagens antigas expiram), o envio volta à velocidade normal.
                                         </p>
                                         <p className="text-xs text-muted-foreground">
-                                            <strong>Example:</strong> With threshold = <strong>{botConfig.spamLimit}</strong> and window = <strong>{botConfig.spamInterval}s</strong> →
-                                            the first {botConfig.spamLimit} messages within {botConfig.spamInterval} seconds are sent instantly.
-                                            Message #{botConfig.spamLimit + 1} and beyond will be delayed by {botConfig.spamDelayMin}ms–{botConfig.spamDelayMax}ms each.
+                                            <strong>Exemplo:</strong>  Com limite = <strong>{botConfig.spamLimit}</strong>  e janela = <strong>{botConfig.spamInterval}s</strong>  → as primeiras {botConfig.spamLimit}  mensagens em {botConfig.spamInterval}  segundos são enviadas na hora. A mensagem nº{botConfig.spamLimit + 1}  e seguintes serão atrasadas em {botConfig.spamDelayMin}ms–{botConfig.spamDelayMax}ms cada.
                                         </p>
                                     </div>
 
                                     <div className="grid sm:grid-cols-2 gap-4">
                                         <div className="grid gap-2">
-                                            <Label className="font-semibold">Messages Threshold</Label>
+                                            <Label className="font-semibold">Limite de mensagens</Label>
                                             <Input
                                                 type="number"
                                                 value={botConfig.spamLimit}
@@ -453,12 +457,13 @@ export default function BotSettingsPage() {
                                                 min={1}
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                Number of messages allowed at full speed before delay kicks in.
-                                                <span className="text-orange-600 dark:text-orange-400"> Lower = safer but slower.</span>
+                                                
+                                                Número de mensagens permitidas em velocidade total antes de o atraso começar.
+                                                <span className="text-orange-600 dark:text-orange-400">  Menor = mais seguro, porém mais lento.</span>
                                             </p>
                                         </div>
                                         <div className="grid gap-2">
-                                            <Label className="font-semibold">Time Window (Seconds)</Label>
+                                            <Label className="font-semibold">Janela de tempo (segundos)</Label>
                                             <Input
                                                 type="number"
                                                 value={botConfig.spamInterval}
@@ -466,15 +471,16 @@ export default function BotSettingsPage() {
                                                 min={1}
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                The rolling window to count messages. After this time passes, the counter resets naturally.
-                                                <span className="text-orange-600 dark:text-orange-400"> Longer = more conservative.</span>
+                                                
+                                                A janela móvel usada para contar mensagens. Passado esse tempo, o contador reinicia naturalmente.
+                                                <span className="text-orange-600 dark:text-orange-400">  Maior = mais conservador.</span>
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="grid sm:grid-cols-2 gap-4">
                                         <div className="grid gap-2">
-                                            <Label className="font-semibold">Min Delay (ms)</Label>
+                                            <Label className="font-semibold">Atraso mínimo (ms)</Label>
                                             <Input
                                                 type="number"
                                                 value={botConfig.spamDelayMin}
@@ -483,11 +489,12 @@ export default function BotSettingsPage() {
                                                 step={100}
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                Minimum random delay applied. 1000ms = 1 second.
+                                                
+                                                Atraso aleatório mínimo aplicado. 1000 ms = 1 segundo.
                                             </p>
                                         </div>
                                         <div className="grid gap-2">
-                                            <Label className="font-semibold">Max Delay (ms)</Label>
+                                            <Label className="font-semibold">Atraso máximo (ms)</Label>
                                             <Input
                                                 type="number"
                                                 value={botConfig.spamDelayMax}
@@ -496,15 +503,15 @@ export default function BotSettingsPage() {
                                                 step={100}
                                             />
                                             <p className="text-xs text-muted-foreground">
-                                                Maximum random delay applied. 3000ms = 3 seconds.
+                                                
+                                                Atraso aleatório máximo aplicado. 3000 ms = 3 segundos.
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3">
                                         <p className="text-xs text-muted-foreground">
-                                            ⚠️ <strong>Recommended safe settings:</strong> Threshold <strong>5</strong>, Window <strong>10s</strong>, Delay <strong>1000–3000ms</strong>.
-                                            For high-volume broadcasts, use Threshold <strong>3</strong> with Delay <strong>2000–5000ms</strong>.
+                                            ⚠️ <strong>Configuração segura recomendada:</strong>  Limite <strong>5</strong>, Janela <strong>10s</strong>, Atraso <strong>1000–3000 ms</strong>. Para disparos de grande volume, use Limite <strong>3</strong>  com Atraso <strong>2000–5000 ms</strong>.
                                         </p>
                                     </div>
                                 </div>
@@ -513,7 +520,8 @@ export default function BotSettingsPage() {
                             <div className="pt-2">
                                 <Button onClick={handleSaveBot} disabled={botLoading || !sessionId}>
                                     {botLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Protection Settings
+                                    
+                                    Salvar configurações de proteção
                                 </Button>
                             </div>
                         </CardContent>
@@ -522,14 +530,14 @@ export default function BotSettingsPage() {
                     {/* Privacy & Utility */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Privacy & Utility</CardTitle>
-                            <CardDescription>Configure ghost mode and other features for your active session.</CardDescription>
+                            <CardTitle>Privacidade e utilidades</CardTitle>
+                            <CardDescription>Configure o modo fantasma e outros recursos da sua sessão ativa.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="flex items-center justify-between space-x-2">
                                 <Label htmlFor="ghost-mode" className="flex flex-col space-y-1">
-                                    <span>Ghost Mode</span>
-                                    <span className="font-normal text-xs text-muted-foreground">View status and read messages without sending blue ticks.</span>
+                                    <span>Modo fantasma</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Veja status e leia mensagens sem enviar o tique azul.</span>
                                 </Label>
                                 <Switch id="ghost-mode" checked={privacyConfig.ghostMode}
                                     onCheckedChange={c => setPrivacyConfig(prev => ({ ...prev, ghostMode: c }))} />
@@ -537,8 +545,8 @@ export default function BotSettingsPage() {
 
                             <div className="flex items-center justify-between space-x-2">
                                 <Label htmlFor="anti-delete" className="flex flex-col space-y-1">
-                                    <span>Anti-Delete</span>
-                                    <span className="font-normal text-xs text-muted-foreground">Keep messages even if the sender deletes them for everyone.</span>
+                                    <span>Anti-exclusão</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Mantenha as mensagens mesmo que o remetente as apague para todos.</span>
                                 </Label>
                                 <Switch id="anti-delete" checked={privacyConfig.antiDelete}
                                     onCheckedChange={c => setPrivacyConfig(prev => ({ ...prev, antiDelete: c }))} />
@@ -547,7 +555,8 @@ export default function BotSettingsPage() {
                             <div className="pt-4">
                                 <Button onClick={handleSavePrivacy} disabled={privacyLoading || !sessionId}>
                                     {privacyLoading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Privacy Settings
+                                    
+                                    Salvar configurações de privacidade
                                 </Button>
                             </div>
                         </CardContent>

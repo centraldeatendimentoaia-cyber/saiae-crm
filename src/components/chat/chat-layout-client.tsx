@@ -98,7 +98,8 @@ export function ChatLayoutClient({ sessionId, initialJid }: ChatLayoutClientProp
                                 <MessageCircle className="h-8 w-8 text-muted-foreground/40" />
                             </div>
                             <p className="text-sm text-muted-foreground">
-                                Select a chat to start messaging
+                                
+                                Selecione uma conversa para começar
                             </p>
                         </div>
                     </div>

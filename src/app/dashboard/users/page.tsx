@@ -58,7 +58,7 @@ export default function UsersPage() {
                 const responseData = await res.json();
                 setUsers(responseData?.data || []);
             } else if (res.status === 403) {
-                toast.error("Unauthorized. Only Super Admin can view users.");
+                toast.error("Não autorizado. Somente o Super Admin pode ver os usuários.");
             }
         } catch (error) {
             console.error("Failed to fetch users", error);
@@ -91,7 +91,7 @@ export default function UsersPage() {
                 toast.error(error.error || "Operation failed");
             }
         } catch (error) {
-            toast.error("Operation failed");
+            toast.error("A operação falhou");
         }
     };
 
@@ -107,14 +107,14 @@ export default function UsersPage() {
         try {
             const res = await fetch(`/api/users/${deleteId}`, { method: "DELETE" });
             if (res.ok) {
-                toast.success("User deleted");
+                toast.success("Usuário excluído");
                 fetchUsers();
             } else {
                 const error = await res.json();
                 toast.error(error.error || "Failed to delete");
             }
         } catch (error) {
-            toast.error("Failed to delete user");
+            toast.error("Falha ao excluir o usuário");
         } finally {
             setDeleteId(null);
         }
@@ -123,12 +123,12 @@ export default function UsersPage() {
     const getRoleIcon = (role: string) => {
         switch (role) {
             case "SUPERADMIN": return <ShieldAlert className="h-4 w-4 text-red-500" />;
-            case "OWNER": return <ShieldCheck className="h-4 w-4 text-blue-500" />;
-            default: return <User className="h-4 w-4 text-gray-500" />;
+            case "OWNER": return <ShieldCheck className="h-4 w-4 text-zinc-500" />;
+            default: return <User className="h-4 w-4 text-zinc-500" />;
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
+    if (loading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>;
 
     // TODO: Improve RBAC check here if strictly needed, but API protects it.
     // If empty list and not loading, likely unauthorized or empty.
@@ -138,16 +138,16 @@ export default function UsersPage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-                        <UsersIcon className="h-5 w-5 sm:h-6 sm:w-6" /> User Management
+                        <UsersIcon className="h-5 w-5 sm:h-6 sm:w-6" />  Gerenciamento de usuários
                     </h1>
-                    <p className="text-sm text-muted-foreground">Manage users and roles</p>
+                    <p className="text-sm text-muted-foreground">Gerencie usuários e permissões</p>
                 </div>
                 <Button size="sm" onClick={() => {
                     setEditingUser(null);
                     setFormData({ name: "", email: "", password: "", role: "OWNER" });
                     setShowForm(true);
                 }}>
-                    <Plus className="h-4 w-4 mr-1 sm:mr-2" /> Add User
+                    <Plus className="h-4 w-4 mr-1 sm:mr-2" />  Adicionar usuário
                 </Button>
             </div>
 
@@ -155,13 +155,13 @@ export default function UsersPage() {
             {showForm && (
                 <Card className="border-2 border-primary/20">
                     <CardHeader>
-                        <CardTitle>{editingUser ? "Edit User" : "New User"}</CardTitle>
+                        <CardTitle>{editingUser ? "Editar usuário" : "Novo usuário"}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div className="space-y-2">
-                                    <Label>Name</Label>
+                                    <Label>Nome</Label>
                                     <Input
                                         value={formData.name}
                                         onChange={e => setFormData({ ...formData, name: e.target.value })}
@@ -169,7 +169,7 @@ export default function UsersPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Email</Label>
+                                    <Label>E-mail</Label>
                                     <Input
                                         type="email"
                                         value={formData.email}
@@ -180,7 +180,7 @@ export default function UsersPage() {
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                                 <div className="space-y-2">
-                                    <Label>{editingUser ? "New Password (leave blank to keep)" : "Password"}</Label>
+                                    <Label>{editingUser ? "Nova senha (deixe em branco para manter)" : "Senha"}</Label>
                                     <Input
                                         type="password"
                                         value={formData.password}
@@ -189,7 +189,7 @@ export default function UsersPage() {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Role</Label>
+                                    <Label>Função</Label>
                                     <Select
                                         value={formData.role}
                                         onValueChange={(v: string) => setFormData({ ...formData, role: v })}
@@ -199,15 +199,15 @@ export default function UsersPage() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="SUPERADMIN">Super Admin</SelectItem>
-                                            <SelectItem value="OWNER">Owner</SelectItem>
-                                            <SelectItem value="STAFF">Staff</SelectItem>
+                                            <SelectItem value="OWNER">Proprietário</SelectItem>
+                                            <SelectItem value="STAFF">Equipe</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2">
-                                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancel</Button>
-                                <Button type="submit">{editingUser ? "Update" : "Create"}</Button>
+                                <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
+                                <Button type="submit">{editingUser ? "Atualizar" : "Criar"}</Button>
                             </div>
                         </form>
                     </CardContent>
@@ -222,11 +222,11 @@ export default function UsersPage() {
                             <div className="p-6">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
+                                        <div className="h-10 w-10 rounded-full bg-zinc-100 flex items-center justify-center font-bold text-zinc-500">
                                             {user.name?.charAt(0) || user.email.charAt(0)}
                                         </div>
                                         <div>
-                                            <h3 className="font-semibold">{user.name || "User"}</h3>
+                                            <h3 className="font-semibold">{user.name || "Usuário"}</h3>
                                             <p className="text-xs text-muted-foreground">{user.email}</p>
                                         </div>
                                     </div>
@@ -237,11 +237,11 @@ export default function UsersPage() {
                                 </div>
 
                                 <div className="flex justify-between items-center text-sm text-muted-foreground">
-                                    <span>{user._count?.sessions || 0} Sessions</span>
-                                    <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+                                    <span>{user._count?.sessions || 0}  Sessões</span>
+                                    <span>Cadastro {new Date(user.createdAt).toLocaleDateString()}</span>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 p-3 flex justify-end gap-2 border-t">
+                            <div className="bg-zinc-50 p-3 flex justify-end gap-2 border-t">
                                 <Button size="sm" variant="ghost" onClick={() => {
                                     setEditingUser(user);
                                     setFormData({
@@ -252,10 +252,10 @@ export default function UsersPage() {
                                     });
                                     setShowForm(true);
                                 }}>
-                                    <Edit className="h-4 w-4 mr-1" /> Edit
+                                    <Edit className="h-4 w-4 mr-1" />  Editar
                                 </Button>
                                 <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleDelete(user.id)}>
-                                    <Trash2 className="h-4 w-4 mr-1" /> Delete
+                                    <Trash2 className="h-4 w-4 mr-1" />  Excluir
                                 </Button>
                             </div>
                         </CardContent>
@@ -266,14 +266,15 @@ export default function UsersPage() {
             <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the user request and remove their data from our servers.
+                            
+                            Esta ação não pode ser desfeita. O usuário será excluído permanentemente e seus dados removidos dos nossos servidores.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Continue</AlertDialogAction>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">Continuar</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

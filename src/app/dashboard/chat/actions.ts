@@ -116,3 +116,22 @@ export async function sendMediaMessage(formData: FormData) {
         throw new Error(`Failed to send media: ${error.message}`);
     }
 }
+
+// Marca a conversa como lida (zera o contador de não lidas)
+export async function markChatRead(sessionId: string, jid: string) {
+    const user = await getAuthenticatedUserForAction();
+    if (!user) throw new Error("Unauthorized");
+
+    const canAccess = await canAccessSession(user.id, user.role, sessionId);
+    if (!canAccess) throw new Error("Forbidden");
+
+    const session = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
+    if (!session) throw new Error("Session not found");
+
+    await prisma.chatRead.upsert({
+        where: { sessionId_jid: { sessionId: session.id, jid } },
+        create: { sessionId: session.id, jid, lastReadAt: new Date() },
+        update: { lastReadAt: new Date() }
+    });
+    return { success: true };
+}

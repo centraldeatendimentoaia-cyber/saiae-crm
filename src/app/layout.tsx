@@ -1,34 +1,42 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, Figtree, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { TopLoader } from "@/components/ui/top-loader";
 import { prisma } from "@/lib/prisma";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
 });
 
-const APP_DESCRIPTION = "Self-hosted WhatsApp Gateway with Multi-device support, Auto-replies, API integration, and session management dashboard.";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://wa-akg.app";
+const jetbrains = JetBrains_Mono({
+  variable: "--font-jetbrains",
+  subsets: ["latin"],
+  weight: ["400", "600"],
+});
+
+const APP_DESCRIPTION = "Disparos, respostas automáticas e atendimento no WhatsApp para o seu negócio. Parte da família Saiaê.";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F5F2" },
+    { media: "(prefers-color-scheme: dark)", color: "#18171C" },
   ],
   width: "device-width",
   initialScale: 1,
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  let appName = "WA-AKG";
+  let appName = "Saiaê";
   try {
     // @ts-ignore
     const config = await prisma.systemConfig.findUnique({ where: { id: "default" } });
@@ -37,7 +45,7 @@ export async function generateMetadata(): Promise<Metadata> {
     console.error("Failed to fetch system config for metadata:", e);
   }
 
-  const appDefaultTitle = `${appName} | Premium WhatsApp Gateway`;
+  const appDefaultTitle = `${appName} | Disparador de WhatsApp`;
 
   return {
     metadataBase: new URL(APP_URL),
@@ -99,7 +107,7 @@ export default function RootLayout({
   const allowIndexing = process.env.NEXT_PUBLIC_ALLOW_INDEXING === "true";
 
   return (
-    <html lang="en" suppressHydrationWarning className="scroll-smooth">
+    <html lang="pt-BR" suppressHydrationWarning className="scroll-smooth">
       <head>
         {/* Conditional robots meta (noindex for staging/dev) */}
         {!allowIndexing && <meta name="robots" content="noindex, nofollow" />}
@@ -108,11 +116,9 @@ export default function RootLayout({
         <link rel="preconnect" href={APP_URL} crossOrigin="anonymous" />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased text-foreground bg-background selection:bg-primary/30 selection:text-primary-foreground min-h-screen flex flex-col`}
+        className={`${figtree.variable} ${outfit.variable} ${jetbrains.variable} font-sans antialiased text-foreground bg-background selection:bg-brand selection:text-brand-foreground min-h-screen flex flex-col`}
         suppressHydrationWarning
       >
-        {/* Global ambient background glow for premium feel */}
-        <div className="fixed inset-0 -z-50 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-background to-background dark:from-primary/10 dark:via-background dark:to-background pointer-events-none" suppressHydrationWarning={true} />
         <Providers>
           <TopLoader />
           {children}

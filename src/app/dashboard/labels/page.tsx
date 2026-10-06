@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Tag, Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronUp, X, Search, MessageSquare, UserCheck } from "lucide-react";
+import { Tag, Loader2, Plus, Pencil, Trash2, ChevronDown, ChevronUp, X, Search, MessageSquare, UserCheck, RefreshCw } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -109,16 +109,43 @@ export default function LabelsPage() {
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error fetching labels");
+            toast.error("Erro ao carregar as etiquetas");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const [syncing, setSyncing] = useState(false);
+
+    const handleSync = async () => {
+        if (!sessionId) return;
+        setSyncing(true);
+        try {
+            const res = await fetch(`/api/labels/${sessionId}/sync`, { method: "POST" });
+            const data = await res.json();
+            if (!res.ok || !data.status) throw new Error(data.error || "Falha ao sincronizar");
+            const { labels: total, associations, isBusiness, syncError } = data.data;
+            await fetchLabels();
+            if (total > 0) {
+                toast.success(`${total} etiquetas sincronizadas (${associations} conversas etiquetadas)`);
+            } else if (isBusiness === false) {
+                toast.error("Este número não é WhatsApp Business. Etiquetas só existem no WhatsApp Business.");
+            } else if (syncError) {
+                toast.error("O WhatsApp não liberou as etiquetas: " + syncError);
+            } else {
+                toast.warning("Nenhuma etiqueta recebida. Se você tem etiquetas no celular, reconecte a sessão (novo QR) para a sincronização completa.");
+            }
+        } catch (e: any) {
+            toast.error(e.message || "Falha ao sincronizar");
+        } finally {
+            setSyncing(false);
         }
     };
 
     const handleCreate = async () => {
         if (!sessionId) return;
         if (!currentName.trim()) {
-            toast.error("Label name is required");
+            toast.error("O nome da etiqueta é obrigatório");
             return;
         }
 
@@ -132,7 +159,7 @@ export default function LabelsPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success("Label created successfully");
+                toast.success("Etiqueta criada com sucesso");
                 setIsCreateOpen(false);
                 resetForm();
                 fetchLabels();
@@ -141,7 +168,7 @@ export default function LabelsPage() {
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error creating label");
+            toast.error("Erro ao criar a etiqueta");
         } finally {
             setSubmitting(false);
         }
@@ -150,7 +177,7 @@ export default function LabelsPage() {
     const handleEdit = async () => {
         if (!sessionId || !currentLabelId) return;
         if (!currentName.trim()) {
-            toast.error("Label name is required");
+            toast.error("O nome da etiqueta é obrigatório");
             return;
         }
 
@@ -164,7 +191,7 @@ export default function LabelsPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success("Label updated successfully");
+                toast.success("Etiqueta atualizada com sucesso");
                 setIsEditOpen(false);
                 resetForm();
                 fetchLabels();
@@ -173,7 +200,7 @@ export default function LabelsPage() {
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error updating label");
+            toast.error("Erro ao atualizar a etiqueta");
         } finally {
             setSubmitting(false);
         }
@@ -188,7 +215,7 @@ export default function LabelsPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success("Label deleted successfully");
+                toast.success("Etiqueta excluída com sucesso");
                 if (expandedLabelId === labelId) {
                     setExpandedLabelId(null);
                 }
@@ -198,7 +225,7 @@ export default function LabelsPage() {
             }
         } catch (error) {
             console.error(error);
-            toast.error("Error deleting label");
+            toast.error("Erro ao excluir a etiqueta");
         }
     };
 
@@ -280,7 +307,7 @@ export default function LabelsPage() {
             });
 
             if (res.ok) {
-                toast.success("Chat assigned to label");
+                toast.success("Conversa atribuída à etiqueta");
                 fetchLabels();
                 if (expandedLabelId === assignLabelId) {
                     fetchChatLabels(assignLabelId);
@@ -290,7 +317,7 @@ export default function LabelsPage() {
                 toast.error(data.message || "Failed to assign label");
             }
         } catch (error) {
-            toast.error("Error assigning label");
+            toast.error("Erro ao atribuir a etiqueta");
         }
     };
 
@@ -304,23 +331,23 @@ export default function LabelsPage() {
             });
 
             if (res.ok) {
-                toast.success("Chat removed from label");
+                toast.success("Conversa removida da etiqueta");
                 fetchLabels();
                 if (expandedLabelId === labelId) {
                     fetchChatLabels(labelId);
                 }
             } else {
-                toast.error("Failed to remove label");
+                toast.error("Falha ao remover a etiqueta");
             }
         } catch (error) {
-            toast.error("Error removing label");
+            toast.error("Erro ao remover a etiqueta");
         }
     };
 
     // --- Color Picker Component ---
     const ColorPicker = () => (
         <div className="space-y-2">
-            <Label>Color</Label>
+            <Label>Cor</Label>
             <div className="grid grid-cols-10 gap-1.5 mt-2">
                 {WAP_COLORS.map((hex, index) => (
                     <div
@@ -339,41 +366,47 @@ export default function LabelsPage() {
             <div className="max-w-5xl space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Chat Labels</h1>
-                    <p className="text-sm text-muted-foreground">Organize chats with color-coded labels. Click a label to manage assigned chats.</p>
+                    <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Etiquetas de conversa</h1>
+                    <p className="text-sm text-muted-foreground">Organize as conversas com etiquetas coloridas. Clique em uma etiqueta para gerenciar as conversas atribuídas.</p>
                 </div>
 
                 <Dialog open={isCreateOpen} onOpenChange={(open) => {
                     setIsCreateOpen(open);
                     if (!open) resetForm();
                 }}>
+                    <Button variant="outline" onClick={handleSync} disabled={syncing || !sessionId}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+                        {syncing ? "Sincronizando..." : "Sincronizar do WhatsApp"}
+                    </Button>
                     <DialogTrigger asChild>
                         <Button>
                             <Plus className="w-4 h-4 mr-2" />
-                            New Label
+                            
+                            Nova etiqueta
                         </Button>
                     </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Create New Label</DialogTitle>
-                            <DialogDescription>Add a new color-coded label for organizing chats.</DialogDescription>
+                            <DialogTitle>Criar nova etiqueta</DialogTitle>
+                            <DialogDescription>Adicione uma nova etiqueta colorida para organizar as conversas.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4 py-4">
                             <div className="space-y-2">
-                                <Label>Label Name</Label>
+                                <Label>Nome da etiqueta</Label>
                                 <Input
                                     value={currentName}
                                     onChange={(e) => setCurrentName(e.target.value)}
-                                    placeholder="e.g. VIP Customer"
+                                    placeholder="ex.: Cliente VIP"
                                 />
                             </div>
                             <ColorPicker />
                         </div>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
                             <Button onClick={handleCreate} disabled={submitting || !currentName.trim()}>
                                 {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                                Create Label
+                                
+                                Criar etiqueta
                             </Button>
                         </DialogFooter>
                     </DialogContent>
@@ -388,9 +421,9 @@ export default function LabelsPage() {
                 <Card className="border-dashed shadow-none bg-muted/30">
                     <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                         <Tag className="w-12 h-12 text-muted-foreground/50 mb-4" />
-                        <h3 className="text-lg font-semibold">No labels found</h3>
-                        <p className="text-muted-foreground mb-4">You haven't created any chat labels yet.</p>
-                        <Button variant="outline" onClick={() => setIsCreateOpen(true)}>Create your first label</Button>
+                        <h3 className="text-lg font-semibold">Nenhuma etiqueta encontrada</h3>
+                        <p className="text-muted-foreground mb-4">Você ainda não criou nenhuma etiqueta de conversa.</p>
+                        <Button variant="outline" onClick={() => setIsCreateOpen(true)}>Crie sua primeira etiqueta</Button>
                     </CardContent>
                 </Card>
             ) : (
@@ -408,7 +441,7 @@ export default function LabelsPage() {
                                         <Tag className="w-4 h-4 shrink-0" style={{ color: label.colorHex }} />
                                         <span className="font-semibold truncate">{label.name}</span>
                                         <Badge variant="secondary" className="font-normal text-xs shrink-0">
-                                            {label._count.chatLabels} chat{label._count.chatLabels !== 1 ? "s" : ""}
+                                            {label._count.chatLabels}  conversa{label._count.chatLabels !== 1 ? "s" : ""}
                                         </Badge>
                                         {expandedLabelId === label.id
                                             ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -428,7 +461,7 @@ export default function LabelsPage() {
                                             }}
                                         >
                                             <UserCheck className="w-3.5 h-3.5 mr-1" />
-                                            <span className="hidden sm:inline text-xs">Assign</span>
+                                            <span className="hidden sm:inline text-xs">Atribuir</span>
                                         </Button>
                                         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => openEditModal(label)}>
                                             <Pencil className="w-3.5 h-3.5" />
@@ -441,15 +474,17 @@ export default function LabelsPage() {
                                             </AlertDialogTrigger>
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>Delete label?</AlertDialogTitle>
+                                                    <AlertDialogTitle>Excluir etiqueta?</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        This will permanently delete the <strong>{label.name}</strong> label and remove it from all assigned chats.
+                                                        
+                                                        Isso excluirá permanentemente a etiqueta <strong>{label.name}</strong>  e a removerá de todas as conversas atribuídas.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                                     <AlertDialogAction onClick={() => handleDelete(label.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                                                        Delete
+                                                        
+                                                        Excluir
                                                     </AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
@@ -463,12 +498,12 @@ export default function LabelsPage() {
                                         {chatLabelsLoading ? (
                                             <div className="flex items-center justify-center py-4">
                                                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                                <span className="ml-2 text-sm text-muted-foreground">Loading chats...</span>
+                                                <span className="ml-2 text-sm text-muted-foreground">Carregando conversas...</span>
                                             </div>
                                         ) : chatLabels.length === 0 ? (
                                             <div className="text-center py-4">
                                                 <MessageSquare className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                                                <p className="text-sm text-muted-foreground">No chats assigned to this label yet.</p>
+                                                <p className="text-sm text-muted-foreground">Nenhuma conversa atribuída a esta etiqueta ainda.</p>
                                                 <Button
                                                     variant="outline" size="sm" className="mt-2"
                                                     onClick={() => {
@@ -478,7 +513,7 @@ export default function LabelsPage() {
                                                         setIsAssignOpen(true);
                                                     }}
                                                 >
-                                                    <UserCheck className="w-3.5 h-3.5 mr-1.5" /> Assign a chat
+                                                    <UserCheck className="w-3.5 h-3.5 mr-1.5" />  Atribuir uma conversa
                                                 </Button>
                                             </div>
                                         ) : (
@@ -503,7 +538,7 @@ export default function LabelsPage() {
                                                             variant="ghost" size="icon"
                                                             className="h-7 w-7 text-destructive/70 hover:text-destructive hover:bg-destructive/10 shrink-0"
                                                             onClick={() => removeChatFromLabel(label.id, cl.chatJid)}
-                                                            title="Remove from label"
+                                                            title="Remover da etiqueta"
                                                         >
                                                             <X className="w-3.5 h-3.5" />
                                                         </Button>
@@ -526,25 +561,26 @@ export default function LabelsPage() {
             }}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Edit Label</DialogTitle>
-                        <DialogDescription>Update the label name or color.</DialogDescription>
+                        <DialogTitle>Editar etiqueta</DialogTitle>
+                        <DialogDescription>Atualize o nome ou a cor da etiqueta.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label>Label Name</Label>
+                            <Label>Nome da etiqueta</Label>
                             <Input
                                 value={currentName}
                                 onChange={(e) => setCurrentName(e.target.value)}
-                                placeholder="e.g. VIP Customer"
+                                placeholder="ex.: Cliente VIP"
                             />
                         </div>
                         <ColorPicker />
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
                         <Button onClick={handleEdit} disabled={submitting || !currentName.trim()}>
                             {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                            Save Changes
+                            
+                            Salvar alterações
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -561,14 +597,14 @@ export default function LabelsPage() {
             }}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Assign Chat to Label</DialogTitle>
-                        <DialogDescription>Search for a contact or enter a JID to assign to this label.</DialogDescription>
+                        <DialogTitle>Atribuir conversa à etiqueta</DialogTitle>
+                        <DialogDescription>Busque um contato ou informe um JID para atribuir a esta etiqueta.</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
-                                placeholder="Search contacts or enter JID..."
+                                placeholder="Buscar contatos ou informar JID..."
                                 className="pl-9"
                                 value={contactSearch}
                                 onChange={(e) => setContactSearch(e.target.value)}
@@ -594,27 +630,29 @@ export default function LabelsPage() {
                                             {(c.name || c.notify || c.jid).charAt(0).toUpperCase()}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium truncate">{c.name || c.notify || "Unknown"}</p>
+                                            <p className="text-sm font-medium truncate">{c.name || c.notify || "Desconhecido"}</p>
                                             <p className="text-[11px] text-muted-foreground font-mono truncate">{c.jid}</p>
                                         </div>
-                                        <Badge variant="outline" className="text-[10px] shrink-0">Assign</Badge>
+                                        <Badge variant="outline" className="text-[10px] shrink-0">Atribuir</Badge>
                                     </button>
                                 ))
                             ) : contactSearch.trim() ? (
                                 <div className="text-center py-6 space-y-3">
-                                    <p className="text-sm text-muted-foreground">No contacts found</p>
+                                    <p className="text-sm text-muted-foreground">Nenhum contato encontrado</p>
                                     {contactSearch.includes("@") && (
                                         <Button
                                             variant="outline" size="sm"
                                             onClick={() => assignChatToLabel(contactSearch.trim())}
                                         >
-                                            Assign &quot;{contactSearch.trim()}&quot; directly
+                                            
+                                            Atribuir &quot;{contactSearch.trim()}&quot; diretamente
                                         </Button>
                                     )}
                                 </div>
                             ) : (
                                 <p className="text-sm text-muted-foreground text-center py-6">
-                                    Type to search contacts...
+                                    
+                                    Digite para buscar contatos...
                                 </p>
                             )}
                         </div>
