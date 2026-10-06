@@ -68,7 +68,7 @@ function LoginForm() {
 
       <div className="relative z-10 w-full max-w-md p-4 animate-in fade-in zoom-in-95 duration-500">
         <div className="flex flex-col items-center mb-8">
-          <BrandLogo className="h-24 mb-6" />
+          <BrandLogo crm className="h-14 mb-6" />
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Bem-vindo de volta</h1>
           <p className="text-muted-foreground mt-2">Acesse sua conta Saiaê</p>
         </div>
@@ -114,6 +114,11 @@ function LoginForm() {
                       />
                     </FormControl>
                     <FormMessage />
+                    <div className="pt-1 text-right">
+                      <Link href="/auth/forgot-password" className="text-sm font-semibold underline underline-offset-4 hover:text-foreground/70">
+                        Esqueci minha senha
+                      </Link>
+                    </div>
                   </FormItem>
                 )}
               />

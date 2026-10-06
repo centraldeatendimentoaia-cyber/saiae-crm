@@ -97,7 +97,7 @@ export default function RegisterPage() {
 
             <div className="relative z-10 w-full max-w-md p-4 animate-in fade-in zoom-in-95 duration-500">
                 <div className="flex flex-col items-center mb-8">
-                    <BrandLogo className="h-24 mb-6" />
+                    <BrandLogo crm className="h-14 mb-6" />
                     <h1 className="text-3xl font-bold tracking-tight text-foreground">Criar conta</h1>
                     <p className="text-muted-foreground mt-2">Junte-se à Saiaê</p>
                 </div>

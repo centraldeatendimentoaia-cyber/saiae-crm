@@ -59,6 +59,7 @@ model User {
   notifications Notification[]
   sessionAccesses SessionAccess[]
   usageCounters UsageCounter[]
+  passwordResets PasswordReset[]
 
   @@index([stripeCustomerId])
 }
@@ -425,5 +426,19 @@ model UsageCounter {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period])
+  @@index([userId])
+}
+
+// Links de redefinição de senha (guarda só o hash do token)
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
