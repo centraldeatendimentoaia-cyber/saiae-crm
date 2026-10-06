@@ -73,11 +73,8 @@ const checkScheduledMessages = async () => {
 };
 
 export function startScheduler() {
-    logger.info("Scheduler", "Starting Message Scheduler...");
-
-    // Run immediately on start
-    checkScheduledMessages();
-
-    // Then run every 30 seconds
-    setInterval(checkScheduledMessages, 30 * 1000);
+    // O envio das mensagens agendadas é feito por src/lib/cron.ts (initScheduler).
+    // Este arquivo ficou só como referência e não roda, para não duplicar envios.
+    logger.info("Scheduler", "Envio de agendamentos gerenciado pelo Cron.");
+    void checkScheduledMessages;
 }

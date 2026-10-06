@@ -27,6 +27,9 @@ interface UserProfile {
     email: string;
     role: "SUPERADMIN" | "OWNER" | "STAFF";
     createdAt: string;
+    plan?: string;
+    planStatus?: string;
+    extraSessions?: number;
     _count?: {
         sessions: number;
     }
@@ -44,7 +47,10 @@ export default function UsersPage() {
         name: "",
         email: "",
         password: "",
-        role: "OWNER"
+        role: "OWNER",
+        plan: "ESSENCIAL",
+        planStatus: "ACTIVE",
+        extraSessions: 0
     });
 
     useEffect(() => {
@@ -84,7 +90,7 @@ export default function UsersPage() {
                 toast.success(editingUser ? "User updated" : "User created");
                 setShowForm(false);
                 setEditingUser(null);
-                setFormData({ name: "", email: "", password: "", role: "OWNER" });
+                setFormData({ name: "", email: "", password: "", role: "OWNER", plan: "ESSENCIAL", planStatus: "ACTIVE", extraSessions: 0 });
                 fetchUsers();
             } else {
                 const error = await res.json();
@@ -144,7 +150,7 @@ export default function UsersPage() {
                 </div>
                 <Button size="sm" onClick={() => {
                     setEditingUser(null);
-                    setFormData({ name: "", email: "", password: "", role: "OWNER" });
+                    setFormData({ name: "", email: "", password: "", role: "OWNER", plan: "ESSENCIAL", planStatus: "ACTIVE", extraSessions: 0 });
                     setShowForm(true);
                 }}>
                     <Plus className="h-4 w-4 mr-1 sm:mr-2" />  Adicionar usuário
@@ -204,6 +210,39 @@ export default function UsersPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                <div className="space-y-2">
+                                    <Label>Plano</Label>
+                                    <Select value={formData.plan} onValueChange={(v: string) => setFormData({ ...formData, plan: v })}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="TRIAL">Teste grátis (3 dias)</SelectItem>
+                                            <SelectItem value="ESSENCIAL">Essencial</SelectItem>
+                                            <SelectItem value="PRO">Pro</SelectItem>
+                                            <SelectItem value="ESCALA">Escala</SelectItem>
+                                            <SelectItem value="ILIMITADO">Ilimitado (interno)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Situação da assinatura</Label>
+                                    <Select value={formData.planStatus} onValueChange={(v: string) => setFormData({ ...formData, planStatus: v })}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ACTIVE">Ativa</SelectItem>
+                                            <SelectItem value="SUSPENDED">Suspensa (bloqueia envios)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Números de WhatsApp extras</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={50}
+                                        value={formData.extraSessions}
+                                        onChange={e => setFormData({ ...formData, extraSessions: Math.max(0, parseInt(e.target.value || "0", 10) || 0) })}
+                                    />
+                                </div>
                             </div>
                             <div className="flex justify-end gap-2">
                                 <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
@@ -237,7 +276,12 @@ export default function UsersPage() {
                                 </div>
 
                                 <div className="flex justify-between items-center text-sm text-muted-foreground">
-                                    <span>{user._count?.sessions || 0}  Sessões</span>
+                                    <span className="flex items-center gap-2">
+                                        {user._count?.sessions || 0}  Sessões
+                                        <Badge variant={user.planStatus === "SUSPENDED" ? "destructive" : "secondary"}>
+                                            {user.planStatus === "SUSPENDED" ? "Suspenso" : (user.plan || "ILIMITADO")}
+                                        </Badge>
+                                    </span>
                                     <span>Cadastro {new Date(user.createdAt).toLocaleDateString()}</span>
                                 </div>
                             </div>
@@ -248,7 +292,10 @@ export default function UsersPage() {
                                         name: user.name || "",
                                         email: user.email,
                                         password: "",
-                                        role: user.role
+                                        role: user.role,
+                                        plan: user.plan || "ILIMITADO",
+                                        planStatus: user.planStatus || "ACTIVE",
+                                        extraSessions: user.extraSessions || 0
                                     });
                                     setShowForm(true);
                                 }}>

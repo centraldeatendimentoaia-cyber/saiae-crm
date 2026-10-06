@@ -1,4 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
+import { assertCanCreateSession, PlanError } from "@/lib/plans";
 import { waManager } from "@/modules/whatsapp/manager";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, getAccessibleSessions } from "@/lib/api-auth";
@@ -37,10 +38,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ status: false, message: "Session name is required", error: "Session name is required" }, { status: 400 });
         }
 
+        await assertCanCreateSession(user.id);
+
         // Create session for the authenticated user
         const session = await waManager.createSession(user.id, name, sessionId);
         return NextResponse.json({ status: true, message: "Session created successfully", data: session });
     } catch (error) {
+        if (error instanceof PlanError) {
+            return NextResponse.json({ status: false, message: error.message, error: error.message, code: "PLAN_LIMIT" }, { status: 402 });
+        }
         console.error("Create session error:", error);
         return NextResponse.json({ status: false, message: "Failed to create session", error: "Failed to create session" }, { status: 500 });
     }

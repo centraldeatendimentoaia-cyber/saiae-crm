@@ -84,6 +84,12 @@ export default function BroadcastPage() {
         }
     };
     const [delay, setDelay] = useState([2000]);
+    const [quota, setQuota] = useState<{ used: number; max: number | null } | null>(null);
+    useEffect(() => {
+        fetch("/api/me/plan").then(r => r.json()).then(j => {
+            if (j.status) setQuota({ used: j.data.usage.messages, max: j.data.limits.messages });
+        }).catch(() => {});
+    }, [sessionId]);
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleAt, setScheduleAt] = useState("");
     const [scheduling, setScheduling] = useState(false);
@@ -300,7 +306,12 @@ export default function BroadcastPage() {
                                             onChange={e => setContacts(e.target.value)}
                                             disabled={loading}
                                         />
-                                        <p className="text-xs text-muted-foreground">{recipientCount}  números identificados</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {recipientCount}  números identificados
+                                            {quota && quota.max !== null && (
+                                                <> · restam {Math.max(0, quota.max - quota.used).toLocaleString("pt-BR")} disparos neste mês</>
+                                            )}
+                                        </p>
                                     </div>
                                 </CardContent>
                             </Card>

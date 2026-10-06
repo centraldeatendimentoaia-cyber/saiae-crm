@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { z } from "zod";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { assertCanUseAI, recordAI, PlanError } from "@/lib/plans";
 
 const bodySchema = z.object({
     objective: z.string().min(3).max(1000),
@@ -20,6 +21,13 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) {
         return NextResponse.json({ status: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+        await assertCanUseAI(user.id);
+    } catch (e) {
+        if (e instanceof PlanError) return NextResponse.json({ status: false, error: e.message, code: "PLAN_LIMIT" }, { status: 402 });
+        throw e;
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
@@ -82,6 +90,7 @@ Tom: ${tone || "elegante e acolhedor"}` }],
         const copies = (Array.isArray(list) ? list : [list]).filter(
             (x): x is string => typeof x === "string" && x.trim().length > 0
         );
+        if (copies.length > 0) await recordAI(user.id);
         return NextResponse.json({ status: true, copies });
     } catch (e) {
         console.error("AI copy error", e);

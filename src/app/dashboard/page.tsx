@@ -19,6 +19,7 @@ import {
 import { auth } from "@/lib/auth";
 import { getAccessibleSessions } from "@/lib/api-auth";
 import { redirect } from "next/navigation";
+import { PlanCard } from "@/components/dashboard/plan-card";
 
 export const dynamic = 'force-dynamic';
 
@@ -127,6 +128,8 @@ export default async function DashboardPage() {
                     );
                 })}
             </div>
+
+            <PlanCard />
 
             {/* Quick Actions */}
             <div>

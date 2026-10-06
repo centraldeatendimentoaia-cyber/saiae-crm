@@ -27,6 +27,10 @@ export async function GET(request: NextRequest) {
                 name: true,
                 email: true,
                 role: true,
+                plan: true,
+                planStatus: true,
+                trialEndsAt: true,
+                extraSessions: true,
                 createdAt: true,
                 _count: {
                     select: { sessions: true }
@@ -57,6 +61,7 @@ export async function POST(request: NextRequest) {
         }
 
         const { name, email, password, role } = parseResult.data;
+        const planKey = ["TRIAL", "ESSENCIAL", "PRO", "ESCALA", "ILIMITADO"].includes(body.plan) ? body.plan : "ESSENCIAL";
 
         // Check if email exists
         const existing = await prisma.user.findUnique({ where: { email } });
@@ -71,7 +76,9 @@ export async function POST(request: NextRequest) {
                 name,
                 email,
                 password: hashedPassword,
-                role: role as any
+                role: role as any,
+                plan: planKey,
+                trialEndsAt: planKey === "TRIAL" ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000) : null
             },
             select: {
                 id: true,

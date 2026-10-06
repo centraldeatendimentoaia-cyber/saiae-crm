@@ -4,6 +4,7 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import { z } from "zod";
+import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/lib/plans";
 import { personalizeFor } from "@/lib/personalize";
 import { resolveSendJid } from "@/lib/wa-jid";
 
@@ -42,6 +43,10 @@ export async function POST(
         if (!instance?.socket) {
             return NextResponse.json({ status: false, message: "Session not ready", error: "Session not ready" }, { status: 503 });
         }
+
+        // --- Plano: bloqueia se a conta estiver suspensa ou sem cota ---
+        const ownerId = await ownerIdOfSession(sessionId);
+        if (ownerId) await assertCanSend(ownerId, recipients.length);
 
         // --- Save BroadcastLog & recipients to DB ---
         const log = await prisma.broadcastLog.create({
@@ -93,6 +98,7 @@ export async function POST(
                     const personalized = await personalizeFor(sessionId, targetJid, message, [jid]);
                     await instance.socket!.sendMessage(targetJid, { text: personalized });
                     sent++;
+                    if (ownerId) await recordMessages(ownerId, 1);
 
                     // Update recipient status in DB
                     await prisma.broadcastRecipient.updateMany({
@@ -169,6 +175,9 @@ export async function POST(
         });
 
     } catch (e) {
+        if ((e as any)?.name === "PlanError") {
+            return NextResponse.json({ status: false, message: (e as PlanError).message, error: (e as PlanError).message, code: "PLAN_LIMIT" }, { status: 402 });
+        }
         console.error("Broadcast error", e);
         return NextResponse.json({ status: false, message: "Failed to start broadcast", error: "Failed to start broadcast" }, { status: 500 });
     }

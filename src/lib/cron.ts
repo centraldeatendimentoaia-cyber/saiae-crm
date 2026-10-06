@@ -5,9 +5,15 @@ import cronParser from "cron-parser";
 import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
 import { logger } from "./logger";
+import { assertCanSend, recordMessages } from "@/lib/plans";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let running = false; // evita duas rodadas ao mesmo tempo
 export function initScheduler() {
     // Run every minute
     cron.schedule("* * * * *", async () => {
+        if (running) return;
+        running = true;
         try {
             const now = new Date();
             
@@ -42,6 +48,20 @@ export function initScheduler() {
                 }
 
                 try {
+                    // Plano: conta suspensa ou sem cota não envia
+                    try {
+                        await assertCanSend(msg.session.userId, 1);
+                    } catch (planErr: any) {
+                        logger.warn("Cron", `Plano bloqueou o envio ${msg.id}: ${planErr.message}`);
+                        if (!msg.cronExpression) {
+                            await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "FAILED" } });
+                        } else {
+                            const itv = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
+                            await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { sendAt: itv.next().toDate() } });
+                        }
+                        continue;
+                    }
+
                     logger.info("Cron", `Sending to ${msg.jid}`);
                     
                     if (msg.mediaUrl) {
@@ -66,6 +86,8 @@ export function initScheduler() {
                         await instance.socket.sendMessage(to, { text: msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "" });
                     }
 
+                    await recordMessages(msg.session.userId, 1);
+
                     // Update status or compute next sendAt if recurring
                     if (msg.cronExpression) {
                         const interval = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
@@ -81,6 +103,7 @@ export function initScheduler() {
                         });
                     }
 
+                    await sleep(2500 + Math.floor(Math.random() * 3500));
                 } catch (error) {
                     logger.error("Cron", `Check failed for ${msg.id}`, error);
                     if (!msg.cronExpression) {
@@ -100,6 +123,8 @@ export function initScheduler() {
 
         } catch (error) {
             logger.error("Cron", "Scheduler error:", error);
+        } finally {
+            running = false;
         }
     });
     

@@ -18,7 +18,7 @@ export async function PATCH(
 
     try {
         const body = await request.json();
-        const { name, email, password, role } = body;
+        const { name, email, password, role, plan, planStatus, extraSessions } = body;
 
         // Prevent modifying own role to lock oneself out (optional safety)
         if (id === user.id && role && role !== "SUPERADMIN") {
@@ -29,6 +29,13 @@ export async function PATCH(
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (role) updateData.role = role;
+        if (["TRIAL", "ESSENCIAL", "PRO", "ESCALA", "ILIMITADO"].includes(plan)) {
+            updateData.plan = plan;
+            if (plan === "TRIAL") updateData.trialEndsAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+            else updateData.trialEndsAt = null;
+        }
+        if (planStatus === "ACTIVE" || planStatus === "SUSPENDED") updateData.planStatus = planStatus;
+        if (Number.isInteger(extraSessions) && extraSessions >= 0 && extraSessions <= 50) updateData.extraSessions = extraSessions;
         if (password) {
             updateData.password = await bcrypt.hash(password, 10);
         }
@@ -41,6 +48,9 @@ export async function PATCH(
                 name: true,
                 email: true,
                 role: true,
+                plan: true,
+                planStatus: true,
+                extraSessions: true,
                 updatedAt: true
             }
         });
