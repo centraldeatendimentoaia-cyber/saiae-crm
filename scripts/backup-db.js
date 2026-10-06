@@ -71,17 +71,31 @@ async function main() {
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const file = path.join(dir, `${db}-${stamp}.sql.gz`);
 
+    // credenciais num arquivo temporário (600): funciona em qualquer cliente MySQL/MariaDB
+    // e não aparece na lista de processos nem depende de MYSQL_PWD
+    const cnf = path.join(dir, `.my-${process.pid}.cnf`);
+    const BS = String.fromCharCode(92);
+    const NL = String.fromCharCode(10);
+    const q = (v) => '"' + String(v).split(BS).join(BS + BS).split('"').join(BS + '"') + '"';
+    const cnfLines = [
+        "[client]",
+        `host=${u.hostname}`,
+        `port=${u.port || 3306}`,
+        `user=${q(decodeURIComponent(u.username))}`,
+    ];
+    if (u.password) cnfLines.push(`password=${q(decodeURIComponent(u.password))}`);
+    fs.writeFileSync(cnf, cnfLines.join(NL) + NL, { mode: 0o600 });
+    const isMaria = /maria/i.test(bin);
     const args = [
-        `--host=${u.hostname}`,
-        `--port=${u.port || 3306}`,
-        `--user=${decodeURIComponent(u.username)}`,
+        `--defaults-extra-file=${cnf}`, // precisa ser o primeiro argumento
         "--single-transaction",
         "--routines",
         "--default-character-set=utf8mb4",
+        // rede privada do Railway: o cliente MariaDB 11 exigiria certificado verificado
+        ...(isMaria ? ["--skip-ssl"] : []),
         db,
     ];
     const env = { ...process.env };
-    if (u.password) env.MYSQL_PWD = decodeURIComponent(u.password);
 
     const dump = spawn(bin, args, { env });
     let stderr = "";
@@ -96,7 +110,7 @@ async function main() {
     const [code] = await Promise.all([exited, written]).catch((e) => {
         fs.rmSync(file, { force: true });
         throw e;
-    });
+    }).finally(() => fs.rmSync(cnf, { force: true }));
 
     if (code !== 0) {
         fs.rmSync(file, { force: true });

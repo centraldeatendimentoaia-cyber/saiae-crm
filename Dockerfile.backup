@@ -1,9 +1,11 @@
 # Imagem leve só para o backup diário do banco (serviço "backup" no Railway).
-# Não compila o app: apenas mysqldump + o script + o cliente S3.
+# Não compila o app: apenas mariadb-dump + o script + o cliente S3.
 FROM node:24-alpine
-RUN apk add --no-cache mysql-client ca-certificates
+# mariadb-connector-c traz o plugin caching_sha2_password (autenticação padrão do MySQL 8)
+RUN apk add --no-cache mariadb-client mariadb-connector-c ca-certificates
 WORKDIR /app
 RUN npm install --no-save --ignore-scripts @aws-sdk/client-s3@3.1146.0
 COPY scripts/backup-db.js ./scripts/backup-db.js
 ENV NODE_ENV=production
+ENV MYSQLDUMP_PATH=mariadb-dump
 CMD ["node", "scripts/backup-db.js"]
