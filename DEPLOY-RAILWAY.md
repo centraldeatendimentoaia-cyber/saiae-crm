@@ -36,11 +36,12 @@ Em *Variables*, crie:
 | `TZ` | `America/Sao_Paulo` |
 | `BAILEYS_LOG_LEVEL` | `error` |
 | `NODE_ENV` | `production` |
+| `PORT` | `3000` (precisa bater com a porta configurada no domínio) |
 
 Observações:
 - `NEXT_PUBLIC_*` são gravadas **na hora do build**: defina antes do primeiro deploy (ou refaça o deploy depois de mudar).
 - Não defina `NEXT_PUBLIC_SWAGGER_PASSWORD` se não quiser expor a documentação interativa (`/swagger`). Sem a senha, ninguém entra.
-- Não defina `PORT`: o Railway injeta sozinho.
+- `PORT` deve ser `3000`, a mesma porta configurada em Networking (domínio). Se forem diferentes, o site responde 502.
 
 ## 4. Volume (arquivos de mídia)
 Serviço **app** → *Settings* → **Volumes** → adicionar volume montado em **`/app/data`**.

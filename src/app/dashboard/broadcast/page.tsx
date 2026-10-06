@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { parseRecipients } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -82,6 +84,39 @@ export default function BroadcastPage() {
         }
     };
     const [delay, setDelay] = useState([2000]);
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [scheduleAt, setScheduleAt] = useState("");
+    const [scheduling, setScheduling] = useState(false);
+
+    const handleSchedule = async () => {
+        if (!sessionId) return toast.error("Nenhuma sessão ativa encontrada");
+        if (!message.trim()) return toast.error("A mensagem não pode estar vazia");
+        const recipients = parseRecipients(contacts);
+        if (recipients.length === 0) return toast.error("Nenhum destinatário informado");
+        if (!scheduleAt) return toast.error("Informe a data e a hora do disparo");
+        setScheduling(true);
+        try {
+            const res = await fetch(`/api/scheduler/${sessionId}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    jids: recipients,
+                    content: message,
+                    sendAt: scheduleAt,
+                    spacingMs: Math.max(3000, delay[0]),
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.status) throw new Error(data.message || "Falha ao agendar o disparo");
+            toast.success(`Disparo agendado para ${recipients.length} ${recipients.length === 1 ? "número" : "números"}. Acompanhe no Agendador.`);
+            setScheduleOpen(false);
+            setScheduleAt("");
+        } catch (e: any) {
+            toast.error(e.message || "Falha ao agendar o disparo");
+        } finally {
+            setScheduling(false);
+        }
+    };
     const [loading, setLoading] = useState(false);
     const [broadcastProgress, setBroadcastProgress] = useState<BroadcastProgress | null>(null);
     const [activeTab, setActiveTab] = useState<"new" | "history">("new");
@@ -171,10 +206,7 @@ export default function BroadcastPage() {
         setBroadcastProgress(null);
 
         try {
-            const recipients = contacts.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).map(s => {
-                if (!s.includes('@')) return `${s}@s.whatsapp.net`;
-                return s;
-            });
+            const recipients = parseRecipients(contacts);
 
             if (recipients.length === 0) {
                 toast.error("Nenhum destinatário informado");
@@ -195,9 +227,9 @@ export default function BroadcastPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.info(`Broadcast started for ${recipients.length} recipients...`);
+                toast.info(`Disparo iniciado para ${recipients.length} destinatários...`);
             } else {
-                toast.error(data.message || "Failed to start broadcast");
+                toast.error(data.message || "Falha ao iniciar o disparo");
                 setLoading(false);
             }
         } catch (e) {
@@ -207,7 +239,7 @@ export default function BroadcastPage() {
         }
     };
 
-    const recipientCount = contacts.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).length;
+    const recipientCount = parseRecipients(contacts).length;
     const formatJid = (jid: string) => {
         if (!jid) return "-";
         return jid.replace("@s.whatsapp.net", "").replace("@g.us", " (Group)");
@@ -354,6 +386,16 @@ export default function BroadcastPage() {
                                         >
                                             {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                                             {loading ? "Disparando..." : "Iniciar disparo"}
+                                        </Button>
+
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => setScheduleOpen(true)}
+                                            disabled={loading || !sessionId || recipientCount === 0 || !message.trim()}
+                                        >
+                                            <Calendar className="mr-2 h-4 w-4" />
+                                            Agendar disparo
                                         </Button>
                                     </div>
                                 </CardContent>
@@ -588,6 +630,29 @@ export default function BroadcastPage() {
                     </DialogContent>
                 </Dialog>
             </div>
+            <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Agendar disparo</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            A mensagem será enviada para {recipientCount} {recipientCount === 1 ? "número" : "números"} a partir do horário escolhido, um de cada vez, com {(Math.max(3000, delay[0]) / 1000).toFixed(0)} segundos ou mais entre eles.
+                            Variáveis como {"{primeironome}"} são trocadas na hora do envio.
+                        </p>
+                        <div className="space-y-2">
+                            <Label htmlFor="schedule-at">Data e hora</Label>
+                            <Input id="schedule-at" type="datetime-local" value={scheduleAt} onChange={e => setScheduleAt(e.target.value)} />
+                        </div>
+                        <div className="flex gap-2 justify-end pt-2">
+                            <Button variant="ghost" onClick={() => setScheduleOpen(false)} disabled={scheduling}>Cancelar</Button>
+                            <Button onClick={handleSchedule} disabled={scheduling || !scheduleAt}>
+                                {scheduling ? "Agendando..." : "Agendar"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </SessionGuard>
     );
 }

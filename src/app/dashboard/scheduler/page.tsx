@@ -1,5 +1,6 @@
 "use client";
 
+import { parseRecipients } from "@/lib/phone";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -230,11 +231,17 @@ export default function SchedulerPage() {
             }
         }
 
-        let jid = newJid;
-        if (!jid.includes("@")) {
-            if (newJidType === "group") jid += "@g.us";
-            else if (newJidType === "newsletter") jid += "@newsletter";
-            else jid += "@s.whatsapp.net";
+        let jids: string[];
+        if (newJidType === "personal") {
+            jids = parseRecipients(newJid);
+            if (jids.length === 0) {
+                toast.error("Informe ao menos um número válido");
+                return;
+            }
+        } else {
+            let single = newJid.trim();
+            if (!single.includes("@")) single += newJidType === "group" ? "@g.us" : "@newsletter";
+            jids = [single];
         }
 
         const cronData = buildCronData(isRecurring, recurrenceType, recurringMinutes, recurringHours, recurringDays, customCron, finalSendAt);
@@ -244,7 +251,7 @@ export default function SchedulerPage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    jid,
+                    ...(jids.length > 1 ? { jids, spacingMs: 5000 } : { jid: jids[0] }),
                     content: newContent,
                     sendAt: finalSendAt,
                     mediaUrl: newMediaUrl,
@@ -254,7 +261,7 @@ export default function SchedulerPage() {
             });
 
             if (res.ok) {
-                toast.success("Mensagem agendada");
+                toast.success(jids.length > 1 ? `${jids.length} mensagens agendadas` : "Mensagem agendada");
                 setShowForm(false);
                 setNewJid("");
                 setNewContent("");
@@ -498,7 +505,7 @@ export default function SchedulerPage() {
                         <CardContent className="space-y-4">
                             <div className="space-y-3">
                                 <div className="flex justify-between items-center">
-                                    <Label>JID do destinatário</Label>
+                                    <Label>Destinatários</Label>
                                     <RadioGroup value={newJidType} onValueChange={setNewJidType} className="flex gap-4">
                                         <div className="flex items-center space-x-2">
                                             <RadioGroupItem value="personal" id="new-personal" />
@@ -514,7 +521,22 @@ export default function SchedulerPage() {
                                         </div>
                                     </RadioGroup>
                                 </div>
-                                <Input value={newJid} onChange={e => setNewJid(e.target.value)} placeholder={newJidType === 'group' ? "120363... (ID do grupo)" : newJidType === 'newsletter' ? "120363... (ID do canal)" : "62812345678"} />
+                                {newJidType === "personal" ? (
+                                    <>
+                                        <Textarea
+                                            value={newJid}
+                                            onChange={e => setNewJid(e.target.value)}
+                                            placeholder={"5511999999999\n5511988888888"}
+                                            className="min-h-[120px] font-mono"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            {parseRecipients(newJid).length} números identificados. Um por linha ou separados por vírgula.
+                                            {parseRecipients(newJid).length > 1 && " As mensagens saem uma a uma, com alguns segundos entre elas."}
+                                        </p>
+                                    </>
+                                ) : (
+                                    <Input value={newJid} onChange={e => setNewJid(e.target.value)} placeholder={newJidType === 'group' ? "120363... (ID do grupo)" : "120363... (ID do canal)"} />
+                                )}
                             </div>
                             
                             {renderRecurrenceForm(

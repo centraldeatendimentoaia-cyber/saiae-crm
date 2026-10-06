@@ -70,10 +70,11 @@ export async function POST(
         }
 
         const body = await request.json();
-        const { jid, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule } = body;
+        const { jid, jids, spacingMs, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule } = body;
+        const targets: string[] = Array.isArray(jids) ? jids.filter((j: unknown) => typeof j === "string" && j) : (jid ? [jid] : []);
 
-        if (!jid || (!content && !mediaUrl) || !sendAt) {
-            return NextResponse.json({ status: false, message: "Missing required fields (JID, Content/Media, SendAt)", error: "Missing required fields" }, { status: 400 });
+        if (targets.length === 0 || targets.length > 500 || (!content && !mediaUrl) || !sendAt) {
+            return NextResponse.json({ status: false, message: "Missing required fields (recipients up to 500, Content/Media, SendAt)", error: "Missing required fields" }, { status: 400 });
         }
 
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
@@ -99,19 +100,26 @@ export async function POST(
         const utcDate = moment.tz(sendAt, timezone).toDate();
         console.log(`[Scheduler:POST] Resolved UTC Date: ${utcDate.toISOString()}`);
 
-        const scheduled = await prisma.scheduledMessage.create({
-            data: {
-                sessionId: session.id,
-                jid,
-                content,
-                mediaUrl,
-                mediaType,
-                cronExpression,
-                recurrenceRule,
-                sendAt: utcDate,
-                status: "PENDING"
-            }
-        });
+        // Vários destinatários: cada um sai alguns segundos depois do anterior (evita rajada e bloqueio)
+        const spacing = Math.max(3000, Number(spacingMs) || 5000);
+        const created = [];
+        for (let i = 0; i < targets.length; i++) {
+            const offset = targets.length > 1 ? i * spacing + Math.floor(Math.random() * 2000) : 0;
+            created.push(await prisma.scheduledMessage.create({
+                data: {
+                    sessionId: session.id,
+                    jid: targets[i],
+                    content,
+                    mediaUrl,
+                    mediaType,
+                    cronExpression,
+                    recurrenceRule,
+                    sendAt: new Date(utcDate.getTime() + offset),
+                    status: "PENDING"
+                }
+            }));
+        }
+        const scheduled = created.length === 1 ? created[0] : { count: created.length };
 
         return NextResponse.json({ status: true, message: "Message scheduled successfully", data: scheduled });
 
