@@ -22,7 +22,7 @@ function googleTag(): string {
 window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
 gtag('js',new Date());gtag('config','${id}');
 document.addEventListener('click',function(e){
-  var a=e.target.closest&&e.target.closest('a[href^="https://wa.me"]');
+  var a=e.target.closest&&e.target.closest('a[href^="https://wa.me"],a[href^="https://buy.stripe.com"]');
   if(!a)return;
   gtag('event','generate_lead',{event_category:'whatsapp'});
   ${conversion}
@@ -30,9 +30,29 @@ document.addEventListener('click',function(e){
 </script>`;
 }
 
+const WA = "https://wa.me/5561999531848";
+
+/** Se os links da Stripe estiverem configurados, os botões dos planos abrem o pagamento direto. */
+function applyStripeLinks(html: string): string {
+    const links: Record<string, string | undefined> = {
+        Essencial: process.env.STRIPE_LINK_ESSENCIAL,
+        Pro: process.env.STRIPE_LINK_PRO,
+        Escala: process.env.STRIPE_LINK_ESCALA,
+    };
+    if (!links.Essencial || !links.Pro || !links.Escala) return html;
+
+    let out = html;
+    for (const [plan, url] of Object.entries(links)) {
+        const re = new RegExp(`href="${WA}\\?text=[^"]*plano%20${plan}%20[^"]*"`);
+        out = out.replace(re, `href="${url}"`);
+    }
+    out = out.split("Clique no botão do plano que você quer. Ele abre uma conversa no nosso WhatsApp e a gente faz tudo com você por lá.").join("Clique no botão do plano que você quer e pague com cartão em ambiente seguro. Você recebe o acesso por e-mail na hora. Prefere conversar antes? Chame a gente no WhatsApp.");
+    return out;
+}
+
 export function GET() {
     const file = path.join(process.cwd(), "src", "landing", "crm.html");
-    const html = readFileSync(file, "utf8").replace("<!--GOOGLE_TAG-->", googleTag());
+    const html = applyStripeLinks(readFileSync(file, "utf8")).replace("<!--GOOGLE_TAG-->", googleTag());
     return new Response(html, {
         headers: {
             "Content-Type": "text/html; charset=utf-8",

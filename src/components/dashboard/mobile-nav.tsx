@@ -29,6 +29,7 @@ import {
     MessageCircleReply,
     UserPlus,
     BookOpen,
+    CreditCard
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -47,6 +48,7 @@ const navGroups: NavGroup[] = [
             { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
             { href: "/dashboard/sessions", label: "Sessões / QR", icon: QrCode },
             { href: "/dashboard/guia", label: "Guia de uso", icon: BookOpen },
+            { href: "/dashboard/assinatura", label: "Plano e assinatura", icon: CreditCard },
         ],
     },
     {

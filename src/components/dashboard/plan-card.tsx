@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 
 interface PlanData {
     plan: { key: string; name: string };
@@ -38,12 +39,21 @@ function Meter({ label, used, max }: { label: string; used: number; max: number 
 
 export function PlanCard() {
     const [data, setData] = useState<PlanData | null>(null);
+    const [justPaid, setJustPaid] = useState(false);
 
     useEffect(() => {
-        fetch("/api/me/plan")
-            .then((r) => r.json())
-            .then((j) => j.status && setData(j.data))
-            .catch(() => {});
+        const load = () =>
+            fetch("/api/me/plan")
+                .then((r) => r.json())
+                .then((j) => j.status && setData(j.data))
+                .catch(() => {});
+        load();
+        // voltando do pagamento: o plano é liberado pelo webhook em poucos segundos
+        if (new URLSearchParams(window.location.search).get("assinatura") === "ok") {
+            setJustPaid(true);
+            const timers = [3000, 7000, 15000].map((ms) => setTimeout(load, ms));
+            return () => timers.forEach(clearTimeout);
+        }
     }, []);
 
     if (!data) return null;
@@ -57,6 +67,12 @@ export function PlanCard() {
             <h3 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide mb-3">Meu plano</h3>
             <Card>
                 <CardContent className="space-y-5">
+                    {justPaid && (
+                        <div className="flex items-start gap-2 rounded-[14px] bg-ok-bg text-ok-tx px-4 py-3 text-sm font-medium">
+                            <CheckCircle2 className="h-5 w-5 shrink-0" />
+                            Pagamento recebido! Seu plano é atualizado em instantes.
+                        </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-3">
                         <span className="font-display text-2xl font-bold">{data.plan.name}</span>
                         {data.status === "SUSPENDED" ? (
@@ -80,6 +96,11 @@ export function PlanCard() {
                         <Meter label="Disparos no mês" used={data.usage.messages} max={data.limits.messages} />
                         <Meter label="Textos com IA no mês" used={data.usage.ai} max={data.limits.ai} />
                     </div>
+                    {data.plan.key !== "ILIMITADO" && (
+                        <Link href="/dashboard/assinatura" className="inline-block text-sm font-semibold underline underline-offset-4">
+                            Ver planos e assinar
+                        </Link>
+                    )}
                 </CardContent>
             </Card>
         </div>

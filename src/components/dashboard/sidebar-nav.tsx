@@ -28,7 +28,8 @@ import {
     MessageCircleReply,
     Contact,
     UserPlus,
-    BookOpen
+    BookOpen,
+    CreditCard
 } from "lucide-react";
 import { useSidebar } from "./sidebar-context";
 import {
@@ -59,6 +60,7 @@ const navGroups: NavGroup[] = [
             { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
             { href: "/dashboard/sessions", label: "Sessões / QR", icon: QrCode },
             { href: "/dashboard/guia", label: "Guia de uso", icon: BookOpen },
+            { href: "/dashboard/assinatura", label: "Plano e assinatura", icon: CreditCard },
         ],
     },
     {
