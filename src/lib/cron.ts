@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { personalizeFor } from "@/lib/personalize";
+import { resolveSendJid } from "@/lib/wa-jid";
 import cronParser from "cron-parser";
 import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
@@ -59,9 +60,10 @@ export function initScheduler() {
                             payload.mimetype = "application/octet-stream";
                             payload.fileName = msg.mediaUrl.split('/').pop() || "file";
                         }
-                        await instance.socket.sendMessage(msg.jid, payload);
+                        await instance.socket.sendMessage(await resolveSendJid(instance.socket, msg.jid), payload);
                     } else {
-                        await instance.socket.sendMessage(msg.jid, { text: msg.content ? await personalizeFor(msg.session.sessionId, msg.jid, msg.content) : "" });
+                        const to = await resolveSendJid(instance.socket, msg.jid);
+                        await instance.socket.sendMessage(to, { text: msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "" });
                     }
 
                     // Update status or compute next sendAt if recurring

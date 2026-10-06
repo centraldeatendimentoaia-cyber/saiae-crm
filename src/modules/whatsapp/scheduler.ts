@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { waManager } from "./manager";
 import { logger } from "@/lib/logger";
 import { personalizeFor } from "@/lib/personalize";
+import { resolveSendJid } from "@/lib/wa-jid";
 
 const checkScheduledMessages = async () => {
     try {
@@ -25,7 +26,8 @@ const checkScheduledMessages = async () => {
             if (instance?.socket) {
                 try {
                     let content: any = {};
-                    const finalText = msg.content ? await personalizeFor(msg.sessionId, msg.jid, msg.content) : msg.content;
+                    const targetJid = await resolveSendJid(instance.socket, msg.jid);
+                    const finalText = msg.content ? await personalizeFor(msg.sessionId, targetJid, msg.content, [msg.jid]) : msg.content;
                     if (msg.mediaUrl) {
                         const url = msg.mediaUrl;
                         const type = msg.mediaType || 'image'; // Default to image if null
@@ -45,7 +47,7 @@ const checkScheduledMessages = async () => {
                         content = { text: finalText };
                     }
 
-                    await instance.socket.sendMessage(msg.jid, content);
+                    await instance.socket.sendMessage(targetJid, content);
 
                     await prisma.scheduledMessage.update({
                         where: { id: msg.id },

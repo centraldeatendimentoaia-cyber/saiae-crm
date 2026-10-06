@@ -5,6 +5,7 @@ import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import { z } from "zod";
 import { personalizeFor } from "@/lib/personalize";
+import { resolveSendJid } from "@/lib/wa-jid";
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
@@ -88,12 +89,7 @@ export async function POST(
                 const jid = recipients[i];
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
-                    let targetJid = jid;
-                    if (jid.endsWith("@s.whatsapp.net")) {
-                        const found: any = await instance.socket!.onWhatsApp(jid.split("@")[0]);
-                        if (!found?.[0]?.exists) throw new Error("Número não possui WhatsApp");
-                        targetJid = found[0].jid;
-                    }
+                    const targetJid = await resolveSendJid(instance.socket, jid);
                     const personalized = await personalizeFor(sessionId, targetJid, message, [jid]);
                     await instance.socket!.sendMessage(targetJid, { text: personalized });
                     sent++;
