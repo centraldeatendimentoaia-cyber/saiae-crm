@@ -57,17 +57,15 @@ Serviço **app** → *Settings* → **Networking** → **Generate Domain** (ou u
 4. Crie a conta da sua mãe em **Usuários** e conecte o número do salão em uma sessão dela.
 
 ## 7. Backup diário (serviço **backup**)
-1. No projeto: **+ New** → **GitHub Repo** → o mesmo repositório.
-2. *Settings*:
-   - **Custom Start Command**: `node scripts/backup-db.js`
-   - **Cron Schedule**: `0 6 * * *` (03:00 em Brasília; o Railway usa UTC)
+1. No projeto: **+ New** → **GitHub Repo** → o mesmo repositório. Renomeie para `backup`.
+2. *Settings* → **Config as Code** → caminho do arquivo: `/railway.backup.json` (ele usa `Dockerfile.backup`, uma imagem leve só com o mysqldump, e roda todo dia às 06:00 UTC = 03:00 em Brasília, sem healthcheck).
 3. *Variables*:
    - `DATABASE_URL` = `${{MySQL.MYSQL_URL}}`
-   - `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET` (bucket S3-compatível, por exemplo Backblaze B2 ou Cloudflare R2, que têm plano gratuito pequeno)
-   - `BACKUP_S3_REGION` (se o provedor exigir)
-4. Rode uma vez manualmente (*Deploy → Run*) e confira se o arquivo `.sql.gz` apareceu no bucket.
+   - `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET`, `BACKUP_S3_REGION` (`auto` no Cloudflare R2)
+4. Rode uma vez manualmente (*Deployments → Redeploy*) e confira nos logs a linha `Backup enviado para o bucket` e o arquivo `.sql.gz` no bucket.
+5. No bucket, crie uma regra de ciclo de vida para apagar arquivos com mais de 30 dias.
 
-> O arquivo gerado dentro do próprio container some quando ele termina. Por isso o envio ao bucket é o que de fato protege os dados.
+> O arquivo gerado dentro do container some quando ele termina. Por isso o envio ao bucket é o que de fato protege os dados.
 
 ### Restaurar um backup
 ```bash

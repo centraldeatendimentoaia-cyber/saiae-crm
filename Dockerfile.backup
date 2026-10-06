@@ -1,0 +1,9 @@
+# Imagem leve só para o backup diário do banco (serviço "backup" no Railway).
+# Não compila o app: apenas mysqldump + o script + o cliente S3.
+FROM node:24-alpine
+RUN apk add --no-cache mysql-client ca-certificates
+WORKDIR /app
+RUN npm install --no-save --ignore-scripts @aws-sdk/client-s3@3.1146.0
+COPY scripts/backup-db.js ./scripts/backup-db.js
+ENV NODE_ENV=production
+CMD ["node", "scripts/backup-db.js"]
