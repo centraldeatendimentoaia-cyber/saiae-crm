@@ -10,6 +10,7 @@ import {
     LayoutDashboard,
     MessageSquare,
     Users,
+    UserX,
     Settings,
     LogOut,
     QrCode,
@@ -56,6 +57,7 @@ const navGroups: NavGroup[] = [
         items: [
             { href: "/dashboard/chat", label: "Conversas", icon: MessageSquare },
             { href: "/dashboard/broadcast", label: "Disparo", icon: Megaphone },
+            { href: "/dashboard/descadastros", label: "Descadastrados", icon: UserX },
             { href: "/dashboard/sticker", label: "Criador de figurinhas", icon: ImageIcon },
         ],
     },
