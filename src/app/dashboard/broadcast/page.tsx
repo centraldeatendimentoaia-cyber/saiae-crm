@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { EmojiTextarea } from "@/components/emoji-textarea";
 import { MediaUpload } from "@/components/media-upload";
+import { RecipientPicker } from "@/components/recipient-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { parseRecipients } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
@@ -326,14 +327,15 @@ export default function BroadcastPage() {
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Destinatários</CardTitle>
-                                    <CardDescription>Informe os números de telefone separados por vírgula ou quebra de linha.</CardDescription>
+                                    <CardDescription>Escolha por contatos, etiquetas, grupos ou planilha, ou digite os números (separados por vírgula ou quebra de linha).</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
+                                    <RecipientPicker sessionId={sessionId} value={contacts} onChange={setContacts} disabled={loading} />
                                     <div className="space-y-2">
-                                        <Label>Números de destino (ex.: 5511999999999)</Label>
+                                        <Label>Lista de destino (ex.: 5511999999999) — você pode editar</Label>
                                         <Textarea
                                             placeholder={"5511999999999\n5511988888888"}
-                                            className="min-h-[200px] font-mono text-sm"
+                                            className="min-h-[140px] font-mono text-sm"
                                             value={contacts}
                                             onChange={e => setContacts(e.target.value)}
                                             disabled={loading}
