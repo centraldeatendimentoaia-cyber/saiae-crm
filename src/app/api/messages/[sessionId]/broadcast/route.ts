@@ -7,6 +7,10 @@ import { z } from "zod";
 import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/lib/plans";
 import { personalizeFor } from "@/lib/personalize";
 import { resolveSendJid } from "@/lib/wa-jid";
+import {
+    getSafeMode, safeGate, addSentToday, gateMessage, humanDelayMs, batchPauseMs, sleepMs,
+    BATCH_SIZE, MAX_INVALID_RATE, MIN_CHECKED, MAX_CONSECUTIVE_ERRORS,
+} from "@/lib/safe-mode";
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
@@ -85,20 +89,44 @@ export async function POST(
         }
 
         // Process in background — update DB as we go
+        // Modo Seguro: só quando o Anti-Spam do número está ligado
+        const safe = await getSafeMode(sessionId);
+
         (async () => {
             let sent = 0;
             let failed = 0;
             const errors: { jid: string; error: string }[] = [];
+            let checked = 0;
+            let invalid = 0;
+            let consecutiveErrors = 0;
+            let sinceBreak = 0;
+            let deferredFrom = -1;
+            let deferredNote = "";
+            let stopReason = "";
+            let lastWasInvalid = false;
 
             for (let i = 0; i < recipients.length; i++) {
                 const jid = recipients[i];
+                lastWasInvalid = false;
+
+                if (safe) {
+                    const gate = await safeGate(sessionId, safe);
+                    if (!gate.ok) {
+                        deferredFrom = i;
+                        deferredNote = gateMessage(gate);
+                        break;
+                    }
+                }
+
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
                     const targetJid = await resolveSendJid(instance.socket, jid);
                     const personalized = await personalizeFor(sessionId, targetJid, message, [jid]);
                     await instance.socket!.sendMessage(targetJid, { text: personalized });
                     sent++;
+                    consecutiveErrors = 0;
                     if (ownerId) await recordMessages(ownerId, 1);
+                    if (safe) { await addSentToday(sessionId, 1); sinceBreak++; }
 
                     // Update recipient status in DB
                     await prisma.broadcastRecipient.updateMany({
@@ -107,6 +135,8 @@ export async function POST(
                     });
                 } catch (e: any) {
                     failed++;
+                    lastWasInvalid = /não possui WhatsApp/i.test(e?.message || "");
+                    if (lastWasInvalid) invalid++; else consecutiveErrors++;
                     errors.push({ jid, error: e.message || "Unknown error" });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 
@@ -138,30 +168,71 @@ export async function POST(
                     });
                 }
 
+                checked++;
+
+                // Freio automático: lista ruim ou erros seguidos -> para antes de o número ser bloqueado
+                if (safe) {
+                    if (checked >= MIN_CHECKED && invalid / checked > MAX_INVALID_RATE) {
+                        stopReason = `Disparo pausado: ${Math.round((invalid / checked) * 100)}% dos números não têm WhatsApp. Limpe a lista e comece de novo.`;
+                        break;
+                    }
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        stopReason = "Disparo pausado: vários erros seguidos de envio. Confira a conexão e o estado do número antes de continuar.";
+                        break;
+                    }
+                }
+
                 // Delay between sends
                 if (i < recipients.length - 1) {
-                    const baseDelay = delay || 2000;
-                    const randomDelay = baseDelay + Math.floor(Math.random() * (baseDelay * 0.5));
-                    await new Promise(r => setTimeout(r, randomDelay));
+                    if (safe) {
+                        if (lastWasInvalid) await sleepMs(400 + Math.floor(Math.random() * 800)); // nada foi enviado
+                        else if (sinceBreak >= BATCH_SIZE) { sinceBreak = 0; await sleepMs(batchPauseMs()); }
+                        else await sleepMs(humanDelayMs(delay || 0));
+                    } else {
+                        const baseDelay = delay || 2000;
+                        const randomDelay = baseDelay + Math.floor(Math.random() * (baseDelay * 0.5));
+                        await new Promise(r => setTimeout(r, randomDelay));
+                    }
                 }
             }
 
-            // Mark as completed in DB
+            // O que não coube hoje vira mensagem agendada: o agendador envia dentro do horário e do limite
+            let deferred = 0;
+            if (deferredFrom >= 0) {
+                const rest = recipients.slice(deferredFrom);
+                const dbSession = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
+                if (dbSession) {
+                    await prisma.scheduledMessage.createMany({
+                        data: rest.map(jid => ({ sessionId: dbSession.id, jid, content: message, sendAt: new Date(), status: "PENDING" }))
+                    });
+                    await prisma.broadcastRecipient.updateMany({
+                        where: { broadcastLogId: broadcastId, jid: { in: rest }, status: "pending" },
+                        data: { status: "scheduled" }
+                    });
+                    deferred = rest.length;
+                }
+            }
+
+            const finalStatus = stopReason ? "stopped" : "completed";
+
+            // Mark as finished in DB
             await prisma.broadcastLog.update({
                 where: { id: broadcastId },
-                data: { status: "completed", sent, failed, completedAt: new Date() }
+                data: { status: finalStatus, sent, failed, completedAt: new Date() }
             });
 
             // Final socket emit
             if (io) {
                 io.to(sessionId).emit("broadcast.progress", {
                     broadcastId,
-                    status: "completed",
+                    status: finalStatus,
                     total: recipients.length,
                     sent,
                     failed,
                     errors,
-                    progress: 100,
+                    deferred,
+                    note: stopReason || deferredNote || undefined,
+                    progress: stopReason ? Math.round(((sent + failed) / recipients.length) * 100) : 100,
                     completedAt: new Date().toISOString()
                 });
             }

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
 import { logger } from "./logger";
 import { assertCanSend, recordMessages } from "@/lib/plans";
+import { getSafeMode, safeGate, addSentToday, humanDelayMs, batchPauseMs, BATCH_SIZE } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let running = false; // evita duas rodadas ao mesmo tempo
@@ -35,6 +36,7 @@ export function initScheduler() {
             // Only log if we're actually processing things to reduce noise
             logger.info("Cron", `Found ${pendingMessages.length} messages to send`);
 
+            let batchCount = 0;
             for (const msg of pendingMessages) {
                 const instance = waManager.getInstance(msg.session.sessionId);
 
@@ -45,6 +47,13 @@ export function initScheduler() {
                     // But if session is dead for long time, it piles up.
                     // Let's keep it PENDING for now.
                     continue;
+                }
+
+                // Modo Seguro (só com o Anti-Spam ligado): fora do horário ou acima do limite do dia, espera
+                const safe = await getSafeMode(msg.session.sessionId);
+                if (safe) {
+                    const gate = await safeGate(msg.session.sessionId, safe);
+                    if (!gate.ok) continue; // continua PENDING e sai quando a janela abrir
                 }
 
                 try {
@@ -103,7 +112,14 @@ export function initScheduler() {
                         });
                     }
 
-                    await sleep(2500 + Math.floor(Math.random() * 3500));
+                    if (safe) {
+                        await addSentToday(msg.session.sessionId, 1);
+                        batchCount++;
+                        if (batchCount % BATCH_SIZE === 0) await sleep(batchPauseMs());
+                        else await sleep(humanDelayMs());
+                    } else {
+                        await sleep(2500 + Math.floor(Math.random() * 3500));
+                    }
                 } catch (error) {
                     logger.error("Cron", `Check failed for ${msg.id}`, error);
                     if (!msg.cronExpression) {

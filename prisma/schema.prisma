@@ -286,7 +286,7 @@ model BotConfig {
   prefix        String   @default("#")
   
   // Anti-Spam / Rate Limit
-  antiSpamEnabled Boolean @default(false)
+  antiSpamEnabled Boolean @default(true) // liga também o Modo Seguro dos disparos (src/lib/safe-mode.ts)
   spamLimit       Int     @default(5)    // Messages allowed in window
   spamInterval    Int     @default(10)   // Seconds window
   spamDelayMin    Int     @default(1000) // MS min delay
@@ -428,6 +428,16 @@ model UsageCounter {
 
   @@unique([userId, period])
   @@index([userId])
+}
+
+// Mensagens enviadas por número em cada dia (limite diário do Modo Seguro)
+model SendDaily {
+  sessionId String   // WA session ID string
+  day       String   // AAAA-MM-DD (America/Sao_Paulo)
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([sessionId, day])
 }
 
 // Links de redefinição de senha (guarda só o hash do token)

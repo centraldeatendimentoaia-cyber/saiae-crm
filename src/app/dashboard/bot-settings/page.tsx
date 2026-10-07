@@ -34,7 +34,7 @@ export default function BotSettingsPage() {
         removeBgApiKey: "",
         botMode: "OWNER",
         autoReplyMode: "ALL",
-        antiSpamEnabled: false,
+        antiSpamEnabled: true,
         spamLimit: 5,
         spamInterval: 10,
         spamDelayMin: 1000,
@@ -426,7 +426,7 @@ export default function BotSettingsPage() {
                         <CardContent className="space-y-6">
                             <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg bg-orange-500/5 border-orange-500/20">
                                 <Label htmlFor="anti-spam" className="flex flex-col space-y-1">
-                                    <span className="font-semibold text-orange-700 dark:text-orange-400">Ativar atraso anti-spam</span>
+                                    <span className="font-semibold text-orange-700 dark:text-orange-400">Ativar anti-spam e Modo Seguro</span>
                                     <span className="font-normal text-xs text-muted-foreground">Quando ativado, as mensagens entram em fila e são enviadas com atraso aleatório se o limite for atingido. As mensagens nunca são rejeitadas — apenas atrasadas.</span>
                                 </Label>
                                 <Switch id="anti-spam" checked={botConfig.antiSpamEnabled}
@@ -435,6 +435,16 @@ export default function BotSettingsPage() {
 
                             {botConfig.antiSpamEnabled && (
                                 <div className="grid gap-6 animate-in fade-in slide-in-from-top-1 duration-200">
+                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+                                        <p className="text-sm font-semibold">🛡️ Modo Seguro dos disparos</p>
+                                        <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground leading-relaxed">
+                                            <li>Disparos e mensagens agendadas só saem de <strong>segunda a sábado, das 9h às 19h</strong> (Brasília). Fora disso, esperam e continuam sozinhos.</li>
+                                            <li><strong>Limite diário com aquecimento:</strong> número novo envia até 50 por dia na 1ª semana, 150 na 2ª, 300 na 3ª e 500 depois. O que passar do limite continua no dia seguinte.</li>
+                                            <li><strong>Ritmo humano:</strong> de 10 a 40 segundos entre mensagens e uma pausa de alguns minutos a cada 25 envios.</li>
+                                            <li><strong>Freio automático:</strong> se mais de 15% da lista não tiver WhatsApp, ou se houver vários erros seguidos, o disparo para sozinho.</li>
+                                        </ul>
+                                        <p className="text-xs text-muted-foreground">Desligando o anti-spam, nada disso se aplica e o envio fica livre (por sua conta e risco: é assim que números são bloqueados).</p>
+                                    </div>
                                     {/* How it works */}
                                     <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 p-4 space-y-2">
                                         <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-400">💡 Como funciona</p>

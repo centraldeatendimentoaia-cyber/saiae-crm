@@ -19,10 +19,12 @@ import { useSocket } from "@/components/chat/socket-context";
 
 interface BroadcastProgress {
     broadcastId: string;
-    status: "running" | "completed";
+    status: "running" | "completed" | "stopped";
     total: number;
     sent: number;
     failed: number;
+    deferred?: number;
+    note?: string;
     current?: string | null;
     progress?: number;
     errors?: { jid: string; error: string }[];
@@ -148,11 +150,17 @@ export default function BroadcastPage() {
 
         const handler = (data: BroadcastProgress) => {
             setBroadcastProgress(data);
-            if (data.status === "completed") {
+            if (data.status === "stopped") {
+                setLoading(false);
+                fetchHistory();
+                toast.error(data.note || "Disparo pausado pelo Modo Seguro.", { duration: 12000 });
+            } else if (data.status === "completed") {
                 setLoading(false);
                 // Refresh history after completion
                 fetchHistory();
-                if (data.failed === 0) {
+                if (data.deferred) {
+                    toast.info(`${data.sent} enviadas agora. ${data.deferred} continuam automaticamente dentro do horário seguro.`, { duration: 10000 });
+                } else if (data.failed === 0) {
                     toast.success(`Broadcast complete! ${data.sent} sent.`);
                 } else {
                     toast.warning(`Broadcast complete. ${data.sent} sent, ${data.failed} failed.`);
@@ -428,6 +436,10 @@ export default function BroadcastPage() {
                                     <CardTitle className="flex items-center gap-2 text-lg">
                                         {broadcastProgress.status === "running" ? (
                                             <><Radio className="h-5 w-5 text-zinc-500 animate-pulse" /><span>Disparo em andamento</span></>
+                                        ) : broadcastProgress.status === "stopped" ? (
+                                            <><AlertTriangle className="h-5 w-5 text-red-500" /><span>Disparo pausado pelo Modo Seguro</span></>
+                                        ) : broadcastProgress.deferred ? (
+                                            <><Clock className="h-5 w-5 text-yellow-500" /><span>Continua automaticamente</span></>
                                         ) : broadcastProgress.failed === 0 ? (
                                             <><CheckCircle2 className="h-5 w-5 text-green-500" /><span>Disparo concluído</span></>
                                         ) : (
@@ -470,6 +482,10 @@ export default function BroadcastPage() {
                                         </div>
                                     </div>
 
+                                    {broadcastProgress.note && (
+                                        <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">{broadcastProgress.note}</p>
+                                    )}
+
                                     {broadcastProgress.status === "running" && broadcastProgress.current && (
                                         <div className="flex items-center gap-2 text-sm px-3 py-2 bg-muted/50 rounded-lg">
                                             <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-500" />
@@ -478,7 +494,7 @@ export default function BroadcastPage() {
                                         </div>
                                     )}
 
-                                    {broadcastProgress.status === "completed" && broadcastProgress.errors && broadcastProgress.errors.length > 0 && (
+                                    {broadcastProgress.status !== "running" && broadcastProgress.errors && broadcastProgress.errors.length > 0 && (
                                         <div className="space-y-2">
                                             <h4 className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
                                                 <XCircle className="h-4 w-4" />  Falhas ({broadcastProgress.errors.length})
