@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmojiTextarea } from "@/components/emoji-textarea";
+import { MediaUpload } from "@/components/media-upload";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -556,9 +557,14 @@ export default function SchedulerPage() {
                                 <EmojiTextarea value={newContent} onValueChange={setNewContent} placeholder="Olá!" className="min-h-[110px]" />
                             </div>
 
+                            <div className="space-y-2 mt-4">
+                                <Label>Imagem (opcional)</Label>
+                                <MediaUpload value={newMediaUrl.startsWith("/api/uploads/") ? newMediaUrl : ""} onChange={u => { setNewMediaUrl(u); if (u) setNewMediaType("image"); }} />
+                            </div>
+
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label>URL da mídia (opcional)</Label>
+                                    <Label>Ou URL da mídia (opcional)</Label>
                                     <Input value={newMediaUrl} onChange={e => setNewMediaUrl(e.target.value)} placeholder="https://..." />
                                 </div>
                                 <div className="space-y-2">

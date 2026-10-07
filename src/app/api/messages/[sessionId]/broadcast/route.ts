@@ -7,15 +7,18 @@ import { z } from "zod";
 import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/lib/plans";
 import { personalizeFor } from "@/lib/personalize";
 import { resolveSendJid } from "@/lib/wa-jid";
-import {
-    getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs,
-    MAX_INVALID_RATE, MIN_CHECKED, MAX_CONSECUTIVE_ERRORS,
-} from "@/lib/safe-mode";
+import { getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
+import { isOptedOut, withFooter } from "@/lib/optout";
+import { resolveMedia } from "@/lib/media";
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
-    message: z.string().min(1),
+    message: z.string(),
     delay: z.number().optional(),
+    /** Imagem enviada pelo painel (/api/uploads/:id): vai com o texto como legenda. */
+    mediaUrl: z.string().optional(),
+    /** Acrescenta "responda SAIR" ao fim de cada texto. */
+    optOutFooter: z.boolean().optional(),
     /** Versões extras do texto: cada destinatário recebe uma delas, em rodízio. */
     variants: z.array(z.string()).max(5).optional()
 });
@@ -38,8 +41,9 @@ export async function POST(
             return NextResponse.json({ error: parseResult.error.flatten() }, { status: 400 });
         }
 
-        const { recipients, message, delay } = parseResult.data;
-        const copies = [message, ...(parseResult.data.variants || []).map(v => v.trim()).filter(Boolean)];
+        const { recipients, message, delay, mediaUrl, optOutFooter } = parseResult.data;
+        const copies = [message, ...(parseResult.data.variants || []).map(v => v.trim()).filter(Boolean)]
+            .map(c => (optOutFooter ? withFooter(c) : c));
         const copyFor = (i: number) => copies[i % copies.length];
 
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
@@ -100,14 +104,20 @@ export async function POST(
             let sent = 0;
             let failed = 0;
             const errors: { jid: string; error: string }[] = [];
-            let checked = 0;
-            let invalid = 0;
-            let consecutiveErrors = 0;
             let sinceBreak = 0;
             let deferredFrom = -1;
             let deferredNote = "";
-            let stopReason = "";
+            const stopReason = "";
             let lastWasInvalid = false;
+            let mediaBuffer: Buffer | null = null;
+            if (mediaUrl) {
+                try {
+                    const m = await resolveMedia(mediaUrl);
+                    mediaBuffer = Buffer.isBuffer(m) ? m : Buffer.from(await (await fetch(m.url)).arrayBuffer());
+                } catch (e: any) {
+                    console.error("Broadcast media error", e);
+                }
+            }
 
             for (let i = 0; i < recipients.length; i++) {
                 const jid = recipients[i];
@@ -125,10 +135,14 @@ export async function POST(
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
                     const targetJid = await resolveSendJid(instance.socket, jid);
+                    if (await isOptedOut(sessionId, targetJid)) throw new Error("Descadastrado (respondeu SAIR)");
                     const personalized = await personalizeFor(sessionId, targetJid, copyFor(i), [jid]);
-                    await instance.socket!.sendMessage(targetJid, { text: personalized });
+                    if (mediaBuffer) {
+                        await instance.socket!.sendMessage(targetJid, { image: mediaBuffer, caption: personalized || undefined });
+                    } else {
+                        await instance.socket!.sendMessage(targetJid, { text: personalized });
+                    }
                     sent++;
-                    consecutiveErrors = 0;
                     if (ownerId) await recordMessages(ownerId, 1);
                     if (safe) sinceBreak++;
 
@@ -139,8 +153,8 @@ export async function POST(
                     });
                 } catch (e: any) {
                     failed++;
-                    lastWasInvalid = /não possui WhatsApp/i.test(e?.message || "");
-                    if (lastWasInvalid) invalid++; else consecutiveErrors++;
+                    // número inválido ou descadastrado: nada foi enviado, não precisa esperar
+                    lastWasInvalid = /não possui WhatsApp|Descadastrado/i.test(e?.message || "");
                     errors.push({ jid, error: e.message || "Unknown error" });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 
@@ -172,20 +186,6 @@ export async function POST(
                     });
                 }
 
-                checked++;
-
-                // Freio automático: lista ruim ou erros seguidos -> para antes de o número ser bloqueado
-                if (safe) {
-                    if (checked >= MIN_CHECKED && invalid / checked > MAX_INVALID_RATE) {
-                        stopReason = `Disparo pausado: ${Math.round((invalid / checked) * 100)}% dos números não têm WhatsApp. Limpe a lista e comece de novo.`;
-                        break;
-                    }
-                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-                        stopReason = "Disparo pausado: vários erros seguidos de envio. Confira a conexão e o estado do número antes de continuar.";
-                        break;
-                    }
-                }
-
                 // Delay between sends
                 if (i < recipients.length - 1) {
                     if (safe) {
@@ -207,7 +207,7 @@ export async function POST(
                 const dbSession = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
                 if (dbSession) {
                     await prisma.scheduledMessage.createMany({
-                        data: rest.map((jid, k) => ({ sessionId: dbSession.id, jid, content: copyFor(deferredFrom + k), sendAt: new Date(), status: "PENDING" }))
+                        data: rest.map((jid, k) => ({ sessionId: dbSession.id, jid, content: copyFor(deferredFrom + k), mediaUrl: mediaUrl || null, mediaType: mediaUrl ? "image" : null, sendAt: new Date(), status: "PENDING" }))
                     });
                     await prisma.broadcastRecipient.updateMany({
                         where: { broadcastLogId: broadcastId, jid: { in: rest }, status: "pending" },

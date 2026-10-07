@@ -497,7 +497,7 @@ export default function BotSettingsPage() {
                                             </div>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Envia de segunda a sábado dentro do horário (Brasília); fora dele, espera e continua sozinho. O disparo também para sozinho se mais de 15% da lista não tiver WhatsApp ou se houver vários erros seguidos. Recomendado: 10 a 40 s, pausa de 3 min a cada 25 envios.
+                                            Envia de segunda a sábado dentro do horário (Brasília); fora dele, espera e continua sozinho. Quem responde SAIR é removido dos próximos disparos. Recomendado: 10 a 40 s, pausa de 3 min a cada 25 envios.
                                         </p>
                                     </div>
                                     {/* How it works */}

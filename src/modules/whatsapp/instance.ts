@@ -14,6 +14,7 @@ import { bindSessionStore } from "./store";
 import { syncGroups } from "./store/groups";
 import { bindContactSync } from "./store/contacts";
 import { bindAutoReply } from "./store/autoreply";
+import { bindOptOut } from "./store/optout";
 import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
 import { logger } from "@/lib/logger";
@@ -266,6 +267,7 @@ export class WhatsAppInstance {
                 }
 
                 bindAutoReply(this.socket as WASocket, this.sessionId);
+                bindOptOut(this.socket as WASocket, this.sessionId);
                 bindPpGuard(this.socket as WASocket, this.sessionId);
 
                 await prisma.session.update({

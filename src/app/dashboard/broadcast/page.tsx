@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { EmojiTextarea } from "@/components/emoji-textarea";
+import { MediaUpload } from "@/components/media-upload";
+import { Checkbox } from "@/components/ui/checkbox";
 import { parseRecipients } from "@/lib/phone";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -93,13 +95,15 @@ export default function BroadcastPage() {
             if (j.status) setQuota({ used: j.data.usage.messages, max: j.data.limits.messages });
         }).catch(() => {});
     }, [sessionId]);
+    const [mediaUrl, setMediaUrl] = useState("");
+    const [optOutFooter, setOptOutFooter] = useState(true);
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduleAt, setScheduleAt] = useState("");
     const [scheduling, setScheduling] = useState(false);
 
     const handleSchedule = async () => {
         if (!sessionId) return toast.error("Nenhuma sessão ativa encontrada");
-        if (!message.trim()) return toast.error("A mensagem não pode estar vazia");
+        if (!message.trim() && !mediaUrl) return toast.error("A mensagem não pode estar vazia");
         const recipients = parseRecipients(contacts);
         if (recipients.length === 0) return toast.error("Nenhum destinatário informado");
         if (!scheduleAt) return toast.error("Informe a data e a hora do disparo");
@@ -111,6 +115,10 @@ export default function BroadcastPage() {
                 body: JSON.stringify({
                     jids: recipients,
                     content: message,
+                    variants: variants.map(v => v.trim()).filter(Boolean),
+                    mediaUrl: mediaUrl || undefined,
+                    mediaType: mediaUrl ? "image" : undefined,
+                    optOutFooter,
                     sendAt: scheduleAt,
                     spacingMs: Math.max(3000, delay[0]),
                 }),
@@ -221,7 +229,7 @@ export default function BroadcastPage() {
     // Disparos grandes pedem confirmação, com o aviso de risco de bloqueio
     const handleSend = () => {
         if (!sessionId) return toast.error("Nenhuma sessão ativa encontrada");
-        if (!message.trim()) return toast.error("A mensagem não pode estar vazia");
+        if (!message.trim() && !mediaUrl) return toast.error("A mensagem não pode estar vazia");
         if (parseRecipients(contacts).length > BIG_SEND) { setRiskOpen(true); return; }
         doSend();
     };
@@ -248,6 +256,8 @@ export default function BroadcastPage() {
                     recipients,
                     message,
                     variants: variants.map(v => v.trim()).filter(Boolean),
+                    mediaUrl: mediaUrl || undefined,
+                    optOutFooter,
                     delay: delay[0]
                 })
             });
@@ -397,6 +407,19 @@ export default function BroadcastPage() {
                                         </p>
                                     </div>
 
+                                    <div className="space-y-2">
+                                        <Label>Imagem (opcional)</Label>
+                                        <MediaUpload value={mediaUrl} onChange={setMediaUrl} disabled={loading} />
+                                    </div>
+
+                                    <label className="flex items-start gap-2 text-sm">
+                                        <Checkbox checked={optOutFooter} onCheckedChange={c => setOptOutFooter(c === true)} disabled={loading} className="mt-0.5" />
+                                        <span>
+                                            Incluir no fim da mensagem: <em>"Para não receber mais mensagens, responda SAIR."</em>
+                                            <span className="block text-xs text-muted-foreground">Quem responder SAIR é removido automaticamente dos próximos disparos e agendamentos desse número. Reduz denúncias.</span>
+                                        </span>
+                                    </label>
+
                                     <div className="space-y-3 border border-border p-4">
                                         <p className="kicker">Gerar texto com IA</p>
                                         <EmojiTextarea
@@ -447,7 +470,7 @@ export default function BroadcastPage() {
                                         <Button
                                             className="w-full"
                                             onClick={handleSend}
-                                            disabled={loading || !sessionId || recipientCount === 0 || !message.trim()}
+                                            disabled={loading || !sessionId || recipientCount === 0 || (!message.trim() && !mediaUrl)}
                                         >
                                             {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                                             {loading ? "Disparando..." : "Iniciar disparo"}
@@ -457,7 +480,7 @@ export default function BroadcastPage() {
                                             variant="outline"
                                             className="w-full"
                                             onClick={() => setScheduleOpen(true)}
-                                            disabled={loading || !sessionId || recipientCount === 0 || !message.trim()}
+                                            disabled={loading || !sessionId || recipientCount === 0 || (!message.trim() && !mediaUrl)}
                                         >
                                             <Calendar className="mr-2 h-4 w-4" />
                                             Agendar disparo
@@ -712,6 +735,7 @@ export default function BroadcastPage() {
                         <p className="text-sm text-muted-foreground">
                             A mensagem será enviada para {recipientCount} {recipientCount === 1 ? "número" : "números"} a partir do horário escolhido, um de cada vez, com {(Math.max(3000, delay[0]) / 1000).toFixed(0)} segundos ou mais entre eles.
                             Variáveis como {"{primeironome}"} são trocadas na hora do envio.
+                            {variants.some(v => v.trim()) ? " As versões extras do texto saem em rodízio." : ""}{mediaUrl ? " A imagem vai junto, com o texto como legenda." : ""}
                         </p>
                         <div className="space-y-2">
                             <Label htmlFor="schedule-at">Data e hora</Label>

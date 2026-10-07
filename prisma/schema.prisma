@@ -490,3 +490,27 @@ model StripeEvent {
 
   @@index([objectId])
 }
+
+// Imagens enviadas pelo cliente para disparos e agendamentos (ficam no banco: o disco do servidor é efêmero)
+model MediaFile {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  mime      String
+  size      Int
+  data      Bytes
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Quem respondeu SAIR: não recebe mais disparos desse número (phoneKey = últimos 8 dígitos, ignora o 9º dígito)
+model OptOut {
+  id        String   @id @default(cuid())
+  sessionId String   // WA session ID string
+  phoneKey  String
+  jid       String
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, phoneKey])
+}

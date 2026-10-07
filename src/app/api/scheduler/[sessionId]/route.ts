@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import moment from "moment-timezone";
+import { withFooter } from "@/lib/optout";
 
 // GET: List Scheduled Messages
 export async function GET(
@@ -70,7 +71,10 @@ export async function POST(
         }
 
         const body = await request.json();
-        const { jid, jids, spacingMs, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule } = body;
+        const { jid, jids, spacingMs, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule, optOutFooter } = body;
+        // Versões extras do texto: cada destinatário recebe uma delas, em rodízio
+        const variants: string[] = Array.isArray(body.variants) ? body.variants.filter((v: unknown) => typeof v === "string" && v.trim()).slice(0, 5) : [];
+        const copies: string[] = ([content || "", ...variants] as string[]).map(c => (optOutFooter ? withFooter(c) : c));
         const targets: string[] = Array.isArray(jids) ? jids.filter((j: unknown) => typeof j === "string" && j) : (jid ? [jid] : []);
 
         if (targets.length === 0 || targets.length > 500 || (!content && !mediaUrl) || !sendAt) {
@@ -109,7 +113,7 @@ export async function POST(
                 data: {
                     sessionId: session.id,
                     jid: targets[i],
-                    content,
+                    content: copies[i % copies.length] || null,
                     mediaUrl,
                     mediaType,
                     cronExpression,

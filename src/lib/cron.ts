@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
 import { logger } from "./logger";
 import { assertCanSend, recordMessages } from "@/lib/plans";
+import { isOptedOut } from "@/lib/optout";
+import { resolveMedia } from "@/lib/media";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -75,23 +77,28 @@ export function initScheduler() {
                     
                     if (msg.mediaUrl) {
                         const type = msg.mediaType || "document";
+                        const to = await resolveSendJid(instance.socket, msg.jid);
+                        if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
+                        const media = await resolveMedia(msg.mediaUrl);
+                        const src: any = media; // Buffer ou { url }
                         let payload: any = {};
-                        if (msg.content) payload.caption = msg.content;
-                        
+                        if (msg.content) payload.caption = await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]);
+
                         if (type === "image") {
-                            payload.image = { url: msg.mediaUrl };
+                            payload.image = src;
                         } else if (type === "video") {
-                            payload.video = { url: msg.mediaUrl };
+                            payload.video = src;
                         } else if (type === "audio") {
-                            payload = { audio: { url: msg.mediaUrl } };
+                            payload = { audio: src };
                         } else {
-                            payload.document = { url: msg.mediaUrl };
+                            payload.document = src;
                             payload.mimetype = "application/octet-stream";
                             payload.fileName = msg.mediaUrl.split('/').pop() || "file";
                         }
-                        await instance.socket.sendMessage(await resolveSendJid(instance.socket, msg.jid), payload);
+                        await instance.socket.sendMessage(to, payload);
                     } else {
                         const to = await resolveSendJid(instance.socket, msg.jid);
+                        if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
                         await instance.socket.sendMessage(to, { text: msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "" });
                     }
 
