@@ -10,6 +10,7 @@ import { resolveSendJid } from "@/lib/wa-jid";
 import { getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
 import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
+import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
@@ -99,6 +100,7 @@ export async function POST(
         // Process in background — update DB as we go
         // Modo Seguro: só quando o Anti-Spam do número está ligado
         const safe = await getSafeMode(sessionId);
+        const onlyInteracted = await onlyInteractedEnabled(sessionId);
 
         (async () => {
             let sent = 0;
@@ -136,6 +138,7 @@ export async function POST(
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
                     const targetJid = await resolveSendJid(instance.socket, jid);
                     if (await isOptedOut(sessionId, targetJid)) throw new Error("Descadastrado (respondeu SAIR)");
+                    if (onlyInteracted && !(await hasInteracted(sessionId, targetJid))) throw new Error(NO_INTERACTION_ERROR);
                     const personalized = await personalizeFor(sessionId, targetJid, copyFor(i), [jid]);
                     if (mediaBuffer) {
                         await instance.socket!.sendMessage(targetJid, { image: mediaBuffer, caption: personalized || undefined });
@@ -154,7 +157,7 @@ export async function POST(
                 } catch (e: any) {
                     failed++;
                     // número inválido ou descadastrado: nada foi enviado, não precisa esperar
-                    lastWasInvalid = /não possui WhatsApp|Descadastrado/i.test(e?.message || "");
+                    lastWasInvalid = /não possui WhatsApp|Descadastrado|Sem conversa anterior/i.test(e?.message || "");
                     errors.push({ jid, error: e.message || "Unknown error" });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 

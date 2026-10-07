@@ -7,6 +7,8 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { logger } from "./logger";
 import { assertCanSend, recordMessages } from "@/lib/plans";
 import { isOptedOut } from "@/lib/optout";
+import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
+import { startRetention } from "@/lib/retention";
 import { resolveMedia } from "@/lib/media";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
@@ -79,6 +81,7 @@ export function initScheduler() {
                         const type = msg.mediaType || "document";
                         const to = await resolveSendJid(instance.socket, msg.jid);
                         if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
+                        if ((await onlyInteractedEnabled(msg.session.sessionId)) && !(await hasInteracted(msg.session.sessionId, to))) throw new Error(NO_INTERACTION_ERROR);
                         const media = await resolveMedia(msg.mediaUrl);
                         const src: any = media; // Buffer ou { url }
                         let payload: any = {};
@@ -99,6 +102,7 @@ export function initScheduler() {
                     } else {
                         const to = await resolveSendJid(instance.socket, msg.jid);
                         if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
+                        if ((await onlyInteractedEnabled(msg.session.sessionId)) && !(await hasInteracted(msg.session.sessionId, to))) throw new Error(NO_INTERACTION_ERROR);
                         await instance.socket.sendMessage(to, { text: msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "" });
                     }
 
@@ -150,5 +154,6 @@ export function initScheduler() {
         }
     });
     
+    startRetention();
     logger.info("Cron", "Scheduler initialized");
 }

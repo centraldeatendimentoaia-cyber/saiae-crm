@@ -97,6 +97,7 @@ model Contact {
   notify      String?  // Pushname
   verifiedName String? // Business Name
   remoteJidAlt String? // Alternate JID (e.g. Phone if JID is LID)
+  lastInboundAt DateTime? // última vez que essa pessoa mandou mensagem para o número (filtro "só quem já interagiu")
   profilePic  String?  @db.Text
   data        Json?    // Detailed contact data
   createdAt   DateTime @default(now())
@@ -299,6 +300,9 @@ model BotConfig {
   safeBatchPause  Int     @default(3)    // minutos de pausa entre lotes
   safeStartHour   Int     @default(9)    // janela de envio (seg a sáb)
   safeEndHour     Int     @default(19)
+
+  // Disparos e agendamentos só para quem já mandou mensagem para este número
+  onlyInteracted  Boolean @default(false)
 
   // Automation & Presence
   welcomeMessage  String? @db.Text

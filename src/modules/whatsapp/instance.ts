@@ -69,7 +69,8 @@ export class WhatsAppInstance {
             },
             browser: ["Ubuntu", "Chrome", "20.0.04"],
             markOnlineOnConnect: botConfig?.alwaysOnline ?? true,
-            syncFullHistory: true,
+            // Baixar o histórico inteiro pesa em memória, CPU e banco; ligue com WA_SYNC_FULL_HISTORY=true se precisar
+            syncFullHistory: process.env.WA_SYNC_FULL_HISTORY === "true",
         });
 
         // Apply Anti-Spam Wrapper to sendMessage

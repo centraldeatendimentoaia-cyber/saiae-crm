@@ -57,6 +57,7 @@ export async function GET(
             safeBatchPause: 3,
             safeStartHour: 9,
             safeEndHour: 19,
+            onlyInteracted: false,
             welcomeMessage: null,
             autoRead: false,
             alwaysOnline: false
@@ -124,6 +125,7 @@ export async function POST(
                 safeBatchPause: body.safeBatchPause ?? 3,
                 safeStartHour: body.safeStartHour ?? 9,
                 safeEndHour: body.safeEndHour ?? 19,
+                onlyInteracted: body.onlyInteracted ?? false,
                 welcomeMessage: body.welcomeMessage || null,
                 autoRead: body.autoRead ?? false,
                 alwaysOnline: body.alwaysOnline ?? false,
@@ -154,6 +156,7 @@ export async function POST(
                 safeBatchPause: body.safeBatchPause,
                 safeStartHour: body.safeStartHour,
                 safeEndHour: body.safeEndHour,
+                onlyInteracted: body.onlyInteracted,
                 welcomeMessage: body.welcomeMessage,
                 autoRead: body.autoRead,
                 alwaysOnline: body.alwaysOnline,

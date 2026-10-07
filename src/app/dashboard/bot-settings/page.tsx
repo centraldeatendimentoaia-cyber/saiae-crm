@@ -45,6 +45,7 @@ export default function BotSettingsPage() {
         safeBatchPause: 3,
         safeStartHour: 9,
         safeEndHour: 19,
+        onlyInteracted: false,
 
         // New fields
         welcomeMessage: "",
@@ -437,6 +438,17 @@ export default function BotSettingsPage() {
                                 </Label>
                                 <Switch id="anti-spam" checked={botConfig.antiSpamEnabled}
                                     onCheckedChange={c => setBotConfig(prev => ({ ...prev, antiSpamEnabled: c }))} />
+                            </div>
+
+                            <div className="flex items-center justify-between space-x-2 border p-3 rounded-lg bg-emerald-500/5 border-emerald-500/20">
+                                <Label htmlFor="only-interacted" className="flex flex-col space-y-1">
+                                    <span className="font-semibold">Enviar só para quem já interagiu</span>
+                                    <span className="font-normal text-xs text-muted-foreground">
+                                        Disparos e agendamentos só vão para contatos que já mandaram mensagem para este número. É o público mais seguro: quem já conversa com você quase nunca denuncia. Quem nunca falou com você é pulado e aparece como "Sem conversa anterior". Vale a partir de agora: quem só estava na agenda do celular, sem nunca ter escrito, fica de fora.
+                                    </span>
+                                </Label>
+                                <Switch id="only-interacted" checked={!!botConfig.onlyInteracted}
+                                    onCheckedChange={c => setBotConfig(prev => ({ ...prev, onlyInteracted: c }))} />
                             </div>
 
                             {botConfig.antiSpamEnabled && (

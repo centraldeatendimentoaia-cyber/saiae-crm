@@ -289,6 +289,18 @@ async function processAndSaveMessage(
     if (!msg.message) return false;
     if (!keyId || !remoteJid) return false;
 
+    // Guarda quando a pessoa falou com a gente por último (alimenta o filtro "só quem já interagiu")
+    if (!fromMe && !remoteJid.endsWith('@g.us') && !remoteJid.endsWith('@broadcast') && !msg.message.protocolMessage) {
+        await prisma.contact.updateMany({
+            where: {
+                sessionId: dbSessionId,
+                OR: [{ jid: remoteJid }, { lid: remoteJid }],
+                AND: [{ OR: [{ lastInboundAt: null }, { lastInboundAt: { lt: timestamp } }] }],
+            },
+            data: { lastInboundAt: timestamp },
+        }).catch(() => {});
+    }
+
     // Ignore specific technical message types
     const messageKeys = Object.keys(msg.message);
 
