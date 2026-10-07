@@ -292,6 +292,14 @@ model BotConfig {
   spamDelayMin    Int     @default(1000) // MS min delay
   spamDelayMax    Int     @default(3000) // MS max delay
 
+  // Modo Seguro dos disparos (valem quando antiSpamEnabled = true)
+  safeDelayMin    Int     @default(10)   // segundos entre mensagens (mín.)
+  safeDelayMax    Int     @default(40)   // segundos entre mensagens (máx.)
+  safeBatchSize   Int     @default(25)   // pausa a cada N envios (0 = sem pausa)
+  safeBatchPause  Int     @default(3)    // minutos de pausa entre lotes
+  safeStartHour   Int     @default(9)    // janela de envio (seg a sáb)
+  safeEndHour     Int     @default(19)
+
   // Automation & Presence
   welcomeMessage  String? @db.Text
   autoRead        Boolean @default(false)

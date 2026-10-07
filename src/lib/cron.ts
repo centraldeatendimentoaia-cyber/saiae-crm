@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { waManager } from "@/modules/whatsapp/manager";
 import { logger } from "./logger";
 import { assertCanSend, recordMessages } from "@/lib/plans";
-import { getSafeMode, safeGate, addSentToday, humanDelayMs, batchPauseMs, BATCH_SIZE } from "@/lib/safe-mode";
+import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let running = false; // evita duas rodadas ao mesmo tempo
@@ -49,10 +49,10 @@ export function initScheduler() {
                     continue;
                 }
 
-                // Modo Seguro (só com o Anti-Spam ligado): fora do horário ou acima do limite do dia, espera
+                // Modo Seguro (só com o Anti-Spam ligado): fora do horário configurado, espera
                 const safe = await getSafeMode(msg.session.sessionId);
                 if (safe) {
-                    const gate = await safeGate(msg.session.sessionId, safe);
+                    const gate = safeGate(safe);
                     if (!gate.ok) continue; // continua PENDING e sai quando a janela abrir
                 }
 
@@ -113,10 +113,9 @@ export function initScheduler() {
                     }
 
                     if (safe) {
-                        await addSentToday(msg.session.sessionId, 1);
                         batchCount++;
-                        if (batchCount % BATCH_SIZE === 0) await sleep(batchPauseMs());
-                        else await sleep(humanDelayMs());
+                        if (safe.batchSize > 0 && batchCount % safe.batchSize === 0) await sleep(batchPauseMs(safe));
+                        else await sleep(humanDelayMs(safe));
                     } else {
                         await sleep(2500 + Math.floor(Math.random() * 3500));
                     }

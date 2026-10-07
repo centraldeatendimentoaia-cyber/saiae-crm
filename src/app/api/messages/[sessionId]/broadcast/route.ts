@@ -8,14 +8,16 @@ import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/li
 import { personalizeFor } from "@/lib/personalize";
 import { resolveSendJid } from "@/lib/wa-jid";
 import {
-    getSafeMode, safeGate, addSentToday, gateMessage, humanDelayMs, batchPauseMs, sleepMs,
-    BATCH_SIZE, MAX_INVALID_RATE, MIN_CHECKED, MAX_CONSECUTIVE_ERRORS,
+    getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs,
+    MAX_INVALID_RATE, MIN_CHECKED, MAX_CONSECUTIVE_ERRORS,
 } from "@/lib/safe-mode";
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
     message: z.string().min(1),
-    delay: z.number().optional()
+    delay: z.number().optional(),
+    /** Versões extras do texto: cada destinatário recebe uma delas, em rodízio. */
+    variants: z.array(z.string()).max(5).optional()
 });
 
 export async function POST(
@@ -37,6 +39,8 @@ export async function POST(
         }
 
         const { recipients, message, delay } = parseResult.data;
+        const copies = [message, ...(parseResult.data.variants || []).map(v => v.trim()).filter(Boolean)];
+        const copyFor = (i: number) => copies[i % copies.length];
 
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
         if (!canAccess) {
@@ -110,10 +114,10 @@ export async function POST(
                 lastWasInvalid = false;
 
                 if (safe) {
-                    const gate = await safeGate(sessionId, safe);
+                    const gate = safeGate(safe);
                     if (!gate.ok) {
                         deferredFrom = i;
-                        deferredNote = gateMessage(gate);
+                        deferredNote = gateMessage(safe, gate);
                         break;
                     }
                 }
@@ -121,12 +125,12 @@ export async function POST(
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
                     const targetJid = await resolveSendJid(instance.socket, jid);
-                    const personalized = await personalizeFor(sessionId, targetJid, message, [jid]);
+                    const personalized = await personalizeFor(sessionId, targetJid, copyFor(i), [jid]);
                     await instance.socket!.sendMessage(targetJid, { text: personalized });
                     sent++;
                     consecutiveErrors = 0;
                     if (ownerId) await recordMessages(ownerId, 1);
-                    if (safe) { await addSentToday(sessionId, 1); sinceBreak++; }
+                    if (safe) sinceBreak++;
 
                     // Update recipient status in DB
                     await prisma.broadcastRecipient.updateMany({
@@ -186,8 +190,8 @@ export async function POST(
                 if (i < recipients.length - 1) {
                     if (safe) {
                         if (lastWasInvalid) await sleepMs(400 + Math.floor(Math.random() * 800)); // nada foi enviado
-                        else if (sinceBreak >= BATCH_SIZE) { sinceBreak = 0; await sleepMs(batchPauseMs()); }
-                        else await sleepMs(humanDelayMs(delay || 0));
+                        else if (safe.batchSize > 0 && sinceBreak >= safe.batchSize) { sinceBreak = 0; await sleepMs(batchPauseMs(safe)); }
+                        else await sleepMs(humanDelayMs(safe, delay || 0));
                     } else {
                         const baseDelay = delay || 2000;
                         const randomDelay = baseDelay + Math.floor(Math.random() * (baseDelay * 0.5));
@@ -203,7 +207,7 @@ export async function POST(
                 const dbSession = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
                 if (dbSession) {
                     await prisma.scheduledMessage.createMany({
-                        data: rest.map(jid => ({ sessionId: dbSession.id, jid, content: message, sendAt: new Date(), status: "PENDING" }))
+                        data: rest.map((jid, k) => ({ sessionId: dbSession.id, jid, content: copyFor(deferredFrom + k), sendAt: new Date(), status: "PENDING" }))
                     });
                     await prisma.broadcastRecipient.updateMany({
                         where: { broadcastLogId: broadcastId, jid: { in: rest }, status: "pending" },

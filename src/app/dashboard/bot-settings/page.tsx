@@ -39,6 +39,12 @@ export default function BotSettingsPage() {
         spamInterval: 10,
         spamDelayMin: 1000,
         spamDelayMax: 3000,
+        safeDelayMin: 10,
+        safeDelayMax: 40,
+        safeBatchSize: 25,
+        safeBatchPause: 3,
+        safeStartHour: 9,
+        safeEndHour: 19,
 
         // New fields
         welcomeMessage: "",
@@ -435,15 +441,64 @@ export default function BotSettingsPage() {
 
                             {botConfig.antiSpamEnabled && (
                                 <div className="grid gap-6 animate-in fade-in slide-in-from-top-1 duration-200">
-                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+                                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
                                         <p className="text-sm font-semibold">🛡️ Modo Seguro dos disparos</p>
-                                        <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground leading-relaxed">
-                                            <li>Disparos e mensagens agendadas só saem de <strong>segunda a sábado, das 9h às 19h</strong> (Brasília). Fora disso, esperam e continuam sozinhos.</li>
-                                            <li><strong>Limite diário com aquecimento:</strong> número novo envia até 50 por dia na 1ª semana, 150 na 2ª, 300 na 3ª e 500 depois. O que passar do limite continua no dia seguinte.</li>
-                                            <li><strong>Ritmo humano:</strong> de 10 a 40 segundos entre mensagens e uma pausa de alguns minutos a cada 25 envios.</li>
-                                            <li><strong>Freio automático:</strong> se mais de 15% da lista não tiver WhatsApp, ou se houver vários erros seguidos, o disparo para sozinho.</li>
-                                        </ul>
-                                        <p className="text-xs text-muted-foreground">Desligando o anti-spam, nada disso se aplica e o envio fica livre (por sua conta e risco: é assim que números são bloqueados).</p>
+                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                            Vale para disparos e mensagens agendadas. Ajuste ao seu gosto: quanto mais rápido e mais mensagens, maior o risco de o WhatsApp bloquear o número. Não há limite diário.
+                                        </p>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Intervalo mínimo entre mensagens</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={1} max={600} value={botConfig.safeDelayMin}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeDelayMin: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">segundos</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Intervalo máximo entre mensagens</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={1} max={1800} value={botConfig.safeDelayMax}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeDelayMax: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">segundos</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Pausa a cada (0 = sem pausa)</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={0} max={1000} value={botConfig.safeBatchSize}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeBatchSize: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">envios</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Duração da pausa</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={1} max={120} value={botConfig.safeBatchPause}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeBatchPause: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">minutos</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Enviar a partir das</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={0} max={23} value={botConfig.safeStartHour}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeStartHour: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">h</span>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Parar de enviar às</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input type="number" min={1} max={24} value={botConfig.safeEndHour}
+                                                        onChange={e => setBotConfig(prev => ({ ...prev, safeEndHour: parseInt(e.target.value) || 0 }))} />
+                                                    <span className="text-xs text-muted-foreground">h</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Envia de segunda a sábado dentro do horário (Brasília); fora dele, espera e continua sozinho. O disparo também para sozinho se mais de 15% da lista não tiver WhatsApp ou se houver vários erros seguidos. Recomendado: 10 a 40 s, pausa de 3 min a cada 25 envios.
+                                        </p>
                                     </div>
                                     {/* How it works */}
                                     <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 p-4 space-y-2">

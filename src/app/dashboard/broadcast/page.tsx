@@ -135,6 +135,8 @@ export default function BroadcastPage() {
     const [historyLoading, setHistoryLoading] = useState(false);
     const [selectedLog, setSelectedLog] = useState<BroadcastLog | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
+    const [riskOpen, setRiskOpen] = useState(false);
+    const [variants, setVariants] = useState<string[]>([]);
     const [detailLoading, setDetailLoading] = useState(false);
 
     const { getSocket, joinSession } = useSocket();
@@ -214,9 +216,19 @@ export default function BroadcastPage() {
         }
     };
 
-    const handleSend = async () => {
+    const BIG_SEND = 100;
+
+    // Disparos grandes pedem confirmação, com o aviso de risco de bloqueio
+    const handleSend = () => {
         if (!sessionId) return toast.error("Nenhuma sessão ativa encontrada");
         if (!message.trim()) return toast.error("A mensagem não pode estar vazia");
+        if (parseRecipients(contacts).length > BIG_SEND) { setRiskOpen(true); return; }
+        doSend();
+    };
+
+    const doSend = async () => {
+        setRiskOpen(false);
+        if (!sessionId) return;
         setLoading(true);
         setBroadcastProgress(null);
 
@@ -235,6 +247,7 @@ export default function BroadcastPage() {
                 body: JSON.stringify({
                     recipients,
                     message,
+                    variants: variants.map(v => v.trim()).filter(Boolean),
                     delay: delay[0]
                 })
             });
@@ -358,6 +371,32 @@ export default function BroadcastPage() {
                                         </p>
                                     </div>
 
+                                    <div className="space-y-3">
+                                        {variants.map((v, i) => (
+                                            <div key={i} className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <Label>Versão {i + 2} do texto</Label>
+                                                    <Button type="button" size="sm" variant="ghost" disabled={loading}
+                                                        onClick={() => setVariants(vs => vs.filter((_, j) => j !== i))}>Remover</Button>
+                                                </div>
+                                                <EmojiTextarea
+                                                    className="min-h-[110px]"
+                                                    value={v}
+                                                    onValueChange={t => setVariants(vs => vs.map((x, j) => (j === i ? t : x)))}
+                                                    disabled={loading}
+                                                />
+                                            </div>
+                                        ))}
+                                        {variants.length < 4 && (
+                                            <Button type="button" size="sm" variant="outline" disabled={loading} onClick={() => setVariants(vs => [...vs, ""])}>
+                                                + Adicionar outra versão do texto
+                                            </Button>
+                                        )}
+                                        <p className="text-xs text-muted-foreground">
+                                            Com mais de uma versão, os destinatários recebem as versões em rodízio. Mensagens diferentes entre si ajudam a não parecer envio em massa.
+                                        </p>
+                                    </div>
+
                                     <div className="space-y-3 border border-border p-4">
                                         <p className="kicker">Gerar texto com IA</p>
                                         <EmojiTextarea
@@ -375,8 +414,8 @@ export default function BroadcastPage() {
                                             }
                                         />
                                         {aiCopies.map((c, i) => (
+                                            <div key={i}>
                                             <button
-                                                key={i}
                                                 type="button"
                                                 onClick={() => setMessage(c)}
                                                 className="block w-full border border-border p-3 text-left text-sm whitespace-pre-wrap hover:border-foreground transition-colors"
@@ -384,6 +423,9 @@ export default function BroadcastPage() {
                                                 {c}
                                                 <span className="kicker mt-2 block">Clique para usar esta versão</span>
                                             </button>
+                                            <Button type="button" size="sm" variant="ghost" disabled={loading || variants.length >= 4}
+                                                onClick={() => setVariants(vs => [...vs, c])}>Adicionar como outra versão (rodízio)</Button>
+                                            </div>
                                         ))}
                                     </div>
 
@@ -681,6 +723,28 @@ export default function BroadcastPage() {
                                 {scheduling ? "Agendando..." : "Agendar"}
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+
+            <Dialog open={riskOpen} onOpenChange={setRiskOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-yellow-500" />Atenção: risco de bloqueio</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-3 text-sm">
+                        <p>Você vai enviar para <strong>{recipientCount}</strong> contatos. Disparos grandes aumentam o risco de o WhatsApp <strong>bloquear o seu número</strong>, principalmente com lista antiga, contatos que nunca falaram com você ou número novo.</p>
+                        <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                            <li>Prefira clientes que já conversaram com você.</li>
+                            <li>Use intervalos maiores e mais de uma versão do texto.</li>
+                            <li>Evite enviar de madrugada ou à noite.</li>
+                        </ul>
+                        <p className="text-muted-foreground">O bloqueio de um número é responsabilidade de quem dispara. Você pode ajustar o ritmo em Configurações do bot.</p>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2">
+                        <Button variant="outline" onClick={() => setRiskOpen(false)}>Cancelar</Button>
+                        <Button onClick={doSend}>Entendi, iniciar disparo</Button>
                     </div>
                 </DialogContent>
             </Dialog>
