@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useSession } from "@/components/dashboard/session-provider";
 
 interface Props {
     /** URL interna da imagem enviada (/api/uploads/:id) ou "" */
@@ -14,6 +15,7 @@ interface Props {
 
 /** Botão para subir uma imagem (JPG, PNG ou WebP, até 5 MB) que vai junto com a mensagem. */
 export function MediaUpload({ value, onChange, disabled }: Props) {
+    const { sessionId } = useSession();
     const input = useRef<HTMLInputElement>(null);
     const [busy, setBusy] = useState(false);
 
@@ -23,6 +25,7 @@ export function MediaUpload({ value, onChange, disabled }: Props) {
         try {
             const body = new FormData();
             body.append("file", file);
+            if (sessionId) body.append("sessionId", sessionId);
             const res = await fetch("/api/uploads", { method: "POST", body });
             const data = await res.json();
             if (!res.ok || !data.status) throw new Error(data.message || "Falha ao enviar a imagem");
