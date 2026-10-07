@@ -10,7 +10,12 @@ import { resolveSendJid } from "@/lib/wa-jid";
 import { getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
 import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
+import { canonicalPhone, jidVariants } from "@/lib/phone";
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
+
+/** Disparos em andamento neste servidor (um por número): evita lançar o mesmo disparo duas vezes. */
+const running: Map<string, string> = ((globalThis as any).__broadcastRunning ||= new Map());
+const DUPLICATE_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 const broadcastBodySchema = z.object({
     recipients: z.array(z.string()),
@@ -42,7 +47,15 @@ export async function POST(
             return NextResponse.json({ error: parseResult.error.flatten() }, { status: 400 });
         }
 
-        const { recipients, message, delay, mediaUrl, optOutFooter } = parseResult.data;
+        const { message, delay, mediaUrl, optOutFooter } = parseResult.data;
+        // mesma pessoa escrita de jeitos diferentes (com/sem o 9º dígito) entra uma vez só
+        const seenKeys = new Set<string>();
+        const recipients = parseResult.data.recipients.filter(r => {
+            const key = r.includes("@s.whatsapp.net") ? canonicalPhone(r) : r;
+            if (seenKeys.has(key)) return false;
+            seenKeys.add(key);
+            return true;
+        });
         const copies = [message, ...(parseResult.data.variants || []).map(v => v.trim()).filter(Boolean)]
             .map(c => (optOutFooter ? withFooter(c) : c));
         const copyFor = (i: number) => copies[i % copies.length];
@@ -55,6 +68,10 @@ export async function POST(
         const instance = waManager.getInstance(sessionId);
         if (!instance?.socket) {
             return NextResponse.json({ status: false, message: "Session not ready", error: "Session not ready" }, { status: 503 });
+        }
+
+        if (running.has(sessionId)) {
+            return NextResponse.json({ status: false, message: "Já existe um disparo em andamento neste número. Espere terminar ou cancele-o antes de começar outro.", code: "BROADCAST_RUNNING" }, { status: 409 });
         }
 
         // --- Plano: bloqueia se a conta estiver suspensa ou sem cota ---
@@ -79,9 +96,9 @@ export async function POST(
             include: { recipients: true }
         });
 
-        const messageContent: AnyMessageContent = { text: message };
         const io = (global as any).io;
         const broadcastId = log.id;
+        running.set(sessionId, broadcastId);
 
         // Emit initial state
         if (io) {
@@ -111,6 +128,8 @@ export async function POST(
             let deferredNote = "";
             const stopReason = "";
             let lastWasInvalid = false;
+            let cancelled = false;
+            const sentTargets = new Set<string>();
             let mediaBuffer: Buffer | null = null;
             if (mediaUrl) {
                 try {
@@ -125,6 +144,10 @@ export async function POST(
                 const jid = recipients[i];
                 lastWasInvalid = false;
 
+                // o usuário pode cancelar a qualquer momento
+                const cur = await prisma.broadcastLog.findUnique({ where: { id: broadcastId }, select: { status: true } });
+                if (cur?.status === "cancelled") { cancelled = true; break; }
+
                 if (safe) {
                     const gate = safeGate(safe);
                     if (!gate.ok) {
@@ -137,6 +160,18 @@ export async function POST(
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
                     const targetJid = await resolveSendJid(instance.socket, jid);
+                    if (sentTargets.has(targetJid)) throw new Error("Número repetido na lista (Repetido)");
+                    // proteção contra envio em dobro: já recebeu esta mesma mensagem recentemente?
+                    const already = await prisma.broadcastRecipient.findFirst({
+                        where: {
+                            status: "sent",
+                            sentAt: { gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+                            jid: { in: [...jidVariants(jid), targetJid] },
+                            broadcastLog: { sessionId, message },
+                        },
+                        select: { id: true },
+                    });
+                    if (already) throw new Error("Repetido: já recebeu esta mensagem nas últimas 12h");
                     if (await isOptedOut(sessionId, targetJid)) throw new Error("Descadastrado (respondeu SAIR)");
                     if (onlyInteracted && !(await hasInteracted(sessionId, targetJid))) throw new Error(NO_INTERACTION_ERROR);
                     const personalized = await personalizeFor(sessionId, targetJid, copyFor(i), [jid]);
@@ -146,6 +181,7 @@ export async function POST(
                         await instance.socket!.sendMessage(targetJid, { text: personalized });
                     }
                     sent++;
+                    sentTargets.add(targetJid);
                     if (ownerId) await recordMessages(ownerId, 1);
                     if (safe) sinceBreak++;
 
@@ -157,7 +193,7 @@ export async function POST(
                 } catch (e: any) {
                     failed++;
                     // número inválido ou descadastrado: nada foi enviado, não precisa esperar
-                    lastWasInvalid = /não possui WhatsApp|Descadastrado|Sem conversa anterior/i.test(e?.message || "");
+                    lastWasInvalid = /não possui WhatsApp|Descadastrado|Sem conversa anterior|Repetido/i.test(e?.message || "");
                     errors.push({ jid, error: e.message || "Unknown error" });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 
@@ -205,7 +241,7 @@ export async function POST(
 
             // O que não coube hoje vira mensagem agendada: o agendador envia dentro do horário e do limite
             let deferred = 0;
-            if (deferredFrom >= 0) {
+            if (deferredFrom >= 0 && !cancelled) {
                 const rest = recipients.slice(deferredFrom);
                 const dbSession = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
                 if (dbSession) {
@@ -220,7 +256,7 @@ export async function POST(
                 }
             }
 
-            const finalStatus = stopReason ? "stopped" : "completed";
+            const finalStatus = cancelled ? "cancelled" : stopReason ? "stopped" : "completed";
 
             // Mark as finished in DB
             await prisma.broadcastLog.update({
@@ -238,13 +274,18 @@ export async function POST(
                     failed,
                     errors,
                     deferred,
-                    note: stopReason || deferredNote || undefined,
-                    progress: stopReason ? Math.round(((sent + failed) / recipients.length) * 100) : 100,
+                    note: cancelled ? "Disparo cancelado." : stopReason || deferredNote || undefined,
+                    progress: stopReason || cancelled ? Math.round(((sent + failed) / recipients.length) * 100) : 100,
                     completedAt: new Date().toISOString()
                 });
             }
             console.log(`Broadcast ${broadcastId} completed: ${sent} sent, ${failed} failed out of ${recipients.length}`);
-        })();
+        })()
+            .catch(async (e) => {
+                console.error("Broadcast loop error", e);
+                await prisma.broadcastLog.update({ where: { id: broadcastId }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
+            })
+            .finally(() => { if (running.get(sessionId) === broadcastId) running.delete(sessionId); });
 
         return NextResponse.json({
             status: true,

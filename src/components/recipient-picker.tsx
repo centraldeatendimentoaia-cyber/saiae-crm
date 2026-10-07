@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { canonicalPhone } from "@/lib/phone";
 
 type Tab = "contacts" | "labels" | "groups" | "file";
 
@@ -36,12 +37,13 @@ const digits = (s: string) => s.replace(/\D/g, "");
 /** Junta números novos à lista (um por linha), sem repetir. */
 export function mergeNumbers(current: string, add: string[]): { text: string; added: number } {
     const lines = current.split(/[\n,;]+/).map(l => l.trim()).filter(Boolean);
-    const seen = new Set(lines.map(digits));
+    const seen = new Set(lines.map(canonicalPhone));
     let added = 0;
     for (const p of add) {
         const d = digits(p);
-        if (d.length < 8 || seen.has(d)) continue;
-        seen.add(d);
+        const key = canonicalPhone(d);
+        if (d.length < 8 || seen.has(key)) continue;
+        seen.add(key);
         lines.push(d);
         added++;
     }

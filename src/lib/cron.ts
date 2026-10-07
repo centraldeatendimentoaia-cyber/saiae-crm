@@ -15,6 +15,9 @@ import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mo
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let running = false; // evita duas rodadas ao mesmo tempo
 export function initScheduler() {
+    // disparos que estavam em andamento quando o servidor reiniciou não continuam: marca como interrompidos
+    prisma.broadcastLog.updateMany({ where: { status: "running" }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
+
     // Run every minute
     cron.schedule("* * * * *", async () => {
         if (running) return;

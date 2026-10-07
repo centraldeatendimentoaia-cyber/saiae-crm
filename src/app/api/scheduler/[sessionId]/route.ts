@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import moment from "moment-timezone";
 import { withFooter } from "@/lib/optout";
+import { canonicalPhone } from "@/lib/phone";
 
 // GET: List Scheduled Messages
 export async function GET(
@@ -75,7 +76,15 @@ export async function POST(
         // Versões extras do texto: cada destinatário recebe uma delas, em rodízio
         const variants: string[] = Array.isArray(body.variants) ? body.variants.filter((v: unknown) => typeof v === "string" && v.trim()).slice(0, 5) : [];
         const copies: string[] = ([content || "", ...variants] as string[]).map(c => (optOutFooter ? withFooter(c) : c));
-        const targets: string[] = Array.isArray(jids) ? jids.filter((j: unknown) => typeof j === "string" && j) : (jid ? [jid] : []);
+        const rawTargets: string[] = Array.isArray(jids) ? jids.filter((j: unknown) => typeof j === "string" && j) : (jid ? [jid] : []);
+        // a mesma pessoa (com/sem o 9º dígito) só entra uma vez
+        const seenKeys = new Set<string>();
+        const targets = rawTargets.filter(t => {
+            const key = t.includes("@s.whatsapp.net") ? canonicalPhone(t) : t;
+            if (seenKeys.has(key)) return false;
+            seenKeys.add(key);
+            return true;
+        });
 
         if (targets.length === 0 || targets.length > 500 || (!content && !mediaUrl) || !sendAt) {
             return NextResponse.json({ status: false, message: "Missing required fields (recipients up to 500, Content/Media, SendAt)", error: "Missing required fields" }, { status: 400 });

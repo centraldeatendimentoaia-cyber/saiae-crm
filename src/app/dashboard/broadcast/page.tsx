@@ -22,7 +22,7 @@ import { useSocket } from "@/components/chat/socket-context";
 
 interface BroadcastProgress {
     broadcastId: string;
-    status: "running" | "completed" | "stopped";
+    status: "running" | "completed" | "stopped" | "cancelled";
     total: number;
     sent: number;
     failed: number;
@@ -161,10 +161,10 @@ export default function BroadcastPage() {
 
         const handler = (data: BroadcastProgress) => {
             setBroadcastProgress(data);
-            if (data.status === "stopped") {
+            if (data.status === "stopped" || data.status === "cancelled") {
                 setLoading(false);
                 fetchHistory();
-                toast.error(data.note || "Disparo pausado pelo Modo Seguro.", { duration: 12000 });
+                toast.error(data.note || "Disparo interrompido.", { duration: 12000 });
             } else if (data.status === "completed") {
                 setLoading(false);
                 // Refresh history after completion
@@ -182,6 +182,44 @@ export default function BroadcastPage() {
         socket.on("broadcast.progress", handler);
         return () => { socket.off("connect", onConnect); socket.off("broadcast.progress", handler); };
     }, [sessionId, getSocket, joinSession]);
+
+    // Ao entrar (ou voltar) na tela, retoma o disparo em andamento e acompanha o progresso
+    const wasRunning = useRef(false);
+    useEffect(() => {
+        if (!sessionId) return;
+        let stop = false;
+        let timer: ReturnType<typeof setTimeout>;
+        const tick = async () => {
+            try {
+                const res = await fetch(`/api/messages/${sessionId}/broadcast/history?limit=1`);
+                const j = await res.json();
+                const l = j?.data?.[0];
+                if (!stop && l) {
+                    if (l.status === "running") {
+                        wasRunning.current = true;
+                        setLoading(true);
+                        setBroadcastProgress(p => ({ ...(p || {}), broadcastId: l.id, status: "running", total: l.total, sent: l.sent, failed: l.failed, progress: l.total ? Math.round(((l.sent + l.failed) / l.total) * 100) : 0 } as BroadcastProgress));
+                    } else if (wasRunning.current) {
+                        wasRunning.current = false;
+                        setLoading(false);
+                        setBroadcastProgress(p => (p && p.status === "running" ? { ...p, status: l.status === "cancelled" ? "cancelled" : l.status === "stopped" ? "stopped" : "completed", sent: l.sent, failed: l.failed, progress: 100 } : p));
+                        fetchHistory();
+                    }
+                }
+            } catch { /* tenta de novo */ }
+            if (!stop) timer = setTimeout(tick, 4000);
+        };
+        tick();
+        return () => { stop = true; clearTimeout(timer); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
+
+    const cancelBroadcast = async () => {
+        if (!window.confirm("Cancelar o disparo? As mensagens que faltam não serão enviadas.")) return;
+        const res = await fetch(`/api/messages/${sessionId}/broadcast/cancel`, { method: "POST" });
+        if (res.ok) toast.info("Cancelando... o envio para na próxima mensagem.");
+        else toast.error("Não foi possível cancelar.");
+    };
 
     // Fetch history
     const fetchHistory = useCallback(async () => {
@@ -301,6 +339,99 @@ export default function BroadcastPage() {
                     <h2 className="text-xl sm:text-3xl font-bold tracking-tight">Disparo em massa</h2>
                     <p className="text-muted-foreground text-sm mt-1">Envie mensagens em massa para vários destinatários de uma vez.</p>
                 </div>
+
+                {/* Progresso no topo da tela */}
+                {broadcastProgress && (
+                    <Card className={`border-2 transition-colors ${
+                        broadcastProgress.status === "completed"
+                            ? (broadcastProgress.failed === 0 ? "border-green-500/30 bg-green-50/30 dark:bg-green-950/10" : "border-yellow-500/30 bg-yellow-50/30 dark:bg-yellow-950/10")
+                            : "border-zinc-500/30 bg-zinc-50/30 dark:bg-zinc-950/10"
+                    }`}>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                {broadcastProgress.status === "running" ? (
+                                    <><Radio className="h-5 w-5 text-zinc-500 animate-pulse" /><span>Disparo em andamento</span></>
+                                ) : (broadcastProgress.status === "stopped" || broadcastProgress.status === "cancelled") ? (
+                                    <><AlertTriangle className="h-5 w-5 text-red-500" /><span>{broadcastProgress.status === "cancelled" ? "Disparo cancelado" : "Disparo interrompido"}</span></>
+                                ) : broadcastProgress.deferred ? (
+                                    <><Clock className="h-5 w-5 text-yellow-500" /><span>Continua automaticamente</span></>
+                                ) : broadcastProgress.failed === 0 ? (
+                                    <><CheckCircle2 className="h-5 w-5 text-green-500" /><span>Disparo concluído</span></>
+                                ) : (
+                                    <><AlertTriangle className="h-5 w-5 text-yellow-500" /><span>Disparo concluído com erros</span></>
+                                )}
+                            </CardTitle>
+                            <CardDescription className="flex items-center justify-between gap-2">
+                                <span>ID: {broadcastProgress.broadcastId}</span>
+                                {broadcastProgress.status === "running" && (
+                                    <Button size="sm" variant="outline" onClick={cancelBroadcast}>Cancelar disparo</Button>
+                                )}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Progresso</span>
+                                    <span className="font-mono font-medium">
+                                        {broadcastProgress.sent + broadcastProgress.failed} / {broadcastProgress.total} ({broadcastProgress.progress || 0}%)
+                                    </span>
+                                </div>
+                                <Progress value={broadcastProgress.progress || 0} className="h-3" />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="bg-background rounded-lg p-3 text-center border">
+                                    <div className="text-2xl font-bold text-green-600">{broadcastProgress.sent}</div>
+                                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                                        <CheckCircle2 className="h-3 w-3" />  Enviadas
+                                    </div>
+                                </div>
+                                <div className="bg-background rounded-lg p-3 text-center border">
+                                    <div className="text-2xl font-bold text-red-500">{broadcastProgress.failed}</div>
+                                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                                        <XCircle className="h-3 w-3" />  Falhas
+                                    </div>
+                                </div>
+                                <div className="bg-background rounded-lg p-3 text-center border">
+                                    <div className="text-2xl font-bold text-muted-foreground">
+                                        {broadcastProgress.total - broadcastProgress.sent - broadcastProgress.failed}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
+                                        <Clock className="h-3 w-3" />  Pendentes
+                                    </div>
+                                </div>
+                            </div>
+
+                            {broadcastProgress.note && (
+                                <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">{broadcastProgress.note}</p>
+                            )}
+
+                            {broadcastProgress.status === "running" && broadcastProgress.current && (
+                                <div className="flex items-center gap-2 text-sm px-3 py-2 bg-muted/50 rounded-lg">
+                                    <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-500" />
+                                    <span className="text-muted-foreground">Enviando agora:</span>
+                                    <span className="font-mono font-medium">{formatJid(broadcastProgress.current)}</span>
+                                </div>
+                            )}
+
+                            {broadcastProgress.status !== "running" && broadcastProgress.errors && broadcastProgress.errors.length > 0 && (
+                                <div className="space-y-2">
+                                    <h4 className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
+                                        <XCircle className="h-4 w-4" />  Falhas ({broadcastProgress.errors.length})
+                                    </h4>
+                                    <div className="max-h-40 overflow-y-auto bg-red-50 dark:bg-red-950/30 rounded-lg p-2 space-y-1">
+                                        {broadcastProgress.errors.map((err, i) => (
+                                            <div key={i} className="flex justify-between items-center text-xs py-1 px-2 bg-background/60 rounded">
+                                                <span className="font-mono">{formatJid(err.jid)}</span>
+                                                <span className="text-red-500 truncate ml-2 max-w-[200px]">{err.error}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Tabs */}
                 <div className="flex gap-1 bg-muted/50 p-1 rounded-lg w-fit">
@@ -492,93 +623,6 @@ export default function BroadcastPage() {
                             </Card>
                         </div>
 
-                        {/* Live Progress */}
-                        {broadcastProgress && (
-                            <Card className={`border-2 transition-colors ${
-                                broadcastProgress.status === "completed"
-                                    ? (broadcastProgress.failed === 0 ? "border-green-500/30 bg-green-50/30 dark:bg-green-950/10" : "border-yellow-500/30 bg-yellow-50/30 dark:bg-yellow-950/10")
-                                    : "border-zinc-500/30 bg-zinc-50/30 dark:bg-zinc-950/10"
-                            }`}>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="flex items-center gap-2 text-lg">
-                                        {broadcastProgress.status === "running" ? (
-                                            <><Radio className="h-5 w-5 text-zinc-500 animate-pulse" /><span>Disparo em andamento</span></>
-                                        ) : broadcastProgress.status === "stopped" ? (
-                                            <><AlertTriangle className="h-5 w-5 text-red-500" /><span>Disparo pausado pelo Modo Seguro</span></>
-                                        ) : broadcastProgress.deferred ? (
-                                            <><Clock className="h-5 w-5 text-yellow-500" /><span>Continua automaticamente</span></>
-                                        ) : broadcastProgress.failed === 0 ? (
-                                            <><CheckCircle2 className="h-5 w-5 text-green-500" /><span>Disparo concluído</span></>
-                                        ) : (
-                                            <><AlertTriangle className="h-5 w-5 text-yellow-500" /><span>Disparo concluído com erros</span></>
-                                        )}
-                                    </CardTitle>
-                                    <CardDescription>ID: {broadcastProgress.broadcastId}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Progresso</span>
-                                            <span className="font-mono font-medium">
-                                                {broadcastProgress.sent + broadcastProgress.failed} / {broadcastProgress.total} ({broadcastProgress.progress || 0}%)
-                                            </span>
-                                        </div>
-                                        <Progress value={broadcastProgress.progress || 0} className="h-3" />
-                                    </div>
-
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div className="bg-background rounded-lg p-3 text-center border">
-                                            <div className="text-2xl font-bold text-green-600">{broadcastProgress.sent}</div>
-                                            <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <CheckCircle2 className="h-3 w-3" />  Enviadas
-                                            </div>
-                                        </div>
-                                        <div className="bg-background rounded-lg p-3 text-center border">
-                                            <div className="text-2xl font-bold text-red-500">{broadcastProgress.failed}</div>
-                                            <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <XCircle className="h-3 w-3" />  Falhas
-                                            </div>
-                                        </div>
-                                        <div className="bg-background rounded-lg p-3 text-center border">
-                                            <div className="text-2xl font-bold text-muted-foreground">
-                                                {broadcastProgress.total - broadcastProgress.sent - broadcastProgress.failed}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground flex items-center justify-center gap-1 mt-1">
-                                                <Clock className="h-3 w-3" />  Pendentes
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {broadcastProgress.note && (
-                                        <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm">{broadcastProgress.note}</p>
-                                    )}
-
-                                    {broadcastProgress.status === "running" && broadcastProgress.current && (
-                                        <div className="flex items-center gap-2 text-sm px-3 py-2 bg-muted/50 rounded-lg">
-                                            <RefreshCw className="h-3.5 w-3.5 animate-spin text-zinc-500" />
-                                            <span className="text-muted-foreground">Enviando agora:</span>
-                                            <span className="font-mono font-medium">{formatJid(broadcastProgress.current)}</span>
-                                        </div>
-                                    )}
-
-                                    {broadcastProgress.status !== "running" && broadcastProgress.errors && broadcastProgress.errors.length > 0 && (
-                                        <div className="space-y-2">
-                                            <h4 className="text-sm font-semibold text-red-600 flex items-center gap-1.5">
-                                                <XCircle className="h-4 w-4" />  Falhas ({broadcastProgress.errors.length})
-                                            </h4>
-                                            <div className="max-h-40 overflow-y-auto bg-red-50 dark:bg-red-950/30 rounded-lg p-2 space-y-1">
-                                                {broadcastProgress.errors.map((err, i) => (
-                                                    <div key={i} className="flex justify-between items-center text-xs py-1 px-2 bg-background/60 rounded">
-                                                        <span className="font-mono">{formatJid(err.jid)}</span>
-                                                        <span className="text-red-500 truncate ml-2 max-w-[200px]">{err.error}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
                     </>
                 )}
 
