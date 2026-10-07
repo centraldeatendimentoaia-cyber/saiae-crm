@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Search, FileUp, X } from "lucide-react";
+import { Search, FileUp, X, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,12 +10,18 @@ import { cn } from "@/lib/utils";
 
 type Tab = "contacts" | "labels" | "groups" | "file";
 
+interface Member {
+    phone: string;
+    name: string;
+}
+
 interface Item {
     id: string;
     name: string;
     sub?: string;
     color?: string;
     phones: string[];
+    members?: Member[];
 }
 
 const TABS: { id: Tab; label: string }[] = [
@@ -56,12 +62,16 @@ export function RecipientPicker({ sessionId, value, onChange, disabled }: Props)
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [picked, setPicked] = useState<Set<string>>(new Set());
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const [pickedPhones, setPickedPhones] = useState<Set<string>>(new Set()); // pessoas escolhidas dentro de um grupo/etiqueta
     const fileRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => { setCache({}); setPicked(new Set()); }, [sessionId]);
 
     useEffect(() => {
         setPicked(new Set());
+        setPickedPhones(new Set());
+        setExpanded(new Set());
         setSearch("");
         if (!sessionId || tab === "file" || cache[tab]) return;
         let cancelled = false;
@@ -90,11 +100,24 @@ export function RecipientPicker({ sessionId, value, onChange, disabled }: Props)
     const allFilteredPicked = filtered.length > 0 && filtered.every(i => picked.has(i.id));
     const toggleAll = () => setPicked(allFilteredPicked ? new Set() : new Set(filtered.map(i => i.id)));
 
+    const toggleExpanded = (id: string) => setExpanded(prev => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        return next;
+    });
+    const togglePhone = (phone: string) => setPickedPhones(prev => {
+        const next = new Set(prev);
+        if (next.has(phone)) next.delete(phone); else next.add(phone);
+        return next;
+    });
+    const selectedCount = new Set([...items.filter(i => picked.has(i.id)).flatMap(i => i.phones), ...pickedPhones]).size;
+
     const addPicked = () => {
-        const phones = items.filter(i => picked.has(i.id)).flatMap(i => i.phones);
+        const phones = [...items.filter(i => picked.has(i.id)).flatMap(i => i.phones), ...pickedPhones];
         const { text, added } = mergeNumbers(value, phones);
         onChange(text);
         setPicked(new Set());
+        setPickedPhones(new Set());
         toast.success(added ? `${added} ${added === 1 ? "número adicionado" : "números adicionados"} à lista.` : "Esses números já estavam na lista.");
     };
 
@@ -156,7 +179,7 @@ export function RecipientPicker({ sessionId, value, onChange, disabled }: Props)
                             <Checkbox checked={allFilteredPicked} onCheckedChange={toggleAll} disabled={disabled || filtered.length === 0} />
                             Selecionar todos ({filtered.length})
                         </label>
-                        <span>{picked.size} selecionados</span>
+                        <span>{selectedCount} {selectedCount === 1 ? "número" : "números"}</span>
                     </div>
                     <div className="max-h-64 divide-y divide-border overflow-y-auto rounded-lg border border-border">
                         {loading ? (
@@ -167,21 +190,42 @@ export function RecipientPicker({ sessionId, value, onChange, disabled }: Props)
                             </p>
                         ) : (
                             filtered.slice(0, 300).map(i => (
-                                <label key={i.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-muted/50">
-                                    <Checkbox checked={picked.has(i.id)} onCheckedChange={() => toggle(i.id)} disabled={disabled} />
-                                    {i.color && <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: i.color }} />}
-                                    <span className="min-w-0 flex-1">
-                                        <span className="block truncate text-sm font-medium">{i.name}</span>
-                                        {i.sub && <span className="block truncate text-xs text-muted-foreground">{i.sub}</span>}
-                                    </span>
-                                </label>
+                                <div key={i.id}>
+                                    <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/50">
+                                        {i.members ? (
+                                            <button type="button" onClick={() => toggleExpanded(i.id)} aria-label="Ver pessoas" className="shrink-0 text-muted-foreground hover:text-foreground">
+                                                {expanded.has(i.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                            </button>
+                                        ) : null}
+                                        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
+                                            <Checkbox checked={picked.has(i.id)} onCheckedChange={() => toggle(i.id)} disabled={disabled} />
+                                            {i.color && <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: i.color }} />}
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-sm font-medium">{i.name}</span>
+                                                {i.sub && <span className="block truncate text-xs text-muted-foreground">{i.sub}</span>}
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {i.members && expanded.has(i.id) && (
+                                        <div className="max-h-48 overflow-y-auto bg-muted/30 py-1 pl-9 pr-3">
+                                            {i.members.length === 0 ? (
+                                                <p className="py-1 text-xs text-muted-foreground">Nenhuma pessoa com número identificado.</p>
+                                            ) : i.members.map(m => (
+                                                <label key={m.phone} className="flex cursor-pointer items-center gap-3 py-1">
+                                                    <Checkbox checked={picked.has(i.id) || pickedPhones.has(m.phone)} onCheckedChange={() => togglePhone(m.phone)} disabled={disabled || picked.has(i.id)} />
+                                                    <span className="min-w-0 flex-1 truncate text-sm">{m.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             ))
                         )}
                         {filtered.length > 300 && (
                             <p className="p-2 text-center text-xs text-muted-foreground">Mostrando 300 de {filtered.length}. Use a pesquisa ou "Selecionar todos".</p>
                         )}
                     </div>
-                    <Button type="button" size="sm" onClick={addPicked} disabled={disabled || picked.size === 0}>
+                    <Button type="button" size="sm" onClick={addPicked} disabled={disabled || selectedCount === 0}>
                         Adicionar selecionados à lista
                     </Button>
                 </div>

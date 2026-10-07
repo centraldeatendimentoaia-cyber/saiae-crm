@@ -107,11 +107,14 @@ export class WhatsAppInstance {
         this.socket.ev.on("labels.association" as any, async (ev: any) => {
             try {
                 const assoc = ev?.association;
-                if (!assoc || assoc.type !== "chat") return;
+                if (!assoc || assoc.type !== "label_jid") return; // etiqueta em conversa (o Baileys usa "label_jid")
                 const labelId = `${this.sessionId}:${assoc.labelId}`;
                 if (ev.type === "add") {
+                    // a associação pode chegar antes da etiqueta: cria um espaço reservado que o "labels.edit" completa
                     const exists = await prisma.label.findUnique({ where: { id: labelId } });
-                    if (!exists) return;
+                    if (!exists) {
+                        await prisma.label.create({ data: { id: labelId, sessionId: this.sessionId, name: `Etiqueta ${assoc.labelId}`, color: 0, colorHex: LABEL_COLORS[0] } }).catch(() => {});
+                    }
                     await prisma.chatLabel.upsert({
                         where: { labelId_chatJid: { labelId, chatJid: assoc.chatId } },
                         update: {},

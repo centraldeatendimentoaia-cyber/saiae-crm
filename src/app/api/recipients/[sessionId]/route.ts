@@ -8,12 +8,24 @@ const toPhone = (jid?: string | null): string | null => {
     return m ? m[1] : null;
 };
 
+interface Member {
+    phone: string;
+    name: string;
+}
+
 interface Item {
     id: string;
     name: string;
     sub?: string;
     color?: string;
     phones: string[];
+    members?: Member[];
+}
+
+/** 5561999531848 -> +55 61 99953-1848 (nunca mostra IDs internos do WhatsApp). */
+function formatPhone(phone: string): string {
+    const m = /^55(\d{2})(9?\d{4})(\d{4})$/.exec(phone);
+    return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : `+${phone}`;
 }
 
 /**
@@ -40,9 +52,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
 
     // jid/lid -> telefone
     const phoneOf = new Map<string, string>();
+    const nameOfPhone = new Map<string, string>();
     for (const c of contacts) {
         const phone = toPhone(c.jid) || toPhone(c.remoteJidAlt);
         if (!phone) continue;
+        const display = c.name || c.verifiedName || c.notify;
+        if (display && !nameOfPhone.has(phone)) nameOfPhone.set(phone, display);
         phoneOf.set(c.jid, phone);
         if (c.lid) phoneOf.set(c.lid, phone);
         if (c.remoteJidAlt) phoneOf.set(c.remoteJidAlt, phone);
@@ -58,20 +73,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
             const phone = toPhone(c.jid) || toPhone(c.remoteJidAlt);
             if (!phone || seen.has(phone)) continue;
             seen.add(phone);
-            items.push({ id: phone, name: c.name || c.verifiedName || c.notify || phone, sub: phone, phones: [phone] });
+            const named = c.name || c.verifiedName || c.notify;
+            items.push({ id: phone, name: named || formatPhone(phone), sub: named ? formatPhone(phone) : undefined, phones: [phone] });
         }
     } else if (type === "labels") {
         const labels = await prisma.label.findMany({ where: { sessionId }, orderBy: { name: "asc" }, include: { chatLabels: { select: { chatJid: true } } } });
         items = labels.map(l => {
             const phones = uniq(l.chatLabels.map(cl => resolve(cl.chatJid)));
-            return { id: l.id, name: l.name, color: l.colorHex, sub: `${phones.length} contatos`, phones };
+            const members = phones.map(phone => ({ phone, name: nameOfPhone.get(phone) || formatPhone(phone) }));
+            return { id: l.id, name: l.name, color: l.colorHex, sub: `${phones.length} contatos com número`, phones, members };
         });
     } else if (type === "groups") {
         const groups = await prisma.group.findMany({ where: { sessionId: session.id }, orderBy: { subject: "asc" }, select: { jid: true, subject: true, participants: true } });
         items = groups.map(g => {
             const parts = Array.isArray(g.participants) ? (g.participants as any[]) : [];
             const phones = uniq(parts.map(p => resolve(p?.phoneNumber) || resolve(p?.id)));
-            return { id: g.jid, name: g.subject || g.jid, sub: `${phones.length} participantes`, phones };
+            const members = phones.map(phone => ({ phone, name: nameOfPhone.get(phone) || formatPhone(phone) }));
+            return { id: g.jid, name: g.subject || "Grupo sem nome", sub: `${phones.length} participantes com número`, phones, members };
         });
     } else {
         return NextResponse.json({ status: false, message: "type inválido" }, { status: 400 });
