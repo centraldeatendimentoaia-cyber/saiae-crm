@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useBillingEnforced } from "@/lib/use-billing-enforced";
 import { ChevronDown, PanelLeftClose, PanelLeft } from "lucide-react";
 import {
     LayoutDashboard,
@@ -117,6 +118,7 @@ export function SidebarNav() {
     const { isCollapsed, toggleCollapse } = useSidebar();
     // @ts-ignore
     const userRole = session?.user?.role;
+    const billingEnforced = useBillingEnforced();
 
     // Track collapsed groups — all expanded by default
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -136,6 +138,7 @@ export function SidebarNav() {
                 {navGroups.map((group) => {
                     const visibleItems = group.items.filter((item) => {
                         if (item.superadminOnly && userRole !== "SUPERADMIN") return false;
+                        if (item.href === "/dashboard/assinatura" && billingEnforced !== true) return false; // cobrança desligada
                         if (item.allowedRoles && (!userRole || !item.allowedRoles.includes(userRole))) return false;
                         return true;
                     });

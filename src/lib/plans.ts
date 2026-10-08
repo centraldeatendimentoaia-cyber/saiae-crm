@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { billingEnforced, aiMonthlyCap } from "@/lib/billing-mode";
 
 /**
  * Planos e limites. Os valores (null = ilimitado) podem ser ajustados aqui sem mexer no resto do app.
@@ -44,6 +45,8 @@ export interface Entitlement {
     limits: { sessions: number | null; messages: number | null; ai: number | null };
     usage: { sessions: number; messages: number; ai: number };
     period: string;
+    /** false = cobrança desligada (BILLING_ENFORCEMENT): sem limites, sem trial, sem bloqueio. */
+    billingEnforced: boolean;
 }
 
 export async function getEntitlement(userId: string): Promise<Entitlement> {
@@ -61,6 +64,22 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
         prisma.session.count({ where: { userId } }),
         prisma.usageCounter.findUnique({ where: { userId_period: { userId, period } } }),
     ]);
+
+    // Cobrança desligada: ninguém é limitado nem bloqueado e o trial não expira. O uso continua sendo
+    // contado e só o teto mensal de IA (custo do Gemini) vale. Reversível: BILLING_ENFORCEMENT=on.
+    if (!billingEnforced()) {
+        const ai = aiMonthlyCap();
+        return {
+            plan: { ...PLANS.ILIMITADO, name: "Sem limites (cobrança desativada)", ai },
+            status: "ACTIVE",
+            blockedReason: null,
+            trialEndsAt: null,
+            limits: { sessions: null, messages: null, ai },
+            usage: { sessions, messages: counter?.messages ?? 0, ai: counter?.aiGenerations ?? 0 },
+            period,
+            billingEnforced: false,
+        };
+    }
 
     let blockedReason: string | null = null;
     if (user.role !== "SUPERADMIN") {
@@ -83,6 +102,7 @@ export async function getEntitlement(userId: string): Promise<Entitlement> {
         },
         usage: { sessions, messages: counter?.messages ?? 0, ai: counter?.aiGenerations ?? 0 },
         period,
+        billingEnforced: true,
     };
 }
 
@@ -119,7 +139,11 @@ export async function assertCanUseAI(userId: string): Promise<void> {
     const e = await getEntitlement(userId);
     if (e.blockedReason) throw new PlanError(e.blockedReason);
     if (e.limits.ai !== null && e.usage.ai >= e.limits.ai) {
-        throw new PlanError(`Você usou as ${e.limits.ai} gerações de texto com IA do plano ${e.plan.name} neste mês.`);
+        throw new PlanError(
+            e.billingEnforced
+                ? `Você usou as ${e.limits.ai} gerações de texto com IA do plano ${e.plan.name} neste mês.`
+                : `Você chegou ao limite de ${e.limits.ai} gerações de texto com IA deste mês.`
+        );
     }
 }
 
