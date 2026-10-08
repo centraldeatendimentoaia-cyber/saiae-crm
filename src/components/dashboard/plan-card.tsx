@@ -13,6 +13,7 @@ interface PlanData {
     trialEndsAt: string | null;
     limits: { sessions: number | null; messages: number | null; ai: number | null };
     usage: { sessions: number; messages: number; ai: number };
+    billingEnforced?: boolean;
 }
 
 function Meter({ label, used, max }: { label: string; used: number; max: number | null }) {
@@ -58,7 +59,10 @@ export function PlanCard() {
 
     if (!data) return null;
 
-    const daysLeft = data.trialEndsAt
+    // Cobrança desligada (BILLING_ENFORCEMENT): sem aviso de trial, de bloqueio nem convite para assinar.
+    const billing = data.billingEnforced !== false;
+
+    const daysLeft = billing && data.trialEndsAt
         ? Math.max(0, Math.ceil((new Date(data.trialEndsAt).getTime() - Date.now()) / 86400000))
         : null;
 
@@ -75,7 +79,7 @@ export function PlanCard() {
                     )}
                     <div className="flex flex-wrap items-center gap-3">
                         <span className="font-display text-2xl font-bold">{data.plan.name}</span>
-                        {data.status === "SUSPENDED" ? (
+                        {billing && data.status === "SUSPENDED" ? (
                             <Badge variant="destructive">Suspenso</Badge>
                         ) : data.plan.key === "TRIAL" && daysLeft !== null ? (
                             <Badge variant="warning">{daysLeft === 0 ? "Termina hoje" : `${daysLeft} dia(s) restantes`}</Badge>
@@ -84,7 +88,7 @@ export function PlanCard() {
                         )}
                     </div>
 
-                    {data.blockedReason && (
+                    {billing && data.blockedReason && (
                         <div className="flex items-start gap-2 rounded-[14px] bg-err-bg text-err-tx px-4 py-3 text-sm font-medium">
                             <AlertTriangle className="h-5 w-5 shrink-0" />
                             {data.blockedReason}
@@ -96,7 +100,7 @@ export function PlanCard() {
                         <Meter label="Disparos no mês" used={data.usage.messages} max={data.limits.messages} />
                         <Meter label="Textos com IA no mês" used={data.usage.ai} max={data.limits.ai} />
                     </div>
-                    {data.plan.key !== "ILIMITADO" && (
+                    {billing && data.plan.key !== "ILIMITADO" && (
                         <Link href="/dashboard/assinatura" className="inline-block text-sm font-semibold underline underline-offset-4">
                             Ver planos e assinar
                         </Link>

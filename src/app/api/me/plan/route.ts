@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
                 limits: e.limits,
                 usage: e.usage,
                 period: e.period,
+                billingEnforced: e.billingEnforced,
             },
         });
     } catch (error) {

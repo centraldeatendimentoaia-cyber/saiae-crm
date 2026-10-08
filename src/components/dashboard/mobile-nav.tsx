@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { useBillingEnforced } from "@/lib/use-billing-enforced";
 import pkg from "../../../package.json";
 
 interface NavGroup {
@@ -105,6 +106,7 @@ export function MobileNav({ appName = "Saiaê" }: { appName?: string }) {
     const { data: session } = useSession();
     // @ts-ignore
     const userRole = session?.user?.role;
+    const billingEnforced = useBillingEnforced();
 
     const isActive = (href: string) => {
         if (href === "/dashboard") return pathname === "/dashboard";
@@ -128,7 +130,10 @@ export function MobileNav({ appName = "Saiaê" }: { appName?: string }) {
                 <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-1">
                     {navGroups.map((group) => {
                         const visibleItems = group.items.filter(
-                            (item) => !item.superadminOnly || userRole === "SUPERADMIN"
+                            (item) =>
+                                (!item.superadminOnly || userRole === "SUPERADMIN") &&
+                                // cobrança desligada: esconde "Plano e assinatura"
+                                !(item.href === "/dashboard/assinatura" && billingEnforced !== true)
                         );
                         if (visibleItems.length === 0) return null;
 

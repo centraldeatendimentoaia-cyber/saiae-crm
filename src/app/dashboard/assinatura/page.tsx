@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, ExternalLink } from "lucide-react";
 import { PlanCard } from "@/components/dashboard/plan-card";
+import { useBillingEnforced } from "@/lib/use-billing-enforced";
 
 interface Billing {
     links: { ESSENCIAL: string | null; PRO: string | null; ESCALA: string | null; EXTRA: string | null };
@@ -39,6 +40,7 @@ const OFFERS = [
 
 export default function AssinaturaPage() {
     const [billing, setBilling] = useState<Billing | null>(null);
+    const enforced = useBillingEnforced();
 
     useEffect(() => {
         fetch("/api/me/billing")
@@ -46,6 +48,25 @@ export default function AssinaturaPage() {
             .then((j) => j.status && setBilling(j.data))
             .catch(() => {});
     }, []);
+
+    // Cobrança desligada (BILLING_ENFORCEMENT): sem ofertas nem convite para assinar, só o uso do mês.
+    if (enforced !== true) {
+        return (
+            <div className="max-w-5xl space-y-10 pb-16">
+                <header className="space-y-3">
+                    <p className="kicker">Conta</p>
+                    <h1 className="text-4xl font-bold">Plano e uso</h1>
+                    <span className="gold-bar" />
+                    {enforced === false && (
+                        <p className="text-muted-foreground max-w-2xl">
+                            No momento não há cobrança: você pode usar sem limite de números e de disparos. Só os textos gerados com IA têm um teto mensal.
+                        </p>
+                    )}
+                </header>
+                {enforced === false && <PlanCard />}
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-5xl space-y-10 pb-16">
