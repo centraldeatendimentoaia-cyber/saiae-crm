@@ -6,7 +6,7 @@ import { SEM_LOJA } from "./store";
 /**
  * Direito de apagar: quando o cliente apaga os dados na Comanda (`cliente_apagar_dados`), a Comanda chama a rota
  * `ia-apagar-conversas` e o CRM remove as conversas da IA daquele telefone naquela loja (as mensagens saem junto, em
- * cascata) e também a conversa "sem loja" do mesmo telefone, que só guarda marcadores. Idempotente. Nunca registra o telefone.
+ * cascata), o lead de vendas do mesmo telefone e também a conversa "sem loja" do mesmo telefone, que só guarda marcadores. Idempotente. Nunca registra o telefone.
  */
 
 /** Formas em que o WhatsApp pode entregar o mesmo número brasileiro: com e sem o 9º dígito. */
@@ -29,6 +29,8 @@ export interface ApagarDeps {
 
 const prismaApagar: ApagarDeps["apagar"] = async (lojas, contactKeys) => {
     const r = await prisma.iaConversa.deleteMany({ where: { lojaCodigo: { in: lojas }, contactKey: { in: contactKeys } } });
+    // o lead de vendas (nome, negócio, cidade) é dado pessoal do mesmo telefone: sai junto
+    await prisma.iaLead.deleteMany({ where: { contactKey: { in: contactKeys } } });
     return r.count;
 };
 

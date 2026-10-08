@@ -9,6 +9,7 @@ import type { ConversaRef } from "../store";
 import { CONHECIMENTO_SAIAE } from "./conhecimento";
 import { executarFerramentaVendas } from "./ferramentas";
 import { criarControleVendas, criarResponderVendas, mensagemSoLinkVendas, maxRespostasVendasDia } from "./motor";
+import { limparCampo, origemDoTexto, type LeadStore } from "./lead";
 import { montarPromptVendas } from "./prompt";
 
 const LINK = "https://saiae.com.br/cadastro";
@@ -111,6 +112,57 @@ describe("motor de vendas", () => {
         const m = montar([], { limite: async () => "so_link" });
         expect(await m.rodar()).toBe(mensagemSoLinkVendas(LINK));
         expect(m.entradas).toHaveLength(0);
+    });
+});
+
+describe("lead", () => {
+    const comLead = (saidas: SaidaLlm[]) => {
+        const lead: LeadStore = { garantir: vi.fn(async () => undefined), atualizar: vi.fn(async () => undefined) };
+        const { llm, entradas } = fake(saidas);
+        const logger = { warn: vi.fn() };
+        const responder = criarResponderVendas({ llm, store: { historico: async () => [{ direcao: "in", texto: "oi" }] }, linkCadastro: LINK, chamarHumano: async () => true, lead, now: () => T0, logger });
+        return { lead, entradas, logger, rodar: (texto: string) => responder({ conversa, texto, nomePerfil: null, contactKey: conversa.contactKey }) };
+    };
+    it("todo contato vira lead; a mensagem do panfleto marca a origem", async () => {
+        const m = comLead([{ texto: "Olá!", chamadas: [] }, { texto: "Olá!", chamadas: [] }]);
+        await m.rodar("Oi! Quero ser testador do sai aê (vi no panfleto)");
+        await m.rodar("oi, tudo bem?");
+        expect(m.lead.garantir).toHaveBeenNthCalledWith(1, conversa.contactKey, "panfleto");
+        expect(m.lead.garantir).toHaveBeenNthCalledWith(2, conversa.contactKey, "outro");
+        expect(origemDoTexto("VI NO PANFLETO")).toBe("panfleto");
+    });
+    it("registrar_lead só existe quando há onde guardar e grava campos limpos", async () => {
+        const m = comLead([
+            { chamadas: [{ id: "t1", nome: "registrar_lead", argumentos: { nome: "  Maria\n da   Silva ", negocio: "açaiteria", cidade: 42, extra: "x" } }] },
+            { texto: "Anotado, Maria!", chamadas: [] },
+        ]);
+        expect(m.entradas).toHaveLength(0);
+        expect(await m.rodar("sou a Maria, tenho uma açaiteria")).toBe("Anotado, Maria!");
+        expect(m.entradas[0].ferramentas.map((f) => f.nome)).toContain("registrar_lead");
+        expect(m.lead.atualizar).toHaveBeenCalledWith(conversa.contactKey, { nome: "Maria da Silva", negocio: "açaiteria", cidade: undefined });
+        const sem = montar([{ texto: "ok", chamadas: [] }]);
+        await sem.rodar();
+        expect(sem.entradas[0].ferramentas.map((f) => f.nome)).not.toContain("registrar_lead");
+    });
+    it("registrar_lead sem nenhum campo útil é recusado e nada é gravado", async () => {
+        const atualizar = vi.fn();
+        const r = await executarFerramentaVendas("registrar_lead", { nome: "   ", negocio: 7 }, { linkCadastro: LINK, chamarHumano: async () => true, registrarLead: atualizar });
+        expect(r.erro).toBe(true);
+        expect(atualizar).not.toHaveBeenCalled();
+    });
+    it("falha ao gravar o lead não impede a resposta nem vaza no log", async () => {
+        const lead: LeadStore = { garantir: async () => { throw Object.assign(new Error("5561999990001"), { name: "PrismaError" }); }, atualizar: async () => undefined };
+        const logger = { warn: vi.fn() };
+        const { llm } = fake([{ texto: "Olá!", chamadas: [] }]);
+        const responder = criarResponderVendas({ llm, store: { historico: async () => [] }, linkCadastro: LINK, chamarHumano: async () => true, lead, now: () => T0, logger });
+        expect(await responder({ conversa, texto: "oi", nomePerfil: null, contactKey: conversa.contactKey })).toBe("Olá!");
+        expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("5561999990001");
+    });
+    it("limparCampo: uma linha, sem controles, cortado em 80", () => {
+        expect(limparCampo("a" + String.fromCharCode(10) + "b" + String.fromCharCode(0) + "c")).toBe("a b c");
+        expect(limparCampo("x".repeat(200))?.length).toBe(80);
+        expect(limparCampo("   ")).toBeUndefined();
+        expect(limparCampo(null)).toBeUndefined();
     });
 });
 

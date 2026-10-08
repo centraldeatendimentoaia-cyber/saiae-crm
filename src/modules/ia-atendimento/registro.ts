@@ -9,6 +9,7 @@ import { criarControleLimite, maxRespostasDia, prismaConsumo } from "./consumo";
 import { criarAvisoLimite, criarChamadorDono, criarLiberador } from "./dono";
 import { LlmAnthropic } from "./llm";
 import { motorPadrao } from "./motor";
+import { prismaLeads } from "./vendas/lead";
 import { criarControleVendas, criarResponderVendas } from "./vendas/motor";
 import type { MotivoHumano } from "./vendas/ferramentas";
 import { VENDAS } from "./store";
@@ -105,6 +106,7 @@ export function criarMotorVendas(env: Record<string, string | undefined> = proce
         store: prismaStore,
         linkCadastro,
         chamarHumano: (conversa, motivo) => chamarDono({ ...conversa, lojaCodigo: VENDAS }, equipe, MOTIVO_HUMANO_PARA_DONO[motivo]),
+        lead: prismaLeads,
         limite,
         now: () => new Date(),
         logger,
