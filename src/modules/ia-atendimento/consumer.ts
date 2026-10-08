@@ -6,6 +6,7 @@ import type { InboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/inbound";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
 import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
+import { MAX_TEXTO } from "./constantes";
 import { extrairCodigoLoja } from "./loja";
 import { prismaStore, SEM_LOJA, type ConversaRef, type IaStore } from "./store";
 
@@ -55,7 +56,7 @@ export interface IaDeps {
 
 export const LIMITE_POR_MINUTO = 8;
 export const LIMITE_POR_HORA = 60;
-export const MAX_TEXTO = 1000;
+export { MAX_TEXTO };
 
 const TAG = "IaAtendimento";
 const DIA = 24 * 60 * 60 * 1000;
