@@ -23,7 +23,9 @@ O QUE FAZ (todos os planos)
 CARDÁPIO DIGITAL (link e QR code da loja)
 - O cliente final abre o link ou o QR code da loja, monta o carrinho e faz o pedido pelo celular.
 - No cardápio digital o cliente escolhe Retirada ou Entrega (conforme o que a loja ligou).
-- Pix online: o cliente paga o pedido pelo cardápio (o provedor de Pix hoje é o Mercado Pago). Pedido de Entrega no cardápio digital é pago na entrega; Pix online junto com Entrega ainda não está disponível e não se promete data.
+- Pix online: o cliente paga o pedido pelo cardápio (o provedor de Pix hoje é o Mercado Pago). Vale também para pedido de Entrega: dá para pagar com Pix online ou pagar na entrega, conforme a loja ligar.
+- Chamar o entregador: nos pedidos de Entrega, o dono chama o entregador (motoboy) pelo WhatsApp, direto pelo Saiaê.
+- Cadastro rápido do cliente: ao fechar o pedido, o cliente se identifica com o telefone e recebe um código no WhatsApp para confirmar (sem senha). Assim a loja reconhece quem já pediu.
 - Entrega com taxa por bairro cadastrada pelo dono. A loja pode não entregar em certos bairros.
 - Cupons de desconto: o dono cria o cupom e o cliente digita o código no cardápio digital. O desconto pode ser em percentual ou em valor fixo, com validade, limite total de usos, uma vez por cliente e pedido mínimo. O desconto vale só sobre os itens (nunca sobre a taxa de entrega) e um cupom por pedido. Cupom de 100% gera pedido grátis. A loja precisa ligar os cupons, e eles não valem para pedidos lançados no balcão.
 - Atendimento com IA no WhatsApp para tirar dúvidas dos clientes da loja (cardápio, preço, horário, entrega): só nas lojas que ligarem e ainda em teste fechado. Não prometa data de liberação.

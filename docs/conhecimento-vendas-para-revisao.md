@@ -11,7 +11,9 @@ Este é o resumo, em português simples, do que a atendente de vendas do Saiaê 
 | Atendimento | Mesa, Balcão, Retirada e Entrega; o dono liga/desliga cada um. No cardápio digital o cliente escolhe Retirada ou Entrega. |
 | Cozinha e senha | Cozinha em tempo real com cronômetro; senha com logo da loja, reinicia todo dia. |
 | Pagamentos registrados | Pix, dinheiro, débito e crédito. |
-| Cardápio digital + Pix | Link/QR code da loja; Pix online pelo Mercado Pago. Entrega no cardápio é paga **na entrega** (Pix online com entrega ainda não existe, sem data). |
+| Cardápio digital + Pix | Link/QR code da loja; Pix online pelo Mercado Pago, **inclusive em pedido de Entrega** (ou pagar na entrega). |
+| Chamar o entregador | Nos pedidos de Entrega, o dono chama o entregador (motoboy) pelo WhatsApp, direto pelo Saiaê. |
+| Cadastro do cliente | Ao fechar o pedido, o cliente se identifica pelo telefone e confirma com um código recebido no WhatsApp (sem senha). |
 | Entrega | Taxa por bairro cadastrada pelo dono; a loja pode não entregar em certos bairros. |
 | Cupons | O cliente digita o código no cardápio digital; % ou valor fixo; validade, limite total, uma vez por cliente, pedido mínimo; vale só sobre os itens (nunca a taxa de entrega); um por pedido; 100% = pedido grátis; a loja precisa ligar. |
 | Impressão | Comanda impressa (automática para pedido do cardápio digital + botão na cozinha); impressora Bluetooth 58/80 mm, **só no app Android**. |
@@ -29,9 +31,9 @@ Estoque completo (compras, ficha técnica), caixa avançado, app do iPhone na lo
 ## O que ela nunca faz
 Fechar venda, cobrar, pedir dados de pagamento, prometer desconto ou prazo, mandar qualquer link que não seja o de cadastro (`IA_VENDAS_LINK_CADASTRO`).
 
-## Pontos para você confirmar
-1. **NFC-e**: no CLAUDE.md está "nenhuma nota emitida de verdade ainda" (2026-09-26). Se já houve nota real em produção, podemos trocar "em validação" por algo mais firme.
-2. **Pix com entrega "em breve"**: está assim no CLAUDE.md; se já saiu, é só atualizar essa linha.
-3. **Mercado Pago** como provedor de Pix: citei porque é o único publicado hoje. Prefere não citar?
-4. **Preços e planos**: copiados do `planos.ts` (hoje: Essencial R$ 57,90 e Pro R$ 87,90). Confira se não mudaram.
-5. **Cadastro do cliente por telefone com código no WhatsApp** (perfil do cliente final): ficou **de fora** porque não confirmei se já está no ar. Se estiver, me diga e eu incluo.
+## Respostas do João (2026-10-09), já aplicadas no texto
+1. **NFC-e**: sem resposta → continua "em validação" (ela chama uma pessoa se perguntarem de nota fiscal).
+2. **Pix com entrega**: já funciona, com chamada para o motoboy → incluído.
+3. **Mercado Pago**: pode citar → mantido.
+4. **Preços e planos**: estão certos (Essencial R$ 57,90, Pro R$ 87,90) → mantidos.
+5. **Cadastro do cliente por telefone com código no WhatsApp**: já funciona → incluído.
