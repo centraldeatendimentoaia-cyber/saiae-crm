@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } })); // evita iniciar o agendador ao importar
 
-import { createOrderNotifier, templateFor, barracaName, TEMPLATE_LANGUAGE, type NotifierDeps } from "./order-notifier";
+import { createOrderNotifier, templateFor, barracaName, normalizeBrPhone, TEMPLATE_LANGUAGE, type NotifierDeps } from "./order-notifier";
 import { BoundedTtlMap } from "./state";
 import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
 import type { ComandaEvent } from "./schema";
@@ -13,7 +13,7 @@ const PEDIDO = "11111111-1111-4111-8111-111111111111";
 
 const ev = (type: ComandaEvent["type"], data: Record<string, unknown> = {}, over: Partial<ComandaEvent> = {}): ComandaEvent => ({
     id: crypto.randomUUID(), type, version: 1, occurred_at: "2026-10-08T12:00:00Z", barraca_id: BARRACA, sequence: 1,
-    data: { pedido_id: PEDIDO, senha: 42, status: "a_fazer", tipo_atendimento: "retirada", cliente: { nome: "Maria Teste", telefone: "5561999990001" }, ...data },
+    data: { pedido_id: PEDIDO, senha: 42, status: "a_fazer", tipo_atendimento: "retirada", cliente: { nome: "Maria Teste", telefone: "61999990001" }, ...data },
     ...over,
 });
 
@@ -97,12 +97,15 @@ describe("quando NÃO envia", () => {
         ["cliente sem telefone", { cliente: { nome: "Maria" } }],
         ["telefone nulo", { cliente: { nome: "Maria", telefone: null } }],
         ["telefone curto demais", { cliente: { nome: "Maria", telefone: "123" } }],
+        ["9 dígitos (sem DDD)", { cliente: { nome: "Maria", telefone: "999990001" } }],
+        ["14 dígitos", { cliente: { nome: "Maria", telefone: "55619999900011" } }],
+        ["12 dígitos que não começam com 55", { cliente: { nome: "Maria", telefone: "446199990001" } }],
         ["telefone que não é número (ex.: BSUID)", { cliente: { nome: "Maria", telefone: "BR.abcdefghij" } }],
     ])("%s", async (_n, data) => {
         const { run, sendTemplate, logger } = setup();
         await run(ev("order.created", data));
         expect(sendTemplate).not.toHaveBeenCalled();
-        expect(logger.info.mock.calls.join()).toContain("sem telefone");
+        expect(logger.info.mock.calls.join()).toContain("telefone ausente ou inválido");
     });
     it("cliente descadastrado: respeita o opt-out", async () => {
         const isOptedOut = vi.fn().mockResolvedValue(true);
@@ -229,5 +232,47 @@ describe("barraca_nome vindo no evento", () => {
         const { run, logger } = setup();
         await run(ev("order.created", { barraca_nome: "Barraca Secreta" }));
         expect(JSON.stringify([logger.info.mock.calls, logger.warn.mock.calls])).not.toContain("Secreta");
+    });
+});
+
+describe("telefone nacional do contrato → E.164 brasileiro", () => {
+    it.each([
+        ["61999990001", "5561999990001"],
+        ["6133445566", "556133445566"],
+        ["5561999990001", "5561999990001"],
+        ["556133445566", "556133445566"],
+        ["+55 (61) 99999-0001", "5561999990001"],
+        ["(61) 99999-0001", "5561999990001"],
+        ["61 99999-0001", "5561999990001"],
+    ])("%s → %s", (entrada, esperado) => {
+        expect(normalizeBrPhone(entrada)).toBe(esperado);
+    });
+    it.each(["999990001", "123", "", "BR.13491208655302741918", "BR.1349120865", "446199990001", "55619999900011", "abc61999990001"])("%j → null", (entrada) => {
+        expect(normalizeBrPhone(entrada)).toBeNull();
+    });
+    it.each([null, undefined, 61999990001, {}, []])("valor que não é texto (%j) → null", (entrada) => {
+        expect(normalizeBrPhone(entrada)).toBeNull();
+    });
+    it("o evento com telefone nacional envia para 55+telefone", async () => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.created", { cliente: { nome: "x", telefone: "61999990001" } }));
+        expect(sendTemplate.mock.calls[0][0]).toBe("5561999990001");
+    });
+    it.each(["5561999990001", "+55 (61) 99999-0001"])("telefone já com país (%s) também envia para 5561999990001", async (tel) => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.created", { cliente: { nome: "x", telefone: tel } }));
+        expect(sendTemplate.mock.calls[0][0]).toBe("5561999990001");
+    });
+    it("o opt-out é consultado com o número JÁ normalizado", async () => {
+        const isOptedOut = vi.fn().mockResolvedValue(false);
+        const { run } = setup({ isOptedOut });
+        await run(ev("order.created", { cliente: { nome: "x", telefone: "61999990001" } }));
+        expect(isOptedOut).toHaveBeenCalledWith("pilot", "5561999990001@s.whatsapp.net");
+    });
+    it("a mesma pessoa com e sem 55 em eventos diferentes não recebe o mesmo template duas vezes? (a chave de dedupe é o pedido, não o telefone)", async () => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.created", { cliente: { nome: "x", telefone: "61999990001" } }));
+        await run(ev("order.created", { cliente: { nome: "x", telefone: "5561999990001" } }, { sequence: 2 }));
+        expect(sendTemplate).toHaveBeenCalledTimes(1);
     });
 });

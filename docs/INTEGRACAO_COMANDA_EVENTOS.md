@@ -113,7 +113,11 @@ Os dois templates continuam previstos no código (`TemplateName`) para quando ho
 
 Variáveis (Railway; nunca no repositório): `COMANDA_NOTIFY_TEMPLATES` (`on` liga), `COMANDA_BARRACA_NOMES` (reserva) e as do piloto da Cloud API (`WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`). O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
 
-Regras: telefone ausente ou fora de 8 a 15 dígitos = não envia; cliente descadastrado (opt-out) = não envia; falha ao consultar o opt-out = não envia; o mesmo template do mesmo pedido não sai duas vezes; **falha de envio nunca bloqueia nem altera a resposta ao evento** (o consumidor roda depois do 200). Log só com contagens e códigos de erro da Meta.
+**Telefone:** o contrato manda o telefone **nacional** em `cliente.telefone` (10 ou 11 dígitos, **sem** o 55, ex. `61999990001`), e o CRM **acrescenta o país** antes de enviar (a Meta recusa sem DDI). Aceita também com 55 e com máscara (`+55 (61) 99999-0001`). Normalização: 10 ou 11 dígitos → prefixa 55; 12 ou 13 dígitos começando com 55 → mantém; qualquer outro tamanho (9 dígitos, BSUID, estrangeiro) → **não envia** ("telefone ausente ou inválido"). A consulta de opt-out usa o número **já normalizado**.
+
+**`cliente.consentimento_contato`:** o CRM **ignora** esse campo nos avisos de pedido. A Comanda o preenche pelo consentimento de promoções, e o aviso de pedido é **transacional** (o cliente acabou de pedir). Descadastros (opt-out) continuam sendo respeitados. Se o dono quiser pular quando for explicitamente `false`, é uma linha, mas muda o comportamento: decisão dele.
+
+Regras: telefone ausente ou inválido = não envia; cliente descadastrado (opt-out) = não envia; falha ao consultar o opt-out = não envia; o mesmo template do mesmo pedido não sai duas vezes; **falha de envio nunca bloqueia nem altera a resposta ao evento** (o consumidor roda depois do 200). Log só com contagens e códigos de erro da Meta.
 
 ### Limites aceitos no piloto
 - **Idempotência em memória** (a mesma do restante da rota; dedupe por `id` do evento mantida). A Comanda reenvia com retry; o risco é, **depois de um reinício**, um evento reenviado repetir o aviso.

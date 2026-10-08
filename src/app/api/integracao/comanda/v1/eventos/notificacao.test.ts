@@ -26,7 +26,7 @@ const PHONE = "5561999990001";
 const pedido = (over: Record<string, unknown> = {}) => ({
     pedido_id: crypto.randomUUID(), senha: 42, status: "a_fazer", tipo_atendimento: "retirada",
     itens: [{ nome: "Açaí 300ml", quantidade: 1, preco_centavos: 1600 }], total_centavos: 1600,
-    cliente: { nome: "Maria Teste", telefone: PHONE, consentimento_contato: true }, ...over,
+    cliente: { nome: "Maria Teste", telefone: PHONE.slice(2), consentimento_contato: true }, ...over,
 });
 
 function send(type: string, data: Record<string, unknown>, sequence = 1) {

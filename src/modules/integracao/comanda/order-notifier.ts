@@ -63,6 +63,22 @@ export function barracaName(barracaId: string, env: Record<string, string | unde
     return "a loja";
 }
 
+/**
+ * Telefone do contrato = NACIONAL (a Comanda manda sem o país, ex. 61999990001), com ou sem 55 e com ou sem
+ * máscara. Devolve E.164 brasileiro só com dígitos (5561999990001), ou null se não der para ter certeza:
+ *   10 ou 11 dígitos              → prefixa 55
+ *   12 ou 13 dígitos começando 55 → mantém
+ *   qualquer outro tamanho (ex. 9 dígitos, BSUID, número estrangeiro) → null (não envia)
+ */
+export function normalizeBrPhone(raw: unknown): string | null {
+    if (typeof raw !== "string") return null;
+    if (/[A-Za-z]/.test(raw)) return null; // BSUID (ex.: BR.123...) e texto com letras não são telefone
+    const d = raw.replace(/\D/g, "");
+    if (d.length === 10 || d.length === 11) return "55" + d;
+    if ((d.length === 12 || d.length === 13) && d.startsWith("55")) return d;
+    return null;
+}
+
 /** Parâmetro de template: sem quebra de linha nem espaços repetidos (a Meta recusa) e nunca vazio. */
 function param(value: unknown, fallback: string): string {
     const t = typeof value === "string" || typeof value === "number" ? String(value).replace(/\s+/g, " ").trim() : "";
@@ -99,9 +115,9 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
         if (!template) return;
 
         const data = event.data as { pedido_id?: unknown; senha?: unknown; cliente?: { nome?: unknown; telefone?: unknown } | null };
-        const phone = typeof data.cliente?.telefone === "string" ? data.cliente.telefone.replace(/\D/g, "") : "";
-        if (phone.length < 8 || phone.length > 15) {
-            deps.logger.info(TAG, `${template} pulado: sem telefone`);
+        const phone = normalizeBrPhone(data.cliente?.telefone);
+        if (!phone) {
+            deps.logger.info(TAG, `${template} pulado: telefone ausente ou inválido`);
             return;
         }
 
