@@ -41,4 +41,4 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push && (if [ -n \"$ADMIN_EMAIL\" ] && [ -n \"$ADMIN_PASSWORD\" ]; then node scripts/setup-admin.js \"$ADMIN_EMAIL\" \"$ADMIN_PASSWORD\"; fi) && NODE_OPTIONS=\"--max-old-space-size=${NODE_MAX_MB:-512}\" node node_modules/tsx/dist/cli.mjs src/server/index.ts"]
+CMD ["sh", "-c", "(if [ \"${PRISMA_DB_PUSH:-on}\" != \"off\" ]; then npx prisma db push; else echo 'PRISMA_DB_PUSH=off: schema NAO aplicado neste start'; fi) && (if [ -n \"$ADMIN_EMAIL\" ] && [ -n \"$ADMIN_PASSWORD\" ]; then node scripts/setup-admin.js \"$ADMIN_EMAIL\" \"$ADMIN_PASSWORD\"; fi) && NODE_OPTIONS=\"--max-old-space-size=${NODE_MAX_MB:-512}\" node node_modules/tsx/dist/cli.mjs src/server/index.ts"]
