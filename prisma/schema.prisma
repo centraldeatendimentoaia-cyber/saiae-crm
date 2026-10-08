@@ -518,3 +518,51 @@ model OptOut {
 
   @@unique([sessionId, phoneKey])
 }
+
+// ---------------------------------------------------------------------------------------------
+// Atendente de IA no WhatsApp (fase 1). SO TABELAS NOVAS: nada existente muda.
+// ATENCAO: o CRM roda `prisma db push` em todo start; mergear esta mudanca e publicar CRIA ESTAS TABELAS
+// no banco de producao. Ver docs/CRM_SCHEMA_APLICA_NO_MERGE.md.
+// ---------------------------------------------------------------------------------------------
+
+/// Uma conversa por (loja, cliente). `contactKey` = telefone com DDI, ou BSUID se o telefone estiver oculto.
+model IaConversa {
+  id              String       @id @default(cuid())
+  lojaCodigo      String // codigo de 6 caracteres do link da loja (ia_codigo da Comanda)
+  contactKey      String
+  estado          String       @default("ia") // ia | humano
+  pausadaAte      DateTime? // humano: volta sozinha a ia depois disso
+  ultimaMensagemEm DateTime    @default(now())
+  criadoEm        DateTime     @default(now())
+
+  mensagens       IaMensagem[]
+
+  @@unique([lojaCodigo, contactKey])
+  @@index([contactKey, ultimaMensagemEm])
+}
+
+/// Mensagens da conversa. Retencao maxima de 30 dias (limpeza diaria). `providerMessageId` (wamid) garante
+/// idempotencia: a Meta reenvia o mesmo webhook.
+model IaMensagem {
+  id                String     @id @default(cuid())
+  conversaId        String
+  providerMessageId String     @unique
+  direcao           String // in | out
+  texto             String     @db.Text
+  criadoEm          DateTime   @default(now())
+
+  conversa          IaConversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  @@index([conversaId, criadoEm])
+  @@index([criadoEm])
+}
+
+/// Conversas contadas por loja e mes (limite do plano). `mes` = AAAA-MM.
+model IaConsumo {
+  id         String @id @default(cuid())
+  lojaCodigo String
+  mes        String
+  conversas  Int    @default(0)
+
+  @@unique([lojaCodigo, mes])
+}
