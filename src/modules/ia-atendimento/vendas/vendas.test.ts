@@ -194,6 +194,7 @@ describe("prompt de vendas", () => {
         for (const t of ["Mesa, Balcão, Retirada e Entrega", "Cupons de desconto", "pedido grátis", "taxa de entrega", "FocusNFe", "app Android", "sem internet", "LGPD", "teste fechado"]) expect(CONHECIMENTO_SAIAE).toContain(t);
         for (const t of ["Chamar o entregador", "código no WhatsApp", "Pix online"]) expect(CONHECIMENTO_SAIAE).toContain(t);
         expect(CONHECIMENTO_SAIAE).not.toContain("ainda não está disponível e não se promete data");
+        for (const t of ["OFERTA DO PANFLETO", "30 DIAS GRÁTIS", "MAIS 30 dias grátis do plano Essencial", "a equipe confirma", "feedback_bonus", "teste padrão de 7 dias"]) expect(CONHECIMENTO_SAIAE).toContain(t);
         expect(CONHECIMENTO_SAIAE).toContain("AINDA NÃO EXISTE");
         expect(CONHECIMENTO_SAIAE).toMatch(/em validação/);
         expect(CONHECIMENTO_SAIAE).toMatch(/não se promete data|Não prometa data/);

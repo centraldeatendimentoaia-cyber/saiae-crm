@@ -7,6 +7,7 @@ import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/i
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
 import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
 import { MAX_TEXTO } from "./constantes";
+import { INTENCAO_VENDAS } from "./intencao";
 import { extrairCodigoLoja } from "./loja";
 import { prismaStore, SEM_LOJA, VENDAS, type ConversaRef, type IaStore } from "./store";
 
@@ -70,8 +71,7 @@ export const MSG_VOLTAR = "Que bom ter você de volta! Como posso ajudar?";
 
 const TIPOS_TEXTO = new Set(["text", "button_reply", "list_reply"]);
 
-/** Texto de quem veio do panfleto ("Oi! Quero ser testador do sai aê (vi no panfleto)"): vai para a atendente de vendas. */
-export const INTENCAO_VENDAS = /panfleto|testador/i;
+export { INTENCAO_VENDAS };
 
 export function criarDepsPadrao(over: Partial<IaDeps> = {}): IaDeps {
     return {

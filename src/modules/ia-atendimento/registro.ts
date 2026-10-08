@@ -13,7 +13,7 @@ import { prismaLeads } from "./vendas/lead-store";
 import { criarControleVendas, criarResponderVendas } from "./vendas/motor";
 import type { MotivoHumano } from "./vendas/ferramentas";
 import { VENDAS } from "./store";
-import type { MotivoDono } from "./ferramentas";
+import type { MotivoAviso } from "./dono";
 import type { IaContextoAtivo } from "./comanda-contexto";
 import { IaWindowStore, prismaStore } from "./store";
 
@@ -63,11 +63,12 @@ export function criarMotor(env: Record<string, string | undefined> = process.env
     );
 }
 
-const MOTIVO_HUMANO_PARA_DONO: Record<MotivoHumano, MotivoDono> = {
+const MOTIVO_HUMANO_PARA_DONO: Record<MotivoHumano, MotivoAviso> = {
     pedido_humano: "pedido_humano",
     reclamacao: "reclamacao",
     fora_do_conhecimento: "nao_sei",
     negociacao: "pedido_humano",
+    feedback_bonus: "feedback_bonus",
 };
 
 /**

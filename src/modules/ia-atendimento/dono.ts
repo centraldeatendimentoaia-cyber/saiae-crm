@@ -21,11 +21,15 @@ export const MSG_IA_REATIVADA = "Pronto, a IA voltou a atender as conversas paus
 
 const TAG = "IaDono";
 
-const MOTIVOS: Record<MotivoDono, string> = {
+/** Motivos do chamar_dono das lojas + o aviso de feedback do panfleto (usado só pela atendente de vendas). */
+export type MotivoAviso = MotivoDono | "feedback_bonus";
+
+const MOTIVOS: Record<MotivoAviso, string> = {
     nao_sei: "dúvida que a IA não soube responder",
     reclamacao: "reclamação",
     assunto_sensivel: "assunto sensível",
     pedido_humano: "cliente pediu atendimento humano",
+    feedback_bonus: "FEEDBACK DO PANFLETO: confirmar e liberar +30 dias do Essencial",
 };
 
 /** Parâmetro de template: uma linha, sem espaços repetidos, nunca vazio. */
@@ -48,7 +52,7 @@ export interface DonoDeps {
 /** Devolve `(conversa, ctx, motivo) => avisou?`. true também quando a conversa já estava pausada (já foi avisado); "teto" = pausou sem avisar (teto diário); false = falhou. */
 export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "enviarTemplate" | "store">) {
     const deps: DonoDeps = { now: () => new Date(), logger: defaultLogger, ...over };
-    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoDono): Promise<boolean | "teto"> => {
+    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoAviso): Promise<boolean | "teto"> => {
         const agora = deps.now();
         if (pausadaAgora(conversa, agora)) return true;
         const dono = normalizeBrPhone(ctx.ia.whatsapp_dono);

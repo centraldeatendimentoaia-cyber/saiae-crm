@@ -7,6 +7,7 @@ import { filtrarSaida, MAX_HISTORICO, MAX_PASSOS, montarMensagens, MSG_FALHA } f
 import type { ConversaRef, IaStore } from "../store";
 import { executarFerramentaVendas, FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD, type AcoesVendas, type MotivoHumano } from "./ferramentas";
 import { origemDoTexto, type LeadStore } from "./lead";
+import { INTENCAO_VENDAS } from "../intencao";
 import { montarPromptVendasPartes } from "./prompt";
 
 /**
@@ -47,7 +48,8 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
             const mensagens = montarMensagens(hist, texto.slice(0, MAX_TEXTO));
-            const prompt = montarPromptVendasPartes({ nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out"), agora: deps.now() });
+            const prompt = montarPromptVendasPartes({ nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out"),
+                veioDoPanfleto: INTENCAO_VENDAS.test(texto) || hist.some((h) => h.direcao === "in" && INTENCAO_VENDAS.test(h.texto)), agora: deps.now() });
             const lead = deps.lead;
             const acoes: AcoesVendas = {
                 linkCadastro: deps.linkCadastro,

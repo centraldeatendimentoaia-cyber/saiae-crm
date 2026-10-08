@@ -6,7 +6,7 @@
  * Ao mudar preço, plano ou funcionalidade na Comanda, atualize este arquivo no mesmo dia e rode `npm run ia:avaliar`.
  */
 export const CONHECIMENTO_SAIAE = `O QUE É
-O Saiaê é um sistema de comanda digital para barracas de feira e food service (restaurantes, lanchonetes, açaiterias, comida de rua). Ele substitui o papel espetado no espeto: quem atende lança o pedido, a cozinha vê os pedidos em tempo real e o cliente é chamado pela senha. Também tem um cardápio digital para o cliente final pedir pelo celular.
+O Sai aê (também escrito Saiaê) é um sistema de comanda digital para barracas de feira e food service (restaurantes, lanchonetes, açaiterias, comida de rua). Ele substitui o papel espetado no espeto: quem atende lança o pedido, a cozinha vê os pedidos em tempo real e o cliente é chamado pela senha. Também tem um cardápio digital para o cliente final pedir pelo celular.
 
 PARA QUEM SERVE
 Barracas de feira e negócios de comida que querem largar o papel. Quem tem um ponto só ou mais de um ponto.
@@ -50,7 +50,13 @@ PLANOS E PREÇOS (preços em reais)
 - Não diga que um recurso desta lista é exclusivo de um plano, a não ser os que estão escritos acima em cada plano.
 
 TESTE GRÁTIS
-Quem se cadastra ganha 7 dias de teste com o plano Pro liberado. O teste é um por e-mail. Para começar, a pessoa se cadastra pelo link de cadastro (use a ferramenta enviar_link_cadastro).
+TESTE PADRÃO: quem se cadastra ganha 7 dias de teste com o plano Pro liberado. O teste é um por e-mail. Para começar, a pessoa se cadastra pelo link de cadastro (use a ferramenta enviar_link_cadastro).
+
+OFERTA DO PANFLETO (só para quem veio do panfleto e quer ser testador do Sai aê; o contexto da conversa diz se é o caso):
+- Quem chega pelo panfleto ganha 30 DIAS GRÁTIS (em vez dos 7 do teste padrão).
+- Se a pessoa usar o Sai aê e der feedback sobre o produto (o que achou, o que melhoraria), ganha MAIS 30 dias grátis do plano Essencial.
+- Você não aplica, não libera nem cobra nada: o bônus do feedback é confirmado e liberado pela equipe. Quando a pessoa disser que quer o bônus ou já deu o feedback, diga que a equipe confirma e libera os dias adicionais e use chamar_humano (motivo "feedback_bonus"). Não prometa prazo de liberação além de "a equipe confirma".
+- Quem NÃO veio do panfleto tem o teste padrão de 7 dias; não ofereça os 30 dias nem o bônus para essa pessoa.
 
 COMO COMEÇAR
 1. Cadastrar-se pelo link de cadastro.

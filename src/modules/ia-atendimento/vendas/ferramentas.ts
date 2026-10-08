@@ -7,7 +7,7 @@ import { limparCampo, type CamposLead } from "./lead";
  * (IA_VENDAS_LINK_CADASTRO), nunca de argumento do modelo; nenhuma ferramenta cobra, cria conta ou altera dado.
  */
 
-export const MOTIVOS_HUMANO = ["pedido_humano", "reclamacao", "fora_do_conhecimento", "negociacao"] as const;
+export const MOTIVOS_HUMANO = ["pedido_humano", "reclamacao", "fora_do_conhecimento", "negociacao", "feedback_bonus"] as const;
 export type MotivoHumano = (typeof MOTIVOS_HUMANO)[number];
 
 export interface AcoesVendas {
@@ -26,7 +26,7 @@ export const FERRAMENTAS_VENDAS: DefinicaoFerramenta[] = [
     },
     {
         nome: "chamar_humano",
-        descricao: "Passa a conversa para uma pessoa da equipe do Saiaê. Use quando a pessoa pedir atendente, reclamar, pedir negociação/desconto/demonstração, ou perguntar algo que não está no conhecimento.",
+        descricao: "Passa a conversa para uma pessoa da equipe do Saiaê. Use quando a pessoa pedir atendente, reclamar, pedir negociação/desconto/demonstração, ou perguntar algo que não está no conhecimento. Use o motivo feedback_bonus quando alguém do panfleto der feedback do produto ou pedir o bônus de +30 dias: a equipe confirma e libera.",
         esquema: {
             type: "object",
             properties: { motivo: { type: "string", enum: [...MOTIVOS_HUMANO] } },
