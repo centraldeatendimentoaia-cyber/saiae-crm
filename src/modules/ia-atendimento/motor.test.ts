@@ -114,10 +114,10 @@ describe("motor", () => {
     it("primeira resposta pede apresentação; depois não", async () => {
         const a = montar([{ texto: "ok", chamadas: [] }]);
         await a.rodar();
-        expect(a.entradas[0].sistema).toContain("PRIMEIRA resposta");
+        expect(a.entradas[0].sistemaVariavel).toContain("PRIMEIRA resposta");
         const b = montar([{ texto: "ok", chamadas: [] }], { hist: [{ direcao: "in", texto: "oi" }, { direcao: "out", texto: "Olá!" }, { direcao: "in", texto: "e o horário?" }] });
         await b.rodar("e o horário?");
-        expect(b.entradas[0].sistema).toContain("Você já se apresentou");
+        expect(b.entradas[0].sistemaVariavel).toContain("Você já se apresentou");
     });
 
     it("remove links que não são do cardápio da loja", async () => {

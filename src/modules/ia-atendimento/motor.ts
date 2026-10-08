@@ -4,7 +4,7 @@ import { MAX_TEXTO } from "./constantes";
 import type { Responder } from "./consumer";
 import { executarFerramenta, FERRAMENTAS, type AcoesFerramentas } from "./ferramentas";
 import type { Llm, MensagemLlm } from "./llm";
-import { montarPromptSistema } from "./prompt";
+import { montarPromptPartes } from "./prompt";
 import type { ConversaRef, IaStore } from "./store";
 
 /**
@@ -14,7 +14,7 @@ import type { ConversaRef, IaStore } from "./store";
  */
 
 export const MAX_PASSOS = 4;
-export const MAX_HISTORICO = 12;
+export const MAX_HISTORICO = 8;
 export const MAX_RESPOSTA = 900;
 export const mensagemSoLink = (link: string) => `No momento eu só consigo te passar o link do cardápio, onde você faz seu pedido: ${link}`;
 export const MSG_FALHA = "Desculpe, não consegui responder agora. Pode tentar de novo em instantes?";
@@ -88,11 +88,11 @@ export function criarResponder(deps: MotorDeps): Responder {
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
             const mensagens = montarMensagens(hist, texto);
-            const sistema = montarPromptSistema(ctx, { nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out") });
+            const prompt = montarPromptPartes(ctx, { nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out") });
             const acoes = deps.acoes(conversa, ctx);
 
             for (let passo = 0; passo < MAX_PASSOS; passo++) {
-                const saida = await deps.llm.responder({ sistema, mensagens, ferramentas: FERRAMENTAS });
+                const saida = await deps.llm.responder({ sistema: prompt.estavel, sistemaVariavel: prompt.variavel, mensagens, ferramentas: FERRAMENTAS });
                 if (saida.chamadas.length === 0) {
                     const final = saida.texto ? filtrarSaida(saida.texto, ctx.loja.link_cardapio) : "";
                     if (!final) {
