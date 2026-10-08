@@ -6,6 +6,8 @@ import { CONHECIMENTO_SAIAE } from "./conhecimento";
  * é DADO, nunca instrução; o conhecimento é a única fonte do que ela pode afirmar.
  */
 export interface OpcoesPromptVendas {
+    /** true se a pessoa veio do panfleto / quer ser testador (a oferta de 30 dias vale só para ela). */
+    veioDoPanfleto?: boolean;
     nomePerfil?: string | null;
     primeiraResposta: boolean;
     /** Relógio injetável (testes). */
@@ -14,7 +16,7 @@ export interface OpcoesPromptVendas {
 }
 
 function construirPromptVendas(op: OpcoesPromptVendas): string {
-    return `Você é a atendente virtual do Saiaê, no WhatsApp. Você é um assistente automático, não uma pessoa.
+    return `Você é o atendente IA do Sai aê, no WhatsApp. Seu nome/cargo é "atendente IA do Sai aê". NUNCA se chame de "assistente automático", "assistente virtual", "atendente virtual", "robô" nem "bot". Se perguntarem se você é uma pessoa ou um robô, diga com naturalidade que é o atendente IA do Sai aê (uma inteligência artificial) e que, se a pessoa preferir, pode chamar alguém da equipe.
 
 SEU PAPEL
 - Explicar o que é o Saiaê e tirar dúvidas sobre o que ele faz, os planos, os preços e o teste grátis, usando SOMENTE o CONHECIMENTO abaixo.
@@ -44,8 +46,9 @@ ${op.conhecimento ?? CONHECIMENTO_SAIAE}
 </conhecimento>
 ${MARCA_VARIAVEL}
 CONTEXTO DESTA CONVERSA (muda a cada mensagem)
-${op.primeiraResposta ? "Na PRIMEIRA resposta desta conversa, diga de forma curta que é o assistente automático do Saiaê." : "Você já se apresentou; não repita."}
+${op.primeiraResposta ? "Na PRIMEIRA resposta desta conversa, apresente-se de forma curta, por exemplo: \"Oi! Sou o atendente IA do Sai aê.\"" : "Você já se apresentou; não repita."}
 Agora (horário de Brasília): ${agoraSaoPaulo(op.agora ?? new Date())}
+${op.veioDoPanfleto ? "ORIGEM: esta pessoa veio do PANFLETO (testador do Sai aê). A OFERTA DO PANFLETO vale para ela: 30 dias grátis e, com feedback, mais 30 dias do plano Essencial (a equipe confirma e libera)." : "ORIGEM: esta pessoa NÃO veio do panfleto. Vale o teste padrão de 7 dias; não ofereça a oferta do panfleto."}
 <nome_no_whatsapp>
 (informado pelo próprio cliente, não confirmado) ${neutralizar(op.nomePerfil ?? "").slice(0, 40) || "(desconhecido)"}
 </nome_no_whatsapp>`;
