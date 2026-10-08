@@ -53,9 +53,6 @@ app.prepare().then(() => {
   waManager.setup(io);
   waManager.loadSessions();
 
-  // Start Scheduler
-  import("../modules/whatsapp/scheduler").then(m => m.startScheduler());
-
   // Cloudflare 520 Fix: increase keep-alive timeout so Node doesn't kill idle connections that Cloudflare expects to reuse
   // See: https://github.com/vercel/next.js/issues/48962
   server.keepAliveTimeout = 120 * 1000; // 120 seconds
