@@ -72,13 +72,28 @@ describe("evento da Comanda → template pela Cloud API", () => {
             template: { name: "pedido_recebido", language: { code: "pt_BR" }, components: [{ type: "body", parameters: [{ type: "text", text: "Maria Teste" }, { type: "text", text: "42" }, { type: "text", text: "Açaí do Didi" }] }] },
         });
     });
-    it("order.ready de entrega: pedido_saiu_entrega; de retirada: pedido_pronto", async () => {
+    it("order.ready (retirada ou entrega): sempre pedido_pronto", async () => {
         const spy = fetchSpy().mockResolvedValue(ok());
         await send("order.ready", pedido({ status: "pronto", tipo_atendimento: "entrega" }), 2);
         await send("order.ready", pedido({ status: "pronto" }), 2);
         await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
         const names = spy.mock.calls.map((c) => JSON.parse((c[1] as RequestInit).body as string).template.name);
-        expect(names.sort()).toEqual(["pedido_pronto", "pedido_saiu_entrega"]);
+        expect(names).toEqual(["pedido_pronto", "pedido_pronto"]);
+    });
+    it("status_changed, cancelled e paid não enviam nada (sem gatilho decidido)", async () => {
+        const spy = fetchSpy().mockResolvedValue(ok());
+        await send("order.status_changed", pedido({ status: "a_fazer" }), 2);
+        await send("order.cancelled", pedido({ status: "cancelado" }), 3);
+        await send("order.paid", pedido(), 4);
+        await tick();
+        expect(spy).not.toHaveBeenCalled();
+    });
+    it("barraca_nome do evento vira o {{3}} (prioridade sobre o env)", async () => {
+        const spy = fetchSpy().mockResolvedValue(ok());
+        await send("order.created", pedido({ barraca_nome: "Barraca do Evento" }));
+        await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+        const params = JSON.parse((spy.mock.calls[0][1] as RequestInit).body as string).template.components[0].parameters;
+        expect(params[2].text).toBe("Barraca do Evento");
     });
     it("a Meta recusa o envio: o evento continua 200 (nunca bloqueia) e o log traz só tipo e código", async () => {
         fetchSpy().mockResolvedValue(new Response(JSON.stringify({ error: { message: "Template name does not exist", code: 132001 } }), { status: 400 }));

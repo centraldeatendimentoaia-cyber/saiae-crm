@@ -34,12 +34,12 @@ function setup(over: Partial<NotifierDeps> = {}) {
 describe("templateFor", () => {
     it.each([
         ["order.created", {}, "pedido_recebido"],
-        ["order.status_changed", { status: "a_fazer" }, "pedido_em_preparo"],
+        ["order.status_changed", { status: "a_fazer" }, null], // dispararia também no "Voltar"
         ["order.status_changed", { status: "pronto" }, null],
         ["order.status_changed", { status: "entregue" }, null],
         ["order.ready", { tipo_atendimento: "retirada" }, "pedido_pronto"],
         ["order.ready", { tipo_atendimento: "mesa" }, "pedido_pronto"],
-        ["order.ready", { tipo_atendimento: "entrega" }, "pedido_saiu_entrega"],
+        ["order.ready", { tipo_atendimento: "entrega" }, "pedido_pronto"], // pronto na entrega = pronto para o entregador retirar
         ["order.paid", {}, null],
         ["order.cancelled", {}, null],
         ["customer.created", {}, null],
@@ -143,10 +143,10 @@ describe("repetição e falhas", () => {
     it("templates diferentes do mesmo pedido saem, cada um uma vez", async () => {
         const { run, sendTemplate } = setup();
         await run(ev("order.created"));
-        await run(ev("order.status_changed", { status: "a_fazer" }));
+        await run(ev("order.status_changed", { status: "a_fazer" })); // sem gatilho
         await run(ev("order.ready"));
         await run(ev("order.ready"));
-        expect(sendTemplate.mock.calls.map((c) => c[1].name)).toEqual(["pedido_recebido", "pedido_em_preparo", "pedido_pronto"]);
+        expect(sendTemplate.mock.calls.map((c) => c[1].name)).toEqual(["pedido_recebido", "pedido_pronto"]);
     });
     it("pedidos e barracas diferentes são independentes", async () => {
         const { run, sendTemplate } = setup();
@@ -199,5 +199,35 @@ describe("barracaName", () => {
         expect(barracaName(BARRACA, { COMANDA_BARRACA_NOMES: "{nao json" })).toBe("a loja");
         expect(barracaName("outra", { COMANDA_BARRACA_NOMES: JSON.stringify({ [BARRACA]: "X" }) })).toBe("a loja");
         expect(barracaName(BARRACA, { COMANDA_BARRACA_NOMES: JSON.stringify({ [BARRACA]: 123 }) })).toBe("a loja");
+    });
+});
+
+describe("barraca_nome vindo no evento", () => {
+    it("tem prioridade sobre o env", async () => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.created", { barraca_nome: "Barraca do Evento" }));
+        expect(sendTemplate.mock.calls[0][1].bodyParameters[2]).toBe("Barraca do Evento");
+    });
+    it("vazio, só espaços ou não-texto cai no env e depois em 'a loja'", async () => {
+        for (const v of ["", "   ", 123, null]) {
+            const { run, sendTemplate } = setup();
+            await run(ev("order.created", { barraca_nome: v }));
+            expect(sendTemplate.mock.calls[0][1].bodyParameters[2], String(v)).toBe("Açaí do Didi");
+        }
+        const semEnv = setup({ env: { COMANDA_NOTIFY_TEMPLATES: "on", WHATSAPP_CLOUD_SESSION_ID: "pilot" } });
+        await semEnv.run(ev("order.created", { barraca_nome: "" }));
+        expect(semEnv.sendTemplate.mock.calls[0][1].bodyParameters[2]).toBe("a loja");
+    });
+    it("sem quebra de linha e com tamanho limitado", async () => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.created", { barraca_nome: "Barraca\n\n  do   Didi " + "x".repeat(100) }));
+        const nome = sendTemplate.mock.calls[0][1].bodyParameters[2];
+        expect(nome).not.toMatch(/\n|\s{2}/);
+        expect(nome.length).toBeLessThanOrEqual(60);
+    });
+    it("o nome da barraca do evento também não vai para o log", async () => {
+        const { run, logger } = setup();
+        await run(ev("order.created", { barraca_nome: "Barraca Secreta" }));
+        expect(JSON.stringify([logger.info.mock.calls, logger.warn.mock.calls])).not.toContain("Secreta");
     });
 });

@@ -95,21 +95,29 @@ O CRM tem um consumidor registrado nesta rota (`order-notifier.ts`) que avisa o 
 
 **Desligado por padrão.** Sem `COMANDA_NOTIFY_TEMPLATES=on` nada é enviado: o merge e o deploy nunca disparam mensagem sozinhos.
 
+Status reais de pedido na Comanda: `a_fazer`, `pronto`, `entregue`, `cancelado` (não existe "em preparo"). A cozinha faz `a_fazer → pronto → entregue`; correções: `pronto → a_fazer` ("Voltar") e `entregue → pronto`.
+
 | Evento | Template (pt_BR; `{{1}}` nome, `{{2}}` senha, `{{3}}` barraca) |
 |---|---|
 | `order.created` | `pedido_recebido` |
-| `order.status_changed` com `status = a_fazer` | `pedido_em_preparo` |
-| `order.ready` (retirada, mesa, balcão) | `pedido_pronto` |
-| `order.ready` (entrega) | `pedido_saiu_entrega` |
-| `order.paid`, `order.cancelled`, `customer.*`, `coupon.*`, outros `status_changed` | nenhum aviso |
+| `order.ready` (todos os tipos, inclusive entrega) | `pedido_pronto` |
+| `order.status_changed`, `order.paid`, `order.cancelled`, `customer.*`, `coupon.*` | **nenhum aviso** |
 
-Variáveis (Railway; nunca no repositório): `COMANDA_NOTIFY_TEMPLATES` (`on` liga), `COMANDA_BARRACA_NOMES` (JSON `barraca_id → nome`, para o `{{3}}`; sem isso o texto vira "a loja"), além das do piloto da Cloud API (`WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`). O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
+**Sem gatilho de propósito (decisão da Comanda, 08/10/2026):**
+- `pedido_em_preparo`: a Comanda não tem evento confiável para isso. Mapear `status_changed → a_fazer` dispararia também no botão "Voltar".
+- `pedido_saiu_entrega`: `ready` em entrega significa pronto para o entregador retirar, não "saiu".
+- `order.cancelled`: ainda não há template aprovado.
+Os dois templates continuam previstos no código (`TemplateName`) para quando houver um gatilho confiável.
+
+**Nome da barraca (`{{3}}`), nesta ordem:** `data.barraca_nome` do evento (campo aditivo e opcional do contrato, enviado pela Comanda em todo `order.*`) → `COMANDA_BARRACA_NOMES` (JSON `barraca_id → nome`, reserva) → "a loja".
+
+Variáveis (Railway; nunca no repositório): `COMANDA_NOTIFY_TEMPLATES` (`on` liga), `COMANDA_BARRACA_NOMES` (reserva) e as do piloto da Cloud API (`WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`). O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
 
 Regras: telefone ausente ou fora de 8 a 15 dígitos = não envia; cliente descadastrado (opt-out) = não envia; falha ao consultar o opt-out = não envia; o mesmo template do mesmo pedido não sai duas vezes; **falha de envio nunca bloqueia nem altera a resposta ao evento** (o consumidor roda depois do 200). Log só com contagens e códigos de erro da Meta.
 
-Limites, ditos com franqueza:
-- **A idempotência é em memória** (a mesma do restante da rota): depois de um reinício, um evento reenviado pode gerar o mesmo aviso de novo.
-- **Sem retentativa:** se a Meta recusar, a Comanda já recebeu 200 e não reenvia; o aviso se perde (fica só o código no log).
-- **Opt-out por resposta "SAIR" na Cloud API ainda não é capturado:** o opt-out hoje só nasce no fluxo do Baileys. O consumo do webhook da Meta não grava descadastros. O aviso respeita descadastros existentes, mas esse ciclo não fecha sozinho.
-- **O contrato v1 não traz o nome da barraca** no evento: por isso `COMANDA_BARRACA_NOMES`. Sugestão à Comanda: campo aditivo `barraca_nome`.
-- `pedido_em_preparo` só sai em `status_changed` para `a_fazer`. Como o pedido já nasce `a_fazer`, o cliente recebe só `pedido_recebido` na criação; se quiserem "em preparo" separado, a Comanda precisa emitir esse evento (ou o CRM muda a regra).
+### Limites aceitos no piloto
+- **Idempotência em memória** (a mesma do restante da rota; dedupe por `id` do evento mantida). A Comanda reenvia com retry; o risco é, **depois de um reinício**, um evento reenviado repetir o aviso.
+- **Sem retentativa de envio:** se a Meta recusar, a Comanda já recebeu 200 e não reenvia; o aviso se perde (fica só o código no log).
+
+### Pendência, decisão do dono: opt-out por "SAIR" na Cloud API
+O webhook da Meta **ainda não grava descadastros**: o opt-out hoje só nasce no fluxo do Baileys. O aviso **respeita** descadastros que já existem, mas o ciclo não fecha sozinho para quem responde "SAIR" pela Cloud API. Fechar isso exige guardar o descadastro no banco (**mudança de schema**, que aplica no merge: ver `CRM_SCHEMA_APLICA_NO_MERGE.md`), por isso **não foi implementado**. Como os avisos ficam desligados por padrão, é aceitável para o piloto; o dono decide quando tratar.

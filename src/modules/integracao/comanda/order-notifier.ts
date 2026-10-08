@@ -13,12 +13,16 @@ import { BoundedTtlMap } from "./state";
  * LIGADO SÓ POR OPÇÃO: sem COMANDA_NOTIFY_TEMPLATES=on, não envia nada (padrão). Assim o merge e o
  * deploy nunca disparam mensagens reais sozinhos.
  *
- * Template ({{1}} nome, {{2}} senha, {{3}} barraca; idioma pt_BR):
- *   order.created                       → pedido_recebido
- *   order.status_changed (status a_fazer) → pedido_em_preparo
- *   order.ready, retirada/mesa/balcão   → pedido_pronto
- *   order.ready, entrega                → pedido_saiu_entrega
- * Outros eventos (paid, cancelled, customer.*, coupon.*) não geram aviso.
+ * Template ({{1}} nome, {{2}} senha, {{3}} barraca; idioma pt_BR), conforme os status REAIS da Comanda
+ * (a_fazer, pronto, entregue, cancelado; a cozinha faz a_fazer→pronto→entregue, com correções pronto→a_fazer
+ * e entregue→pronto):
+ *   order.created → pedido_recebido
+ *   order.ready   → pedido_pronto (todos os tipos, inclusive entrega: "pronto" na entrega = pronto para o
+ *                   entregador retirar, não "saiu")
+ * SEM gatilho por enquanto (decisão da Comanda, 08/10/2026): pedido_em_preparo e pedido_saiu_entrega (a Comanda
+ * não tem evento confiável para eles; "a_fazer" dispararia também no "Voltar"), order.cancelled (sem template
+ * aprovado), order.paid, status_changed, customer e coupon. Os dois templates seguem no tipo TemplateName
+ * para quando houver gatilho.
  *
  * Regras: telefone ausente = não envia; cliente descadastrado = não envia; falha de envio nunca vira
  * erro para a Comanda nem bloqueia o evento (o consumidor roda isolado, depois do 200); o mesmo
@@ -32,21 +36,23 @@ export const TEMPLATE_LANGUAGE = "pt_BR";
 
 /** Escolhe o template pelo evento. null = este evento não gera aviso. */
 export function templateFor(event: ComandaEvent): TemplateName | null {
-    const data = event.data as { status?: unknown; tipo_atendimento?: unknown };
     switch (event.type) {
         case "order.created":
             return "pedido_recebido";
-        case "order.status_changed":
-            return data.status === "a_fazer" ? "pedido_em_preparo" : null;
         case "order.ready":
-            return data.tipo_atendimento === "entrega" ? "pedido_saiu_entrega" : "pedido_pronto";
+            return "pedido_pronto";
         default:
             return null;
     }
 }
 
-/** Nome da barraca por env (o contrato v1 não traz o nome no evento): COMANDA_BARRACA_NOMES='{"<barraca_id>":"Açaí do Didi"}'. */
-export function barracaName(barracaId: string, env: Record<string, string | undefined> = process.env): string {
+/**
+ * Nome da barraca para o {{3}}. Ordem: `data.barraca_nome` do evento (campo aditivo do contrato, quando a Comanda
+ * passar a enviar), depois o env COMANDA_BARRACA_NOMES='{"<barraca_id>":"Açaí do Didi"}' (reserva), depois "a loja".
+ */
+export function barracaName(barracaId: string, env: Record<string, string | undefined> = process.env, fromEvent?: unknown): string {
+    const fromData = typeof fromEvent === "string" ? fromEvent.replace(/\s+/g, " ").trim() : "";
+    if (fromData) return fromData.slice(0, 60);
     try {
         const map = JSON.parse(env.COMANDA_BARRACA_NOMES ?? "{}") as Record<string, unknown>;
         const name = map[barracaId];
@@ -121,7 +127,7 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
             await provider.sendTemplate(phone, {
                 name: template,
                 languageCode: TEMPLATE_LANGUAGE,
-                bodyParameters: [param(data.cliente?.nome, "cliente"), param(data.senha, "-"), barracaName(event.barraca_id, deps.env)],
+                bodyParameters: [param(data.cliente?.nome, "cliente"), param(data.senha, "-"), barracaName(event.barraca_id, deps.env, (event.data as { barraca_nome?: unknown }).barraca_nome)],
             });
             deps.sent.set(key, true);
             deps.logger.info(TAG, `${template} enviado`);
