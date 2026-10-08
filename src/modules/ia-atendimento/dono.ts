@@ -128,7 +128,12 @@ export function criarAvisoLimite(enviarTemplate: DonoDeps["enviarTemplate"]) {
         await enviarTemplate(dono, {
             name: TEMPLATE_DONO,
             languageCode: "pt_BR",
-            bodyParameters: [param(ctx.loja.nome), motivo === "global" ? "limite diário de respostas da IA atingido; ela só envia o link do cardápio até amanhã" : "limite mensal de conversas da IA atingido; ela só envia o link do cardápio até o mês virar", "nenhum", "-"],
+            bodyParameters: [
+                param(ctx.loja.nome),
+                param(motivo === "global" ? "limite diário de respostas da IA atingido; ela só envia o link do cardápio até amanhã" : "limite mensal de conversas da IA atingido; ela só envia o link do cardápio até o mês virar", 200),
+                "nenhum",
+                "-",
+            ],
         });
     };
 }
