@@ -2,7 +2,10 @@ import { logger as defaultLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
 import type { IaContextoAtivo } from "./comanda-contexto";
+import { diaSaoPaulo } from "./dono";
 import type { ConversaRef } from "./store";
+
+export { diaSaoPaulo };
 
 /**
  * Consumo mensal da IA: uma "conversa" = um cliente (telefone) numa loja, dentro de uma janela de 24 h, contada no mês de
@@ -76,13 +79,6 @@ export const MAX_RESPOSTAS_DIA_PADRAO = 500;
 export function maxRespostasDia(env: Record<string, string | undefined>): number {
     const n = Number.parseInt(env.IA_MAX_RESPOSTAS_DIA ?? "", 10);
     return Number.isFinite(n) && n > 0 ? n : MAX_RESPOSTAS_DIA_PADRAO;
-}
-
-/** "AAAA-MM-DD" no fuso de São Paulo. */
-export function diaSaoPaulo(d: Date): string {
-    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
-    const v = (t: string) => p.find((x) => x.type === t)?.value;
-    return `${v("year")}-${v("month")}-${v("day")}`;
 }
 
 export function criarControleLimite(over: Partial<ControleLimiteDeps> & Pick<ControleLimiteDeps, "store" | "avisarDono">) {
