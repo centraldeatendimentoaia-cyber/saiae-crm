@@ -1,7 +1,7 @@
 import { MAX_TEXTO } from "../constantes";
 import type { Responder } from "../consumer";
 import type { ConsumoStore } from "../consumo";
-import { diaSaoPaulo } from "../dono";
+import { diaSaoPaulo } from "../tempo";
 import type { Llm } from "../llm";
 import { filtrarSaida, MAX_HISTORICO, MAX_PASSOS, montarMensagens, MSG_FALHA } from "../motor";
 import type { ConversaRef, IaStore } from "../store";
