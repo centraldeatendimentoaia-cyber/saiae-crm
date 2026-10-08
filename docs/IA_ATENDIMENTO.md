@@ -41,7 +41,7 @@ Ordem: mensagens de um lote são tratadas por timestamp. Uma mensagem com proble
 
 ## Pendências antes de abrir para clientes reais
 
-- **Apagar conversas da IA quando o cliente apaga os dados na Comanda**: rota assinada no CRM (mesma assinatura HMAC), chamada pela `cliente_apagar_dados` da Comanda, que remove `IaConversa`/`IaMensagem` daquele telefone. Ainda NÃO implementado (hoje só vale a retenção de 30 dias).
+- ~~Apagar conversas da IA quando o cliente apaga os dados na Comanda~~: feito, ver "Apagar conversas" abaixo.
 - Teto global de respostas por dia e limite diário de avisos ao responsável: implementados (ver abaixo).
 
 ## Teto global de custo (`IA_MAX_RESPOSTAS_DIA`)
@@ -57,3 +57,7 @@ A IA só avisa (e só aceita "LIBERAR") o número do responsável depois que ele
 3. Se o dono mudar o número na Comanda, a confirmação zera lá e a IA desliga.
 
 Observação do template `ia_chamar_dono`: o texto fixo termina com "responda aqui: LIBERAR #{{4}}". Para o pedido de confirmação o motivo ({{2}}) já diz para responder CONFIRMAR; se a Meta aprovar, vale considerar um template próprio só de confirmação para não misturar as instruções.
+
+## Apagar conversas (direito de apagar)
+
+`POST /api/integracao/comanda/v1/ia-apagar-conversas` com `{"codigo_loja":"ABC234","telefone":"5561988887777"}` (telefone só dígitos, 10 a 13), chamada pela `cliente_apagar_dados` da Comanda. Assinatura igual à do ia-contexto (`X-Saiae-Timestamp`, `X-Saiae-Signature = sha256=` + HMAC(`COMANDA_IA_SEGREDO`, `${timestamp}.${corpo}`), janela de 5 min, lista de segredos). Apaga as conversas da IA desse telefone nessa loja (as mensagens saem em cascata) e também a conversa "sem loja" do mesmo telefone, considerando as formas com e sem o 9º dígito. Idempotente: `200 {"apagadas": n}`, inclusive `0`; `401`/`400`/`413`/`503` sem corpo. Nunca registra telefone nem código da loja. Não apaga o opt-out ("PARAR") do número, que é uma proteção do cliente.
