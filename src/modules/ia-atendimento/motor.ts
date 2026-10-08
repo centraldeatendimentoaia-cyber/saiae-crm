@@ -32,9 +32,32 @@ export interface MotorDeps {
 
 const TAG = "IaMotor";
 
-/** Remove links que não sejam o do cardápio da loja: a IA nunca manda outro endereço. */
+const TLDS = "com|br|net|org|io|me|ly|gl|co|app|link|xyz|info|ai|tv|ws|gg|to|cc|us|site|online|store|shop|club|dev|page|live|be|im|is|in|ru|cn|top|vip|biz|click|fyi|run";
+const escapar = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const URL_COM_ESQUEMA = /https?:\/\/[^\s)>\]]+/gi;
+/** Endereço sem esquema: "www.x.com", "bit.ly/xyz", "wa.me/55..." ou "dominio.com". Não pega preços ("12.50") nem frases coladas ("pedido.Obrigado"). */
+const DOMINIO_SOLTO = new RegExp(`(?<![\\w@.-])(?:www\\.[a-z0-9-]+(?:\\.[a-z0-9-]+)+|[a-z0-9-]*[a-z][a-z0-9-]*(?:\\.[a-z0-9-]*[a-z][a-z0-9-]*)*\\.(?:${TLDS})(?![a-z0-9]))(?:[/?#][^\\s)>\\]]*)?`, "gi");
+
+function semLinks(trecho: string): string {
+    return trecho.replace(URL_COM_ESQUEMA, "").replace(DOMINIO_SOLTO, "");
+}
+
+/**
+ * Remove qualquer endereço que não seja o do cardápio da loja: com esquema (http/https), com www., encurtadores
+ * (bit.ly/xyz, wa.me/...) e domínios soltos. A IA nunca manda outro destino. O link do cardápio (com ou sem esquema)
+ * só vale inteiro: "link.evil.com" ou "link/../x" não passam.
+ */
 export function filtrarSaida(texto: string, linkCardapio: string): string {
-    const limpo = texto.replace(/https?:\/\/[^\s)>\]]+/gi, (u) => (u.startsWith(linkCardapio) ? u : "")).replace(/[ \t]{2,}/g, " ").trim();
+    const permitidos = [linkCardapio, linkCardapio.replace(/^https?:\/\//i, "")].map(escapar).join("|");
+    const lista = new RegExp(`(?:${permitidos})(?![\\w-]|\\.[\\w]|/\\.\\.)`, "gi");
+    let out = "";
+    let ultimo = 0;
+    for (const m of texto.matchAll(lista)) {
+        out += semLinks(texto.slice(ultimo, m.index)) + m[0];
+        ultimo = (m.index ?? 0) + m[0].length;
+    }
+    out += semLinks(texto.slice(ultimo));
+    const limpo = out.replace(/[ \t]{2,}/g, " ").trim();
     return limpo.length > MAX_RESPOSTA ? limpo.slice(0, MAX_RESPOSTA - 1).trimEnd() + "…" : limpo;
 }
 
