@@ -7,6 +7,8 @@ import { NextRequest } from "next/server";
 const { logger, auth } = vi.hoisted(() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, auth: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logger }));
 vi.mock("@/lib/auth", () => ({ auth }));
+vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import { POST } from "./route";
 import { proxy } from "@/proxy";

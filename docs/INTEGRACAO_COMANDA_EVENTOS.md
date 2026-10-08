@@ -88,3 +88,40 @@ Modelo da Meta: `codigo_verificacao` (categoria Autenticação, pt_BR, botão "C
 **Configuração (Railway; nunca no repositório):** `COMANDA_CODIGO_SECRET` (mínimo de 16 caracteres; lista separada por vírgula para rotação; o mesmo valor vai na Comanda), mais `WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN` e `META_WA_PHONE_NUMBER_ID`. O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
 
 **Limites:** a idempotência é **em memória** (10 min, até 10 mil), então depois de um reinício uma repetição reenvia o **mesmo** código (não gera um novo), o que é inofensivo. O teto de envios por telefone, aparelho e loja é da **Comanda**, não do CRM. Falha de envio **não** marca o `request_id` como enviado, para a Comanda poder tentar de novo. Log só com o resultado e o tipo do erro: **nunca telefone nem código**.
+
+## Avisos de pedido por template (SAI-013, lado CRM)
+
+O CRM tem um consumidor registrado nesta rota (`order-notifier.ts`) que avisa o cliente pela WhatsApp Cloud API.
+
+**Desligado por padrão.** Sem `COMANDA_NOTIFY_TEMPLATES=on` nada é enviado: o merge e o deploy nunca disparam mensagem sozinhos.
+
+Status reais de pedido na Comanda: `a_fazer`, `pronto`, `entregue`, `cancelado` (não existe "em preparo"). A cozinha faz `a_fazer → pronto → entregue`; correções: `pronto → a_fazer` ("Voltar") e `entregue → pronto`.
+
+| Evento | Template (pt_BR; `{{1}}` nome, `{{2}}` senha, `{{3}}` barraca) |
+|---|---|
+| `order.created` | `pedido_recebido` |
+| `order.ready` (todos os tipos, inclusive entrega) | `pedido_pronto` |
+| `order.status_changed`, `order.paid`, `order.cancelled`, `customer.*`, `coupon.*` | **nenhum aviso** |
+
+**Sem gatilho de propósito (decisão da Comanda, 08/10/2026):**
+- `pedido_em_preparo`: a Comanda não tem evento confiável para isso. Mapear `status_changed → a_fazer` dispararia também no botão "Voltar".
+- `pedido_saiu_entrega`: `ready` em entrega significa pronto para o entregador retirar, não "saiu".
+- `order.cancelled`: ainda não há template aprovado.
+Os dois templates continuam previstos no código (`TemplateName`) para quando houver um gatilho confiável.
+
+**Nome da barraca (`{{3}}`), nesta ordem:** `data.barraca_nome` do evento (campo aditivo e opcional do contrato, enviado pela Comanda em todo `order.*`) → `COMANDA_BARRACA_NOMES` (JSON `barraca_id → nome`, reserva) → "a loja".
+
+Variáveis (Railway; nunca no repositório): `COMANDA_NOTIFY_TEMPLATES` (`on` liga), `COMANDA_BARRACA_NOMES` (reserva) e as do piloto da Cloud API (`WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`). O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
+
+**Telefone:** o contrato manda o telefone **nacional** em `cliente.telefone` (10 ou 11 dígitos, **sem** o 55, ex. `61999990001`), e o CRM **acrescenta o país** antes de enviar (a Meta recusa sem DDI). Aceita também com 55 e com máscara (`+55 (61) 99999-0001`). Normalização: 10 ou 11 dígitos → prefixa 55; 12 ou 13 dígitos começando com 55 → mantém; qualquer outro tamanho (9 dígitos, BSUID, estrangeiro) → **não envia** ("telefone ausente ou inválido"). A consulta de opt-out usa o número **já normalizado**.
+
+**`cliente.consentimento_contato`:** o CRM **ignora** esse campo nos avisos de pedido. A Comanda o preenche pelo consentimento de promoções, e o aviso de pedido é **transacional** (o cliente acabou de pedir). Descadastros (opt-out) continuam sendo respeitados. Se o dono quiser pular quando for explicitamente `false`, é uma linha, mas muda o comportamento: decisão dele.
+
+Regras: telefone ausente ou inválido = não envia; cliente descadastrado (opt-out) = não envia; falha ao consultar o opt-out = não envia; o mesmo template do mesmo pedido não sai duas vezes; **falha de envio nunca bloqueia nem altera a resposta ao evento** (o consumidor roda depois do 200). Log só com contagens e códigos de erro da Meta.
+
+### Limites aceitos no piloto
+- **Idempotência em memória** (a mesma do restante da rota; dedupe por `id` do evento mantida). A Comanda reenvia com retry; o risco é, **depois de um reinício**, um evento reenviado repetir o aviso.
+- **Sem retentativa de envio:** se a Meta recusar, a Comanda já recebeu 200 e não reenvia; o aviso se perde (fica só o código no log).
+
+### Pendência, decisão do dono: opt-out por "SAIR" na Cloud API
+O webhook da Meta **ainda não grava descadastros**: o opt-out hoje só nasce no fluxo do Baileys. O aviso **respeita** descadastros que já existem, mas o ciclo não fecha sozinho para quem responde "SAIR" pela Cloud API. Fechar isso exige guardar o descadastro no banco (**mudança de schema**, que aplica no merge: ver `CRM_SCHEMA_APLICA_NO_MERGE.md`), por isso **não foi implementado**. Como os avisos ficam desligados por padrão, é aceitável para o piloto; o dono decide quando tratar.
