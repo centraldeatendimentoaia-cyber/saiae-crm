@@ -35,3 +35,13 @@ export class InMemoryWindowStore implements WindowStore {
         return this.map.get(`${sessionId}:${contactKey}`) ?? null;
     }
 }
+
+/**
+ * Nunca sabe quando o cliente escreveu: a janela fica sempre FECHADA. Falha fechada, usada enquanto não
+ * existe armazenamento da última mensagem do cliente. Com ele, só template (que não depende da janela) sai.
+ */
+export class ClosedWindowStore implements WindowStore {
+    async lastInboundAt(): Promise<Date | null> {
+        return null;
+    }
+}
