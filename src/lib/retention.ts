@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { limparMensagensAntigas } from "@/modules/ia-atendimento/store";
 
 /**
  * Limpeza diária (03:30, Brasília) para o banco não crescer sem parar e o custo ficar baixo:
@@ -52,6 +53,15 @@ export async function runRetention(): Promise<void> {
                 total += ids.length;
             }
             if (total) logger.info("Retention", `${total} mensagens com mais de ${msgDays} dias apagadas`);
+        }
+
+        // Conversas da IA no WhatsApp: retenção fixa de 30 dias (spec da fase 1).
+        try {
+            const iaApagadas = await limparMensagensAntigas();
+            if (iaApagadas) logger.info("Retention", `${iaApagadas} mensagens da IA com mais de 30 dias apagadas`);
+        } catch (e) {
+            // tabela ainda não criada ou banco indisponível: nunca derruba a limpeza das outras tabelas
+            logger.warn("Retention", `limpeza das mensagens da IA falhou: ${e instanceof Error ? e.name : "erro"}`);
         }
 
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);

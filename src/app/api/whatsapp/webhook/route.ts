@@ -4,12 +4,16 @@ import { safeEqual, summarizeEvent, verifyMetaSignature } from "@/lib/whatsapp-w
 import { normalizeMetaWebhook } from "@/modules/whatsapp/cloud/inbound";
 import { dispatchInbound } from "@/modules/whatsapp/cloud/inbound-handler";
 import { failedStatusLines } from "@/modules/whatsapp/cloud/status-log";
+import { registrarIaAtendimento } from "@/modules/ia-atendimento/registro";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_000_000;
 const TAG = "WhatsAppWebhook";
+
+// Atendente de IA (fase 1): só registra com IA_ATENDIMENTO=on (padrão: desligada).
+registrarIaAtendimento();
 
 /**
  * Webhook da WhatsApp Cloud API (Meta). Rota pública (liberada em src/proxy.ts): a proteção é a
