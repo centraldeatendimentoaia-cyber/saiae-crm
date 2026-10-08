@@ -1,8 +1,11 @@
 # Imagem leve só para o backup diário do banco (serviço "backup" no Railway).
 # Não compila o app: apenas mariadb-dump + o script + o cliente S3.
-FROM node:24-alpine
+# Versão do Alpine FIXADA de propósito: em 2026-10 o build mais novo trouxe um mariadb-client/connector em que o plugin
+# caching_sha2_password não carregava e o backup parou. Só troque a versão depois de testar (Run now no Railway).
+FROM node:24-alpine3.22
 # mariadb-connector-c traz o plugin caching_sha2_password (autenticação padrão do MySQL 8)
-RUN apk add --no-cache mariadb-client mariadb-connector-c ca-certificates
+RUN apk add --no-cache mariadb-client mariadb-connector-c ca-certificates \
+ && test -f /usr/lib/mariadb/plugin/caching_sha2_password.so
 WORKDIR /app
 RUN npm install --no-save --ignore-scripts @aws-sdk/client-s3@3.1146.0
 COPY scripts/backup-db.js ./scripts/backup-db.js

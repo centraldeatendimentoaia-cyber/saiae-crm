@@ -14,7 +14,7 @@
  * Em produção (Railway) roda como serviço com Cron Schedule, enviando o arquivo
  * para o bucket (a cópia dentro do container some quando ele termina).
  */
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const { pipeline } = require("stream/promises");
 const fs = require("fs");
 const path = require("path");
@@ -32,6 +32,27 @@ try {
         if (!(key in process.env)) process.env[key] = val;
     }
 } catch { /* sem .env: usa variáveis do ambiente */ }
+
+/**
+ * true se o cliente de dump é MariaDB: pelo texto de "--version" (ex.: "mariadb-dump from 11.4.12-MariaDB") ou, se não
+ * der para executar, pelo nome do binário. Só o cliente MariaDB 11 exige certificado verificado e precisa de --skip-ssl.
+ */
+function ehMariaDb(bin, versionOutput) {
+    if (typeof versionOutput === "string" && versionOutput.trim()) return /maria/i.test(versionOutput);
+    return /maria/i.test(bin);
+}
+
+function lerVersao(bin) {
+    const r = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 10000 });
+    return r.error ? "" : `${r.stdout || ""}${r.stderr || ""}`;
+}
+
+/** Mensagem de ajuda quando o cliente não carrega o plugin de autenticação padrão do MySQL 8. */
+function dicaPlugin(stderr) {
+    return /caching_sha2_password/i.test(stderr || "") && /could not be loaded|plugin/i.test(stderr || "")
+        ? "Faltou o plugin caching_sha2_password no cliente. Na imagem Dockerfile.backup instale mariadb-connector-c e confira que existe /usr/lib/mariadb/plugin/caching_sha2_password.so (veja DEPLOY-RAILWAY.md, seção Backup)."
+        : "";
+}
 
 async function uploadToS3(filePath) {
     const bucket = process.env.BACKUP_S3_BUCKET;
@@ -85,7 +106,9 @@ async function main() {
     ];
     if (u.password) cnfLines.push(`password=${q(decodeURIComponent(u.password))}`);
     fs.writeFileSync(cnf, cnfLines.join(NL) + NL, { mode: 0o600 });
-    const isMaria = /maria/i.test(bin);
+    const versao = lerVersao(bin);
+    const isMaria = ehMariaDb(bin, versao);
+    log(`Cliente de dump: ${versao.trim().split(String.fromCharCode(10))[0] || "(versão não lida)"} -> ${isMaria ? "MariaDB (--skip-ssl)" : "MySQL"}`);
     const args = [
         `--defaults-extra-file=${cnf}`, // precisa ser o primeiro argumento
         "--single-transaction",
@@ -114,7 +137,8 @@ async function main() {
 
     if (code !== 0) {
         fs.rmSync(file, { force: true });
-        throw new Error(`mysqldump terminou com código ${code}: ${stderr.trim() || "(sem mensagem)"}`);
+        const dica = dicaPlugin(stderr);
+        throw new Error(`mysqldump terminou com código ${code}: ${stderr.trim() || "(sem mensagem)"}${dica ? `\n[backup] AVISO: ${dica}` : ""}`);
     }
 
     const size = fs.statSync(file).size;
@@ -137,12 +161,16 @@ async function main() {
     }
 }
 
-main()
-    .then(() => {
-        log("Concluído.");
-        process.exit(0);
-    })
-    .catch((e) => {
-        console.error("[backup] ERRO:", e.message);
-        process.exit(1);
-    });
+if (require.main === module) {
+    main()
+        .then(() => {
+            log("Concluído.");
+            process.exit(0);
+        })
+        .catch((e) => {
+            console.error("[backup] ERRO:", e.message);
+            process.exit(1);
+        });
+}
+
+module.exports = { ehMariaDb, dicaPlugin };
