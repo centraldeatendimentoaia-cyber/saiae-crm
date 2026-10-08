@@ -126,6 +126,11 @@ export class CloudApiProvider implements WhatsAppProvider {
             components.unshift({ type: "body", parameters: template.bodyParameters.map((text) => ({ type: "text", text })) });
         }
 
+        if (template.buttonParameters?.length) {
+            if (template.buttonParameters.some((p) => typeof p !== "string" || p === "")) throw new CloudApiError("invalid_request", "Parâmetros do botão devem ser texto não vazio");
+            components.push({ type: "button", sub_type: "url", index: "0", parameters: template.buttonParameters.map((text) => ({ type: "text", text })) });
+        }
+
         const id = await this.client.sendMessage({
             recipient_type: "individual",
             to: recipient,

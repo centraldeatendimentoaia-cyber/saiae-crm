@@ -58,3 +58,33 @@ COMANDA_WEBHOOK_SECRETS={"<barraca_id>":"<segredo>","<outra>":["<novo>","<antigo
 - **Hoje não há consumidor registrado:** o evento é validado, deduplicado e **descartado**. Nada é gravado e nenhuma mensagem é enviada.
 - **Entrega "no máximo uma vez" para os consumidores:** se um consumidor falhar, a Comanda **não** reenvia (ela recebeu 200).
 - O log guarda só o **tipo** do evento e o resultado (aceito, duplicado, ignorado, recusado). **Nunca** telefone, nome, itens nem segredo.
+
+## Código de verificação do cliente final
+
+Rota: `POST /api/integracao/comanda/v1/codigo-verificacao` (pública no `proxy.ts`, **caminho exato**). A Comanda pede o envio do código de login do cliente final; o CRM só o entrega pelo WhatsApp (modelo de **autenticação** da Cloud API). **O CRM não guarda o código, o telefone nem o corpo.**
+
+**Autenticação:** a mesma dos eventos (`X-Saiae-Timestamp` em segundos, `X-Saiae-Signature = "sha256=" + HMAC-SHA256(segredo, timestamp + "." + corpo bruto)`, janela de 5 min, tempo constante), mais `X-Saiae-Event-Id` igual ao `request_id`. A diferença: o segredo é **de plataforma**, não por barraca.
+
+Corpo (exato, sem campos extras):
+
+```json
+{ "barraca_id": "<uuid>", "telefone": "61999990001", "codigo": "483920", "request_id": "<uuid>" }
+```
+`telefone`: 10 ou 11 dígitos, **sem** o 55 (o CRM acrescenta). `codigo`: 6 dígitos. Limite de corpo: 4 KB.
+
+| Status | Quando |
+|---|---|
+| **200** `{enviado:true}` | enviado; repetição do mesmo `request_id` → `{enviado:true,duplicate:true}` **sem enviar de novo** |
+| 400 | JSON inválido |
+| 401 `{error:"Não autorizado"}` | cabeçalhos ausentes, janela vencida ou assinatura inválida (**resposta idêntica**) |
+| 413 | corpo > 4 KB |
+| 422 | corpo fora do contrato (nunca ecoa telefone nem código), `X-Saiae-Event-Id` ≠ `request_id`, ou a Meta recusou (número não entregável, modelo inválido) |
+| 429 | limite de taxa da Meta |
+| 502 | falha da Meta, de rede ou inesperada |
+| 503 | `COMANDA_CODIGO_SECRET` ausente, ou sessão Cloud API indisponível (**nunca** cai para o Baileys: o código não sai por outro canal) |
+
+Modelo da Meta: `codigo_verificacao` (categoria Autenticação, pt_BR, botão "Copiar código"). O CRM manda o código **no corpo e também no botão** (a Meta recusa sem o botão). Texto fixo: "Seu código de verificação é {{1}}."
+
+**Configuração (Railway; nunca no repositório):** `COMANDA_CODIGO_SECRET` (mínimo de 16 caracteres; lista separada por vírgula para rotação; o mesmo valor vai na Comanda), mais `WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN` e `META_WA_PHONE_NUMBER_ID`. O envio usa a **primeira** sessão de `WHATSAPP_CLOUD_SESSION_ID`.
+
+**Limites:** a idempotência é **em memória** (10 min, até 10 mil), então depois de um reinício uma repetição reenvia o **mesmo** código (não gera um novo), o que é inofensivo. O teto de envios por telefone, aparelho e loja é da **Comanda**, não do CRM. Falha de envio **não** marca o `request_id` como enviado, para a Comanda poder tentar de novo. Log só com o resultado e o tipo do erro: **nunca telefone nem código**.
