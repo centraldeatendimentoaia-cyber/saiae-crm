@@ -14,6 +14,13 @@ export const RETENCAO_DIAS = 30;
  */
 export const SEM_LOJA = "SEM-LOJA";
 
+/**
+ * "Loja" da atendente de vendas do Saiaê (mesmo número das lojas). Tem o formato de um código de loja (6 caracteres do
+ * alfabeto do link) para o "LIBERAR #VENDAS" do responsável funcionar como nas lojas. Conversas com esse código guardam o
+ * texto normalmente (retenção de 30 dias).
+ */
+export const VENDAS = "VENDAS";
+
 export interface ConversaRef {
     id: string;
     lojaCodigo: string;

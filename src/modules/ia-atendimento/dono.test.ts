@@ -111,6 +111,28 @@ describe("aviso de limite", () => {
     });
 });
 
+describe("liberar #VENDAS (equipe do Saiaê)", () => {
+    const EQUIPE = "61977776666";
+    const montar = () => {
+        const store = { retomarLoja: vi.fn(async () => 1) };
+        const contexto = vi.fn(async () => ({ ativa: false }) as const);
+        return { store, contexto, liberar: criarLiberador({ store, contexto, responsavelVendas: () => EQUIPE, logger: { info: vi.fn() } }) };
+    };
+    it("do número da equipe: devolve as conversas de vendas sem consultar a Comanda", async () => {
+        const l = montar();
+        expect(await l.liberar("LIBERAR #vendas", `55${EQUIPE}`)).toBe(MSG_IA_REATIVADA);
+        expect(l.store.retomarLoja).toHaveBeenCalledWith("VENDAS");
+        expect(l.contexto).not.toHaveBeenCalled();
+    });
+    it("de outro número, ou sem a env configurada: ignora", async () => {
+        const l = montar();
+        expect(await l.liberar("LIBERAR #VENDAS", CLIENTE)).toBeNull();
+        const sem = criarLiberador({ store: l.store, contexto: l.contexto, responsavelVendas: () => undefined, logger: { info: vi.fn() } });
+        expect(await sem("LIBERAR #VENDAS", `55${EQUIPE}`)).toBeNull();
+        expect(l.store.retomarLoja).not.toHaveBeenCalled();
+    });
+});
+
 describe("liberar", () => {
     const montar = (dono: string | null, ativa = true) => {
         const store = { retomarLoja: vi.fn(async () => 2) };

@@ -180,6 +180,68 @@ describe("ordem", () => {
     });
 });
 
+describe("atendente de vendas do Saiaê", () => {
+    const VENDAS_ON = { IA_ATENDIMENTO: "on", IA_VENDAS: "on", WHATSAPP_CLOUD_SESSION_ID: "pilot" };
+    const montarV = (env: Record<string, string | undefined> = VENDAS_ON) => {
+        const vendas = vi.fn().mockResolvedValue("Resposta de vendas");
+        return { vendas, ...setup({ vendas, env }) };
+    };
+    it("sem código e sem conversa de loja: vai para vendas, com o texto gravado, e não recebe a orientação", async () => {
+        const { run, vendas, responder, enviar, store } = montarV();
+        await run(lote(msg({ text: "oi, quanto custa?" })));
+        expect(vendas).toHaveBeenCalledTimes(1);
+        expect(responder).not.toHaveBeenCalled();
+        expect(enviar).toHaveBeenCalledWith(PHONE, "Resposta de vendas");
+        expect(enviar).not.toHaveBeenCalledWith(PHONE, MSG_ORIENTACAO);
+        expect([...store.msgs.values()].some((m) => m.lojaCodigo === "VENDAS" && m.texto === "oi, quanto custa?")).toBe(true);
+    });
+    it("a mensagem do panfleto cai em vendas mesmo se a pessoa já conversou com uma loja", async () => {
+        const { run, vendas, responder } = montarV();
+        await run(lote(msg({ messageId: "wamid.a", text: `Oi #${LOJA}` })));
+        expect(responder).toHaveBeenCalledTimes(1);
+        await run(lote(msg({ messageId: "wamid.b", text: "Oi! Quero ser testador do sai aê (vi no panfleto)" })));
+        expect(vendas).toHaveBeenCalledTimes(1);
+    });
+    it("quem está em conversa de vendas e escreve um #CODIGO passa para a loja; sem código continua em vendas", async () => {
+        const { run, vendas, responder } = montarV();
+        await run(lote(msg({ messageId: "wamid.1", text: "oi" })));
+        await run(lote(msg({ messageId: "wamid.2", text: "e o plano pro?" })));
+        expect(vendas).toHaveBeenCalledTimes(2);
+        await run(lote(msg({ messageId: "wamid.3", text: `quero pedir #${LOJA}` })));
+        expect(responder).toHaveBeenCalledTimes(1);
+        expect(vendas).toHaveBeenCalledTimes(2);
+    });
+    it("quem está em conversa de loja sem código continua na loja", async () => {
+        const { run, vendas, responder } = montarV();
+        await run(lote(msg({ messageId: "wamid.1", text: `Oi #${LOJA}` })));
+        await run(lote(msg({ messageId: "wamid.2", text: "tem açaí?" })));
+        expect(responder).toHaveBeenCalledTimes(2);
+        expect(vendas).not.toHaveBeenCalled();
+    });
+    it.each([undefined, "", "off", "1"])("IA_VENDAS=%j: tudo como antes (orientação, vendas nunca chamada)", async (v) => {
+        const { run, vendas, enviar } = montarV({ ...VENDAS_ON, IA_VENDAS: v });
+        await run(lote(msg({ text: "oi" })));
+        expect(vendas).not.toHaveBeenCalled();
+        expect(enviar).toHaveBeenCalledWith(PHONE, MSG_ORIENTACAO);
+    });
+    it("vendas desligada: #VENDAS e conversa antiga de vendas não viram loja", async () => {
+        const { run, vendas, responder, enviar } = montarV({ ...VENDAS_ON, IA_VENDAS: "off" });
+        await run(lote(msg({ text: "oi #VENDAS" })));
+        expect(vendas).not.toHaveBeenCalled();
+        expect(responder).not.toHaveBeenCalled();
+        expect(enviar).toHaveBeenCalledWith(PHONE, MSG_ORIENTACAO);
+    });
+    it("PARAR vale para vendas também (opt-out) e conversa pausada fica calada", async () => {
+        const { run, vendas, optOut } = montarV();
+        await run(lote(msg({ messageId: "wamid.1", text: "oi" })));
+        await run(lote(msg({ messageId: "wamid.2", text: "PARAR" })));
+        expect(optOut.add).toHaveBeenCalled();
+        optOut.is.mockResolvedValue(true);
+        await run(lote(msg({ messageId: "wamid.3", text: "e o preço?" })));
+        expect(vendas).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe("sem loja", () => {
     it("sem código e sem conversa prévia: orienta a usar o link, UMA vez, sem listar lojas", async () => {
         const { run, enviar, responder } = setup();
