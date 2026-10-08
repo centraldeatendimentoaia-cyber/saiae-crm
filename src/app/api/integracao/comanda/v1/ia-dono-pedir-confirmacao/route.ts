@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_024;
 const TAG = "IaDonoPedirConfirmacao";
-const corpoSchema = z.object({ codigo_loja: z.string().regex(/^[A-Z0-9]{6}$/), telefone: z.string().regex(/^[0-9]{12,13}$/) });
+const corpoSchema = z.object({ codigo_loja: z.string().regex(/^[A-Z0-9]{6}$/), telefone: z.string().regex(/^[0-9]{12,13}$/), nome_loja: z.string().max(120).optional() });
 
 /** Mesmo segredo do ia-contexto (COMANDA_IA_SEGREDO). Rotação: lista separada por vírgula; cada um com 16+ caracteres. */
 function segredos(env: Record<string, string | undefined> = process.env): string[] {
@@ -58,8 +58,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ enviado: false, motivo: "falha_envio" }, { headers: { "Cache-Control": "no-store" } });
     }
     try {
-        const pedir = criarPedidoConfirmacao({ enviarTemplate: (to, t) => provider.sendTemplate!(to, t), contar: prismaConsumo.incrementar });
-        return NextResponse.json(await pedir(corpo.data.codigo_loja, corpo.data.telefone), { headers: { "Cache-Control": "no-store" } });
+        const pedir = criarPedidoConfirmacao({ enviarTemplate: (to, t) => provider.sendTemplate!(to, t), contar: prismaConsumo.incrementar, template: process.env.IA_TEMPLATE_CONFIRMAR?.trim() || undefined });
+        return NextResponse.json(await pedir(corpo.data.codigo_loja, corpo.data.telefone, corpo.data.nome_loja), { headers: { "Cache-Control": "no-store" } });
     } catch (e) {
         logger.error(TAG, `falha inesperada: ${e instanceof Error ? e.name : "erro"}`);
         return vazio(500);

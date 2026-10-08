@@ -48,6 +48,11 @@ describe("POST ia-dono-pedir-confirmacao", () => {
         expect(await r.json()).toEqual({ enviado: true });
         expect(h.sendTemplate).toHaveBeenCalledWith(TEL, expect.objectContaining({ name: "ia_chamar_dono" }));
     });
+    it("com IA_TEMPLATE_CONFIRMAR e nome_loja: usa o template novo", async () => {
+        vi.stubEnv("IA_TEMPLATE_CONFIRMAR", "ia_confirmar_responsavel");
+        await enviar({ codigo_loja: "ABC234", telefone: TEL, nome_loja: "Açaí do Zé" });
+        expect(h.sendTemplate).toHaveBeenCalledWith(TEL, { name: "ia_confirmar_responsavel", languageCode: "pt_BR", bodyParameters: ["Açaí do Zé", "ABC234"] });
+    });
     it("acima de 3 pedidos no dia: enviado:false motivo limite, sem template", async () => {
         h.incrementar.mockResolvedValue(4);
         expect(await (await enviar({ codigo_loja: "ABC234", telefone: TEL })).json()).toEqual({ enviado: false, motivo: "limite" });

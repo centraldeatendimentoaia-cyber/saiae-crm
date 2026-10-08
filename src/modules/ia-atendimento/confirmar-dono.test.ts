@@ -58,6 +58,35 @@ describe("pedido de confirmação (Comanda → CRM)", () => {
     });
 });
 
+describe("template próprio de confirmação (IA_TEMPLATE_CONFIRMAR)", () => {
+    const montar = (template?: string) => {
+        const enviarTemplate = vi.fn(async () => ({}));
+        return { enviarTemplate, pedir: criarPedidoConfirmacao({ enviarTemplate, contar: async () => 1, template, now: () => T0, logger: { info: vi.fn(), warn: vi.fn() } }) };
+    };
+    it("com a env: usa o template novo com {{1}} nome da loja e {{2}} código", async () => {
+        const m = montar("ia_confirmar_responsavel");
+        expect(await m.pedir("ABC234", TEL, "Açaí do  Zé")).toEqual({ enviado: true });
+        expect(m.enviarTemplate).toHaveBeenCalledWith(TEL, { name: "ia_confirmar_responsavel", languageCode: "pt_BR", bodyParameters: ["Açaí do Zé", "ABC234"] });
+    });
+    it("sem o nome da loja usa 'sua loja'; nome longo é cortado e quebras de linha somem", async () => {
+        const m = montar("ia_confirmar_responsavel");
+        await m.pedir("ABC234", TEL);
+        await m.pedir("ABC234", TEL, "A\nB".repeat(50));
+        const [a, b] = m.enviarTemplate.mock.calls.map((c) => (c as unknown as [string, { bodyParameters: string[] }])[1].bodyParameters[0]);
+        expect(a).toBe("sua loja");
+        expect(b.length).toBeLessThanOrEqual(60);
+        expect(b).not.toMatch(/[\r\n]/);
+    });
+    it("sem a env: continua no ia_chamar_dono (4 parâmetros)", async () => {
+        const m = montar();
+        await m.pedir("ABC234", TEL, "Loja X");
+        const t = (m.enviarTemplate.mock.calls[0] as unknown as [string, { name: string; bodyParameters: string[] }])[1];
+        expect(t.name).toBe("ia_chamar_dono");
+        expect(t.bodyParameters).toHaveLength(4);
+        expect(t.bodyParameters[0]).toBe("Loja X");
+    });
+});
+
 describe("CONFIRMAR #CODIGO (dono → CRM → Comanda)", () => {
     const montar = (ok: boolean) => {
         const confirmar = vi.fn(async () => ok);

@@ -23,6 +23,8 @@ export type MotivoNaoEnviado = "sem_whatsapp" | "limite" | "falha_envio";
 export type ResultadoPedido = { enviado: true } | { enviado: false; motivo: MotivoNaoEnviado };
 
 export interface PedidoDeps {
+    /** Template próprio de confirmação (IA_TEMPLATE_CONFIRMAR, ex.: ia_confirmar_responsavel). Ausente: usa o ia_chamar_dono. */
+    template?: string;
     enviarTemplate: (to: string, template: TemplateInput) => Promise<unknown>;
     /** Soma 1 ao contador (loja, chave) e devolve o total (tabela IaConsumo, chave "confirmar:AAAA-MM-DD"). */
     contar: (lojaCodigo: string, chave: string) => Promise<number>;
@@ -33,7 +35,7 @@ export interface PedidoDeps {
 /** Pedido da Comanda: manda o template de confirmação ao telefone informado (vem do banco da Comanda). No máximo 3 por loja por dia. */
 export function criarPedidoConfirmacao(over: Partial<PedidoDeps> & Pick<PedidoDeps, "enviarTemplate" | "contar">) {
     const deps: PedidoDeps = { now: () => new Date(), logger: defaultLogger, ...over };
-    return async (codigoLoja: string, telefone: string): Promise<ResultadoPedido> => {
+    return async (codigoLoja: string, telefone: string, nomeLoja?: string): Promise<ResultadoPedido> => {
         const dono = normalizeBrPhone(telefone);
         if (!dono) return { enviado: false, motivo: "sem_whatsapp" };
         try {
@@ -46,16 +48,18 @@ export function criarPedidoConfirmacao(over: Partial<PedidoDeps> & Pick<PedidoDe
             return { enviado: false, motivo: "falha_envio" }; // sem contagem não arrisca enviar sem teto
         }
         try {
-            await deps.enviarTemplate(dono, {
-                name: TEMPLATE_DONO,
-                languageCode: "pt_BR",
-                bodyParameters: [
-                    "sua loja",
-                    `confirmar este número como responsável da loja; responda CONFIRMAR #${codigoLoja}`,
-                    "nenhum",
-                    codigoLoja,
-                ],
-            });
+            const nome = (nomeLoja ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || "sua loja";
+            await deps.enviarTemplate(
+                dono,
+                deps.template
+                    ? // template próprio: "A loja {{1}} cadastrou este número... responda aqui: CONFIRMAR #{{2}}"
+                      { name: deps.template, languageCode: "pt_BR", bodyParameters: [nome, codigoLoja] }
+                    : {
+                          name: TEMPLATE_DONO,
+                          languageCode: "pt_BR",
+                          bodyParameters: [nome, `confirmar este número como responsável da loja; responda CONFIRMAR #${codigoLoja}`, "nenhum", codigoLoja],
+                      },
+            );
         } catch (e) {
             deps.logger.warn(TAG, `envio do pedido de confirmação falhou: ${e instanceof Error ? e.name : "erro"}`);
             return { enviado: false, motivo: "falha_envio" };
