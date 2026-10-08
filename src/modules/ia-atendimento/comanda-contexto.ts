@@ -87,8 +87,9 @@ export function assinar(segredo: string, timestamp: string, corpo: string): stri
 
 /**
  * Busca o contexto da loja para este cliente. `telefone`: só dígitos (10 a 13). Nunca lança.
- * Sem COMANDA_IA_SEGREDO/COMANDA_IA_URL, código de loja inválido ou telefone inválido (ex.: BSUID): `{ ativa: false }`
- * sem chamar a Comanda.
+ * Sem COMANDA_IA_SEGREDO/COMANDA_IA_URL ou com código de loja inválido: `{ ativa: false }` sem chamar a Comanda.
+ * Telefone inválido (ex.: BSUID, telefone oculto): chama a Comanda SEM telefone; a loja e o cardápio vêm normalmente
+ * e `cliente` é sempre null (cliente anônimo, nunca identificado).
  */
 export async function buscarContexto(codigoLoja: string, telefone: string, over: Partial<ContextoDeps> = {}): Promise<IaContexto> {
     const deps: ContextoDeps = { fetch: globalThis.fetch, env: process.env, now: Date.now, logger: defaultLogger, cache: cachePadrao, ...over };
@@ -101,13 +102,13 @@ export async function buscarContexto(codigoLoja: string, telefone: string, over:
     }
     if (!CODIGO_LOJA.test(codigoLoja)) return INATIVA;
     const digitos = typeof telefone === "string" ? telefone.replace(/\D/g, "") : "";
-    if (!/^[0-9]{10,13}$/.test(digitos) || /[A-Za-z]/.test(telefone)) return INATIVA;
+    const comTelefone = typeof telefone === "string" && /^[0-9]{10,13}$/.test(digitos) && !/[A-Za-z]/.test(telefone);
 
-    const chave = `${codigoLoja}:${digitos}`;
+    const chave = `${codigoLoja}:${comTelefone ? digitos : "-"}`;
     const guardado = deps.cache.get(chave);
     if (guardado) return guardado;
 
-    const corpo = JSON.stringify({ codigo_loja: codigoLoja, telefone: digitos });
+    const corpo = JSON.stringify(comTelefone ? { codigo_loja: codigoLoja, telefone: digitos } : { codigo_loja: codigoLoja });
     const timestamp = String(Math.floor(deps.now() / 1000));
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -127,8 +128,9 @@ export async function buscarContexto(codigoLoja: string, telefone: string, over:
             deps.logger.warn(TAG, "resposta da Comanda fora do contrato");
             return INATIVA;
         }
-        deps.cache.set(chave, parsed.data);
-        return parsed.data;
+        const dados: IaContexto = comTelefone || !parsed.data.ativa ? parsed.data : { ...parsed.data, cliente: null }; // anônimo nunca é identificado
+        deps.cache.set(chave, dados);
+        return dados;
     } catch (e) {
         const aborted = (e as { name?: string })?.name === "AbortError";
         deps.logger.warn(TAG, aborted ? "tempo esgotado falando com a Comanda" : "falha de rede falando com a Comanda");

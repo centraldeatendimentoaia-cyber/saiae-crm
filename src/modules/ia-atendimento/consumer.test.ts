@@ -139,6 +139,22 @@ describe("idempotência (a Meta reenvia)", () => {
         await run(lote(m, m));
         expect(responder).toHaveBeenCalledTimes(1);
     });
+    it("falha ao gravar NÃO marca a mensagem como vista: a reentrega da Meta é processada", async () => {
+        const store = memStore();
+        const original = store.registrarMensagem.bind(store);
+        let falhar = true;
+        store.registrarMensagem = async (r) => {
+            if (falhar) throw new Error("banco indisponível");
+            return original(r);
+        };
+        const { run, responder } = setup({ store });
+        const m = msg({ messageId: "wamid.RETRY" });
+        await run(lote(m)); // falha: não derruba nem responde
+        expect(responder).not.toHaveBeenCalled();
+        falhar = false;
+        await run(lote(m)); // reentrega
+        expect(responder).toHaveBeenCalledTimes(1);
+    });
     it("memória zerada (reinício): o banco ainda barra a reentrega", async () => {
         const a = setup();
         const m = msg({ messageId: "wamid.PERSIST" });
