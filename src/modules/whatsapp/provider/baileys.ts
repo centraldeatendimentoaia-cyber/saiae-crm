@@ -14,6 +14,16 @@ const CAPABILITIES: ProviderCapabilities = {
     groups: true,
     polls: true,
     stickers: true,
+    lists: true,
+    contacts: true,
+    locations: true,
+    reactions: true,
+    replies: true,
+    forwarding: true,
+    deleteMessage: true,
+    editMessage: true,
+    starMessage: true,
+    mentions: true,
 };
 
 /**

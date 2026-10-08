@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
+import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 
 // DELETE: Delete message for everyone
@@ -20,6 +21,9 @@ export async function DELETE(
         if (!canAccess) {
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
+
+        const unsupported = requireCapability(sessionId, "deleteMessage");
+        if (unsupported) return unsupported;
 
         const instance = waManager.getInstance(sessionId);
         if (!instance?.socket) {
@@ -72,6 +76,9 @@ export async function PATCH(
         if (!canAccess) {
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
+
+        const unsupported = requireCapability(sessionId, "editMessage");
+        if (unsupported) return unsupported;
 
         const instance = waManager.getInstance(sessionId);
         if (!instance?.socket) {
