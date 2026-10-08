@@ -68,7 +68,6 @@ export default function ApiDocsPage() {
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/list", description: "Send list message", params: "Path: sessionId, jid, Body: { ... }" },
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/location", description: "Send location", params: "Path: sessionId, jid, Body: { location }" },
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/poll", description: "Send poll", params: "Path: sessionId, jid, Body: { poll }" },
-        { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/spam", description: "Report spam", params: "Path: sessionId, jid" },
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/sticker", description: "Send sticker", params: "Path: sessionId, jid, Body: { file, pack, author, type, quality } (multipart/form-data)" },
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/[messageId]/react", description: "Send reaction", params: "Path: sessionId, jid, messageId" },
         { category: "Messaging", method: "POST", path: "/api/messages/[sessionId]/[jid]/contact", description: "Send contact", params: "Path: sessionId, jid, Body: { vcard }" },
@@ -90,7 +89,6 @@ export default function ApiDocsPage() {
         { category: "Messaging", method: "POST", path: "/api/messages/location", description: "Send location [DEPRECATED]", params: "Body: { sessionId, jid, location }" },
         { category: "Messaging", method: "POST", path: "/api/messages/poll", description: "Send poll [DEPRECATED]", params: "Body: { sessionId, jid, poll }" },
         { category: "Messaging", method: "POST", path: "/api/messages/react", description: "Send reaction [DEPRECATED]", params: "Body: { sessionId, jid, reaction }" },
-        { category: "Messaging", method: "POST", path: "/api/messages/spam", description: "Report spam [DEPRECATED]", params: "Body: { sessionId, jid }" },
         { category: "Messaging", method: "POST", path: "/api/messages/sticker", description: "Send sticker [DEPRECATED]", params: "Body: { sessionId, jid, sticker }" },
 
         // Chat

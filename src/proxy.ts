@@ -6,7 +6,7 @@ export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Public routes that don't require authentication
-    const publicRoutes = ["/auth/login", "/auth/register", "/api/auth", "/api/test", "/terms", "/privacy"];
+    const publicRoutes = ["/auth/login", "/auth/register", "/api/auth", "/terms", "/privacy"];
 
     // Check if it's a public route
     const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
     // API routes: Check for API key or session
     if (pathname.startsWith("/api/")) {
         // Skip auth endpoints
-        if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/test")) {
+        if (pathname.startsWith("/api/auth")) {
             return NextResponse.next();
         }
 

@@ -1680,40 +1680,6 @@ All endpoints require authentication via:
                     }
                 },
 
-                "/messages/{sessionId}/{jid}/spam": {
-                    post: {
-                        tags: ["Messaging"],
-                        summary: "Message bombing (Spam)",
-                        description: "Send a message multiple times in a row in the background",
-                        parameters: [
-                            { name: "sessionId", in: "path", required: true, schema: { type: "string" } },
-                            { name: "jid", in: "path", required: true, schema: { type: "string" } }
-                        ],
-                        requestBody: {
-                            content: {
-                                "application/json": {
-                                    schema: {
-                                        type: "object",
-                                        required: ["message"],
-                                        properties: {
-                                            message: { type: "string", example: "Check our new catalog!" },
-                                            count: { type: "integer", default: 10, example: 5 },
-                                            delay: { type: "integer", default: 500, example: 1000, description: "Delay in ms" }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        responses: {
-                            200: { description: "Spam started", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" } } } } } },
-                            401: { $ref: "#/components/responses/Unauthorized" },
-                            403: { $ref: "#/components/responses/Forbidden" },
-                            503: { $ref: "#/components/responses/SessionNotReady" },
-                            500: { description: "Failed to start spam" }
-                        }
-                    }
-                },
-
                 "/messages/{sessionId}/{jid}/sticker": {
                     post: {
                         tags: ["Messaging"],
