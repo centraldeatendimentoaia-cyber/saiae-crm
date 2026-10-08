@@ -3,6 +3,7 @@ import { logger } from "@/lib/logger";
 import { safeEqual, summarizeEvent, verifyMetaSignature } from "@/lib/whatsapp-webhook";
 import { normalizeMetaWebhook } from "@/modules/whatsapp/cloud/inbound";
 import { dispatchInbound } from "@/modules/whatsapp/cloud/inbound-handler";
+import { failedStatusLines } from "@/modules/whatsapp/cloud/status-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,7 +84,12 @@ export async function POST(request: NextRequest) {
 
     // Normaliza e entrega aos consumidores SEM esperar: a Meta quer o 200 rápido. Falha de consumidor
     // nunca vira erro para a Meta (ela reentregaria o mesmo lote).
-    void dispatchInbound(normalizeMetaWebhook(payload)).catch(() => {});
+    const batch = normalizeMetaWebhook(payload);
+
+    // Diagnóstico: por status "failed", só código, título curto e categoria (nunca telefone, texto ou ids).
+    for (const line of failedStatusLines(batch)) logger.warn(TAG, line);
+
+    void dispatchInbound(batch).catch(() => {});
 
     return NextResponse.json({ received: true });
 }
