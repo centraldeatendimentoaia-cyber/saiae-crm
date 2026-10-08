@@ -1,6 +1,7 @@
 import { logger as defaultLogger } from "@/lib/logger";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
-import { MAX_TEXTO, type Responder } from "./consumer";
+import { MAX_TEXTO } from "./constantes";
+import type { Responder } from "./consumer";
 import { executarFerramenta, FERRAMENTAS, type AcoesFerramentas } from "./ferramentas";
 import type { Llm, MensagemLlm } from "./llm";
 import { montarPromptSistema } from "./prompt";

@@ -15,7 +15,8 @@
     "db:backup": "node scripts/backup-db.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ia:avaliar": "tsx src/modules/ia-atendimento/avaliacao/executar.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
