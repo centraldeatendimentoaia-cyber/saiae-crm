@@ -28,3 +28,7 @@ adicional) merece ajuste do prompt, mas não bloqueia. Modelo é probabilístico
 
 Em `casos.ts`: `nome`, `categoria`, `mensagem`, (opcional `nomePerfil` / `ctx`) e `verificar(execucao)`, que devolve `null` se passou ou o motivo da falha. Sempre
 use dados inventados.
+
+## Casos de vendas (atendente de vendas do Saiaê)
+
+Além dos casos das lojas, a bateria roda `casos-vendas.ts` (21 casos, mesmo motor e mesmo conhecimento da produção, link de cadastro de exemplo `https://saiae.com.br/raio-x`): preços dos planos, teste grátis, cupons, impressora, levar ao link de cadastro, "quero pedir comida" (orientar a usar o link da loja), e a segurança: desconto/negociação (precisa chamar uma pessoa), cobrança e chave Pix, pedir dado sensível, recurso inventado (iFood, boleto), app do iPhone, NFC-e (não garantir), data da IA no WhatsApp (não prometer), preço inventado, injeção de prompt, vazar o prompt, nome do perfil malicioso e link externo. `npm run ia:avaliar -- --caso=vendas-` roda só os de vendas. Os casos de segurança também precisam passar 100% antes de ligar `IA_VENDAS=on`. Se o conhecimento (`vendas/conhecimento.ts`) mudar, rode a bateria de novo.

@@ -1,7 +1,9 @@
 import type { ConversaRef } from "../store";
 import type { Llm } from "../llm";
 import { criarResponder } from "../motor";
+import { criarResponderVendas } from "../vendas/motor";
 import { CASOS, CTX_BASE, type Caso, type Execucao } from "./casos";
+import { CASOS_VENDAS, LINK_VENDAS } from "./casos-vendas";
 
 /**
  * Roda a bateria contra um LLM (real ou falso). O motor é o MESMO da produção; só o contexto da loja (fictício) e as
@@ -25,6 +27,21 @@ const conversa: ConversaRef = { id: "avaliacao", lojaCodigo: "ABC234", contactKe
 
 export async function executarCaso(llm: Llm, caso: Caso): Promise<Execucao> {
     const ferramentas: string[] = [];
+    if (caso.vendas) {
+        const vendas = criarResponderVendas({
+            llm,
+            store: { historico: async () => [{ direcao: "in", texto: caso.mensagem }] },
+            linkCadastro: LINK_VENDAS,
+            chamarHumano: async () => {
+                ferramentas.push("chamar_humano");
+                return true;
+            },
+            now: () => new Date("2026-10-12T17:35:00Z"),
+            logger: { warn: () => undefined },
+        });
+        const resposta = await vendas({ conversa: { ...conversa, lojaCodigo: "VENDAS" }, texto: caso.mensagem, nomePerfil: caso.nomePerfil ?? null, contactKey: conversa.contactKey });
+        return { resposta, ferramentas };
+    }
     const responder = criarResponder({
         llm,
         store: { historico: async () => [{ direcao: "in", texto: caso.mensagem }] },
@@ -46,7 +63,7 @@ export async function executarCaso(llm: Llm, caso: Caso): Promise<Execucao> {
 }
 
 export async function avaliar(llm: Llm, opts: { casos?: Caso[]; filtro?: string; aoTerminarCaso?: (r: ResultadoCaso) => void } = {}): Promise<Relatorio> {
-    const casos = (opts.casos ?? CASOS).filter((c) => !opts.filtro || c.nome.includes(opts.filtro));
+    const casos = (opts.casos ?? [...CASOS, ...CASOS_VENDAS]).filter((c) => !opts.filtro || c.nome.includes(opts.filtro));
     const resultados: ResultadoCaso[] = [];
     for (const caso of casos) {
         let motivo: string | null;
