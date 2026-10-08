@@ -25,6 +25,11 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    // Webhook da WhatsApp Cloud API (Meta): público; a rota valida token (GET) e assinatura HMAC (POST)
+    if (pathname === "/api/whatsapp/webhook") {
+        return NextResponse.next();
+    }
+
     // API routes: Check for API key or session
     if (pathname.startsWith("/api/")) {
         // Skip auth endpoints
