@@ -5,6 +5,7 @@ import { cloudSessionIds } from "@/modules/whatsapp/provider";
 import type { InboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/inbound";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
+import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
 import { extrairCodigoLoja } from "./loja";
 import { prismaStore, SEM_LOJA, type ConversaRef, type IaStore } from "./store";
 
@@ -30,6 +31,8 @@ export interface IaDeps {
     /** Envia texto livre ao cliente (dentro da janela de 24 h). Devolve o id da mensagem, se houver. */
     enviar: (contactKey: string, texto: string) => Promise<string | null>;
     responder?: Responder;
+    /** Trata "LIBERAR #CODIGO" do responsável: devolve o texto de confirmação, ou null se não for um pedido válido. */
+    liberar?: (texto: string, contactKey: string) => Promise<string | null>;
     optOut: {
         is: (sessionId: string, jid: string) => Promise<boolean>;
         add: (sessionId: string, jid: string) => Promise<void>;
@@ -44,6 +47,8 @@ export interface IaDeps {
     orientados: BoundedTtlMap<true>;
     /** Quem já recebeu o aviso de tipo não suportado. */
     avisadosTipo: BoundedTtlMap<true>;
+    /** Conversas pausadas cujo cliente já recebeu "o responsável foi avisado". */
+    avisadosPausa: BoundedTtlMap<true>;
     /** Marcas de tempo (ms) das mensagens recentes por cliente, para o rate limit. */
     recentes: BoundedTtlMap<number[]>;
 }
@@ -73,6 +78,7 @@ export function criarDepsPadrao(over: Partial<IaDeps> = {}): IaDeps {
         vistos: new BoundedTtlMap<true>(20_000, DIA),
         orientados: new BoundedTtlMap<true>(10_000, DIA),
         avisadosTipo: new BoundedTtlMap<true>(10_000, 60 * 60 * 1000),
+        avisadosPausa: new BoundedTtlMap<true>(10_000, PAUSA_HORAS * 60 * 60 * 1000),
         recentes: new BoundedTtlMap<number[]>(10_000, 60 * 60 * 1000),
         ...over,
     };
@@ -146,6 +152,14 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
             return;
         }
 
+        if (emTexto && deps.liberar) {
+            const confirmacao = await deps.liberar(texto, contactKey);
+            if (confirmacao !== null) {
+                await responderTexto(contactKey, registro.conversa, confirmacao);
+                return;
+            }
+        }
+
         if (sessionId && isOptInText(texto)) {
             await deps.optOut.remove(sessionId, jid);
             await responderTexto(contactKey, registro.conversa, MSG_VOLTAR);
@@ -173,8 +187,19 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
             return;
         }
 
-        const pausada = registro.conversa.estado === "humano" && registro.conversa.pausadaAte !== null && registro.conversa.pausadaAte > deps.now();
-        if (pausada || !deps.responder) return; // pausa: quem trata é o dono (Task 7)
+        const conv = registro.conversa;
+        if (conv.estado === "humano") {
+            if (pausadaAgora(conv, deps.now())) {
+                // o responsável assumiu: a IA fica calada; o cliente é avisado uma única vez
+                if (!deps.avisadosPausa.has(conv.id)) {
+                    deps.avisadosPausa.set(conv.id, true);
+                    await responderTexto(contactKey, conv, MSG_RESPONSAVEL_AVISADO);
+                }
+                return;
+            }
+            await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
+        }
+        if (!deps.responder) return;
 
         const resposta = await deps.responder({ conversa: registro.conversa, texto: texto.slice(0, MAX_TEXTO), nomePerfil: m.from.name, contactKey });
         if (resposta) await responderTexto(contactKey, registro.conversa, resposta);

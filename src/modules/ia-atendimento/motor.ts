@@ -1,10 +1,10 @@
 import { logger as defaultLogger } from "@/lib/logger";
-import { buscarContexto, type IaContexto } from "./comanda-contexto";
+import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import { MAX_TEXTO, type Responder } from "./consumer";
 import { executarFerramenta, FERRAMENTAS, type AcoesFerramentas } from "./ferramentas";
 import type { Llm, MensagemLlm } from "./llm";
 import { montarPromptSistema } from "./prompt";
-import type { IaStore } from "./store";
+import type { ConversaRef, IaStore } from "./store";
 
 /**
  * Motor da IA: monta o contexto REAL da loja (Comanda), conversa com o modelo e executa no máximo MAX_PASSOS rodadas
@@ -22,7 +22,7 @@ export interface MotorDeps {
     store: Pick<IaStore, "historico">;
     contexto: (codigoLoja: string, telefone: string) => Promise<IaContexto>;
     /** Ações das ferramentas por conversa (Task 7 liga o aviso ao dono). */
-    acoes: (conversaId: string, codigoLoja: string, contactKey: string, ctx: Extract<IaContexto, { ativa: true }>) => AcoesFerramentas;
+    acoes: (conversa: ConversaRef, ctx: IaContextoAtivo) => AcoesFerramentas;
     logger: { warn: (tag: string, msg: string) => void };
 }
 
@@ -61,7 +61,7 @@ export function criarResponder(deps: MotorDeps): Responder {
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
             const mensagens = montarMensagens(hist, texto);
             const sistema = montarPromptSistema(ctx, { nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out") });
-            const acoes = deps.acoes(conversa.id, conversa.lojaCodigo, contactKey, ctx);
+            const acoes = deps.acoes(conversa, ctx);
 
             for (let passo = 0; passo < MAX_PASSOS; passo++) {
                 const saida = await deps.llm.responder({ sistema, mensagens, ferramentas: FERRAMENTAS });
