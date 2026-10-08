@@ -30,6 +30,11 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    // Eventos Comanda → CRM (contrato SAI-001): público; a rota valida a assinatura HMAC por barraca e a janela de 5 min
+    if (pathname === "/api/integracao/comanda/v1/eventos") {
+        return NextResponse.next();
+    }
+
     // API routes: Check for API key or session
     if (pathname.startsWith("/api/")) {
         // Skip auth endpoints

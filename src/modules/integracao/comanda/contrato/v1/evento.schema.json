@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.saiae.com.br/contrato/v1/evento.schema.json",
+  "title": "Evento Comanda → CRM (v1)",
+  "type": "object",
+  "required": ["id", "type", "version", "occurred_at", "barraca_id", "sequence", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "type": {
+      "enum": [
+        "order.created", "order.paid", "order.status_changed", "order.ready",
+        "order.cancelled", "customer.created", "customer.updated", "coupon.redeemed"
+      ]
+    },
+    "version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "barraca_id": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "data": { "type": "object" }
+  },
+  "$defs": {
+    "opcao_escolhida": {
+      "type": "object",
+      "required": ["grupo_id", "grupo_nome", "tipo", "opcao_id", "nome", "preco_centavos"],
+      "properties": {
+        "grupo_id": { "type": "string", "format": "uuid" },
+        "grupo_nome": { "type": "string" },
+        "tipo": { "enum": ["variacao", "adicional"] },
+        "opcao_id": { "type": "string", "format": "uuid" },
+        "nome": { "type": "string" },
+        "preco_centavos": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Variação: preço absoluto da unidade. Adicional: valor somado."
+        },
+        "quantidade": { "type": "integer", "minimum": 1, "description": "Sempre 1 na v1. O leitor deve tolerar valores maiores (reservado para versões futuras)." }
+      }
+    },
+    "pedido": {
+      "type": "object",
+      "required": ["pedido_id", "status", "tipo_atendimento", "itens", "total_centavos"],
+      "properties": {
+        "pedido_id": { "type": "string", "format": "uuid" },
+        "senha": { "type": ["integer", "null"] },
+        "status": { "enum": ["a_fazer", "pronto", "entregue", "cancelado"] },
+        "tipo_atendimento": { "enum": ["mesa", "balcao", "retirada", "entrega"] },
+        "itens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nome", "quantidade", "preco_centavos"],
+            "properties": {
+              "nome": { "type": "string" },
+              "quantidade": { "type": "integer", "minimum": 1 },
+              "preco_centavos": { "type": "integer", "minimum": 0 },
+              "observacao": { "type": ["string", "null"] },
+              "opcoes": {
+                "description": "Aditivo v1 (SAI-010). Escolhas do cliente na linha: snapshot imutável. Ausente ou vazio em item simples. preco_centavos do item já é o preço final da unidade (variação ou base + adicionais).",
+                "type": "array",
+                "items": { "$ref": "#/$defs/opcao_escolhida" }
+              }
+            }
+          }
+        },
+        "taxa_entrega_centavos": { "type": "integer", "minimum": 0 },
+        "total_centavos": { "type": "integer", "minimum": 0 },
+        "metodo_pagamento": { "type": ["string", "null"] },
+        "cliente": {
+          "type": ["object", "null"],
+          "properties": {
+            "nome": { "type": ["string", "null"] },
+            "telefone": { "type": ["string", "null"], "pattern": "^[0-9]{8,15}$" },
+            "consentimento_contato": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}
