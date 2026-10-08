@@ -39,6 +39,12 @@ export async function proxy(request: NextRequest) {
             return NextResponse.next();
         }
 
+        // Webhook da Stripe: público; a rota valida a assinatura Stripe-Signature (400 se inválida).
+        // Só o caminho exato: qualquer outra rota /api/stripe/* continua exigindo sessão.
+        if (pathname === "/api/stripe/webhook") {
+            return NextResponse.next();
+        }
+
         // Check for session auth
         const session = await auth();
         if (!session?.user) {
