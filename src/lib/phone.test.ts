@@ -18,11 +18,14 @@ describe("canonicalPhone", () => {
     it("ignora o sufixo de dispositivo do JID", () => {
         expect(canonicalPhone("5561999531848:12@s.whatsapp.net")).toBe("556199531848");
     });
-    // BUG CONHECIDO: a regex em phone.ts é /D/g (letra D) em vez de /\D/g, então telefone formatado
-    // (com +, espaços ou traços) não é limpo. Quando for corrigido, este teste passa a falhar de propósito
-    // (it.fails) e deve virar um it normal.
-    it.fails("limpa telefone formatado, não só JID (bug /D/g em phone.ts)", () => {
+    // Regressão: a regex era /D/g (letra D) em vez de /\D/g, então telefone formatado
+    // (com +, espaços, parênteses ou traços) não era limpo nem igualado ao mesmo número sem formatação.
+    it("limpa telefone formatado, não só JID", () => {
         expect(canonicalPhone("+55 61 99953-1848")).toBe("556199531848");
+        expect(canonicalPhone("(61) 99953-1848")).toBe("61999531848");
+    });
+    it("telefone formatado e JID do mesmo número viram a mesma chave", () => {
+        expect(canonicalPhone("+55 61 99953-1848")).toBe(canonicalPhone("5561999531848@s.whatsapp.net"));
     });
 });
 
@@ -32,6 +35,11 @@ describe("jidVariants", () => {
             ["556199531848@s.whatsapp.net", "5561999531848@s.whatsapp.net"].sort()
         );
         expect(jidVariants("556199531848@s.whatsapp.net").sort()).toEqual(
+            ["556199531848@s.whatsapp.net", "5561999531848@s.whatsapp.net"].sort()
+        );
+    });
+    it("aceita texto com formatação, não só JID", () => {
+        expect(jidVariants("+55 (61) 99953-1848").sort()).toEqual(
             ["556199531848@s.whatsapp.net", "5561999531848@s.whatsapp.net"].sort()
         );
     });
