@@ -4,7 +4,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import type { IaContextoAtivo } from "./comanda-contexto";
-import { criarControleLimite, limiteConhecido, limparLimitesParaTeste, mesSaoPaulo, type ConsumoStore } from "./consumo";
+import { criarControleLimite, diaSaoPaulo, limiteConhecido, limparLimitesParaTeste, maxRespostasDia, mesSaoPaulo, type ConsumoStore } from "./consumo";
 import { criarResponder, mensagemSoLink } from "./motor";
 import type { ConversaRef } from "./store";
 
@@ -21,12 +21,18 @@ const completo = (limite: number | null) =>
         ia: { texto_livre: null, whatsapp_dono: null, plano_limite_conversas: limite },
     }) as IaContextoAtivo;
 
-function memConsumo(nova = true, inicial = 0) {
-    let total = inicial;
+/** Contadores por chave (loja + período), como a tabela: o do plano e o global não se misturam. */
+function memConsumo(nova = true, inicial = 0, globalInicial = 0) {
+    const conta = new Map<string, number>();
+    const k = (l: string, m: string) => `${l}|${m}`;
     const store: ConsumoStore = {
         conversaNova: vi.fn(async () => nova),
-        incrementar: vi.fn(async () => ++total),
-        ler: vi.fn(async () => total),
+        incrementar: vi.fn(async (l: string, m: string) => {
+            const atual = conta.get(k(l, m)) ?? (l === "GLOBAL" ? globalInicial : inicial);
+            conta.set(k(l, m), atual + 1);
+            return atual + 1;
+        }),
+        ler: vi.fn(async (l: string, m: string) => conta.get(k(l, m)) ?? (l === "GLOBAL" ? globalInicial : inicial)),
     };
     return store;
 }
@@ -63,7 +69,7 @@ describe("controle de limite", () => {
         const store = memConsumo(false, 5);
         const c = criarControleLimite({ store, avisarDono: async () => undefined });
         expect(await c(conversa, ctx(10))).toBe("ok");
-        expect(store.incrementar).not.toHaveBeenCalled();
+        expect(store.incrementar).not.toHaveBeenCalledWith("ABC234", expect.anything()); // só o contador global conta cada resposta
         expect(store.ler).toHaveBeenCalled();
     });
     it("limite 0 = só link", async () => {
@@ -86,6 +92,42 @@ describe("controle de limite", () => {
     it("falha ao avisar o dono não impede o modo só link", async () => {
         const c = criarControleLimite({ store: memConsumo(true, 5), avisarDono: async () => { throw new Error("x"); }, logger: { warn: vi.fn() } });
         expect(await c(conversa, ctx(1))).toBe("so_link");
+    });
+});
+
+describe("teto global de respostas por dia (IA_MAX_RESPOSTAS_DIA)", () => {
+    const montar = (globalInicial: number, env: Record<string, string | undefined> = {}) => {
+        const store = memConsumo(true, 0, globalInicial);
+        const avisarDono = vi.fn(async () => undefined);
+        return { store, avisarDono, c: criarControleLimite({ store, avisarDono, env }) };
+    };
+    it("padrão 500: até o teto ok; passou, só link e avisa o responsável UMA vez no dia", async () => {
+        const m = montar(499);
+        expect(await m.c(conversa, ctx(null))).toBe("ok"); // 500
+        expect(await m.c(conversa, ctx(null))).toBe("so_link"); // 501
+        expect(await m.c(conversa, ctx(null))).toBe("so_link");
+        expect(m.avisarDono).toHaveBeenCalledTimes(1);
+        expect(m.avisarDono).toHaveBeenCalledWith(expect.anything(), "global");
+        expect(m.store.incrementar).toHaveBeenCalledWith("GLOBAL", expect.stringMatching(/^ia:\d{4}-\d{2}-\d{2}$/));
+    });
+    it("vale também para loja sem limite de plano e respeita a variável", async () => {
+        const m = montar(2, { IA_MAX_RESPOSTAS_DIA: "3" });
+        expect(await m.c(conversa, ctx(null))).toBe("ok"); // 3
+        expect(await m.c(conversa, ctx(null))).toBe("so_link"); // 4
+    });
+    it.each([undefined, "", "abc", "0", "-5"])("valor inválido %j usa 500", (v) => {
+        expect(maxRespostasDia({ IA_MAX_RESPOSTAS_DIA: v })).toBe(500);
+    });
+    it("limite do plano estourado não gasta o contador global", async () => {
+        const m = montar(0);
+        const c = criarControleLimite({ store: memConsumo(true, 5, 0), avisarDono: m.avisarDono, env: {} });
+        expect(await c(conversa, ctx(1))).toBe("so_link");
+        expect(await c(conversa, ctx(1))).toBe("so_link");
+        expect(m.avisarDono).toHaveBeenCalledWith(expect.anything(), "plano");
+    });
+    it("virada do dia em São Paulo usa outro contador", () => {
+        expect(diaSaoPaulo(new Date("2026-10-09T02:30:00Z"))).toBe("2026-10-08");
+        expect(diaSaoPaulo(new Date("2026-10-09T03:00:00Z"))).toBe("2026-10-09");
     });
 });
 

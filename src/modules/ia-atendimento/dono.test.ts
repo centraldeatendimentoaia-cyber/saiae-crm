@@ -4,7 +4,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import type { IaContextoAtivo } from "./comanda-contexto";
-import { criarChamadorDono, criarLiberador, diaSaoPaulo, MAX_AVISOS_DONO_DIA, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
+import { criarAvisoLimite, criarChamadorDono, criarLiberador, diaSaoPaulo, MAX_AVISOS_DONO_DIA, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
 import type { ConversaRef } from "./store";
 
 const T0 = new Date("2026-10-08T12:00:00Z");
@@ -92,6 +92,22 @@ describe("teto diário de avisos ao responsável", () => {
         const chamar = criarChamadorDono({ enviarTemplate, store: { pausar: async () => undefined }, contar: async () => { throw new Error("db"); }, now: () => T0, logger: { info: vi.fn(), warn: vi.fn() } });
         expect(await chamar(conversa(), ctx(DONO), "nao_sei")).toBe(true);
         expect(enviarTemplate).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("aviso de limite", () => {
+    it.each(["plano", "global"] as const)("o motivo (%s) passa por param(): uma linha, cabe no template", async (motivo) => {
+        const enviar = vi.fn(async () => ({}));
+        await criarAvisoLimite(enviar)(ctx(DONO), motivo);
+        const params = (enviar.mock.calls[0] as unknown as [string, { bodyParameters: string[] }])[1].bodyParameters;
+        expect(params).toHaveLength(4);
+        for (const p of params) expect(p).not.toMatch(/[\r\n]/);
+        expect(params[1]).toContain(motivo === "global" ? "diário" : "mensal");
+    });
+    it("sem WhatsApp do responsável válido não envia", async () => {
+        const enviar = vi.fn(async () => ({}));
+        await criarAvisoLimite(enviar)(ctx(null), "plano");
+        expect(enviar).not.toHaveBeenCalled();
     });
 });
 
