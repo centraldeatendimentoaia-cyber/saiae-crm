@@ -2,7 +2,7 @@
 
 # WhatsApp AI Gateway — Complete API Reference
 
-Professional WhatsApp Gateway REST API with **81 routes** for complete WhatsApp automation.
+Professional WhatsApp Gateway REST API with **80 routes** for complete WhatsApp automation.
 
 > **Version**: 1.6.1 | **Last Updated**: June 2026
 
@@ -2977,81 +2977,6 @@ curl -X POST "http://localhost:3000/api/messages/session-01/628123456789@s.whats
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{"title":"Our Services","options":["Web Dev","App Dev","UI/UX"],"footer":"Choose one"}'
-```
-
----
-
-### \[POST\] /messages/{sessionId}/{jid}/spam
-
-**Message bombing (Spam)**
-
-Send a message multiple times in a row in the background
-
-#### Parameters
-
-| Name | Located in | Required | Type | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `sessionId` | path | ✅ Yes | string | — |
-| `jid` | path | ✅ Yes | string | — |
-
-#### Headers
-
-```
-X-API-Key: your-api-key
-Content-Type: application/json
-```
-
-#### Request Body (`application/json`)
-
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `message` | string | ✅ Yes | — |
-| `count` | integer | No | **Default:** `10` |
-| `delay` | integer | No | Delay in ms **Default:** `500` |
-
-**Example:**
-
-```json
-{
-  "message": "Check our new catalog!",
-  "count": 5,
-  "delay": 1000
-}
-```
-
-#### Responses
-
-| Code | Description |
-| :--- | :--- |
-| `200` | Spam started |
-| `401` | Unauthorized - Invalid or missing API key |
-| `403` | Forbidden - Access denied |
-| `500` | Failed to start spam |
-| `503` | Session not connected or ready |
-
-**Response Fields (`200`):**
-
-| Field | Type | Required | Description |
-| :--- | :--- | :--- | :--- |
-| `success` | boolean | No | — |
-| `message` | string | No | — |
-
-**Response Example (`200`):**
-
-```json
-{
-  "success": true,
-  "message": "string"
-}
-```
-
-#### cURL Example
-
-```bash
-curl -X POST "http://localhost:3000/api/messages/session-01/628123456789@s.whatsapp.net/spam" \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Check our new catalog!","count":5,"delay":1000}'
 ```
 
 ---
