@@ -30,7 +30,19 @@ const param = (v: string, max = 60) => (v.replace(/\s+/g, " ").trim() || "-").sl
 
 export const pausadaAgora = (c: Pick<ConversaRef, "estado" | "pausadaAte">, agora: Date) => c.estado === "humano" && c.pausadaAte !== null && c.pausadaAte > agora;
 
+/** Máximo de avisos ao responsável por loja por dia (São Paulo). Acima disso a IA pausa a conversa mas NÃO envia mais template. */
+export const MAX_AVISOS_DONO_DIA = 10;
+
+/** "AAAA-MM-DD" no fuso de São Paulo. */
+export function diaSaoPaulo(d: Date): string {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+    const v = (t: string) => p.find((x) => x.type === t)?.value;
+    return `${v("year")}-${v("month")}-${v("day")}`;
+}
+
 export interface DonoDeps {
+    /** Soma 1 ao contador (loja, chave) e devolve o novo total. Usa a tabela IaConsumo com chave "dono:AAAA-MM-DD". */
+    contar?: (lojaCodigo: string, chave: string) => Promise<number>;
     enviarTemplate: (to: string, template: TemplateInput) => Promise<unknown>;
     store: Pick<IaStore, "pausar">;
     now: () => Date;
@@ -47,6 +59,20 @@ export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "envi
         if (!dono) {
             deps.logger.warn(TAG, "loja sem WhatsApp do responsável válido");
             return false;
+        }
+        if (deps.contar) {
+            let total = 0;
+            try {
+                total = await deps.contar(conversa.lojaCodigo, `dono:${diaSaoPaulo(agora)}`);
+            } catch (e) {
+                deps.logger.warn(TAG, `contagem de avisos falhou: ${e instanceof Error ? e.name : "erro"}`); // sem contagem, avisa (não perde o cliente)
+            }
+            if (total > MAX_AVISOS_DONO_DIA) {
+                // teto diário: pausa a conversa (a IA cala) mas não envia mais template para não inundar o responsável nem gerar custo
+                await deps.store.pausar(conversa.id, new Date(agora.getTime() + PAUSA_HORAS * 3_600_000));
+                deps.logger.warn(TAG, "teto diário de avisos ao responsável atingido: conversa pausada sem novo aviso");
+                return true;
+            }
         }
         const cliente = normalizeBrPhone(conversa.contactKey);
         try {
