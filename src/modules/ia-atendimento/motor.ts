@@ -16,6 +16,7 @@ import type { ConversaRef, IaStore } from "./store";
 export const MAX_PASSOS = 4;
 export const MAX_HISTORICO = 12;
 export const MAX_RESPOSTA = 900;
+export const mensagemSoLink = (link: string) => `No momento eu só consigo te passar o link do cardápio, onde você faz seu pedido: ${link}`;
 export const MSG_FALHA = "Desculpe, não consegui responder agora. Pode tentar de novo em instantes?";
 
 export interface MotorDeps {
@@ -24,6 +25,8 @@ export interface MotorDeps {
     contexto: (codigoLoja: string, telefone: string) => Promise<IaContexto>;
     /** Ações das ferramentas por conversa (Task 7 liga o aviso ao dono). */
     acoes: (conversa: ConversaRef, ctx: IaContextoAtivo) => AcoesFerramentas;
+    /** Limite mensal (consumo.ts): "so_link" = só manda o link do cardápio, sem chamar o modelo. Ausente = sem limite. */
+    limite?: (conversa: ConversaRef, ctx: IaContextoAtivo) => Promise<"ok" | "so_link">;
     logger: { warn: (tag: string, msg: string) => void };
 }
 
@@ -58,6 +61,7 @@ export function criarResponder(deps: MotorDeps): Responder {
             const telefone = contactKey.replace(/\D/g, "");
             const ctx = await deps.contexto(conversa.lojaCodigo, telefone);
             if (!ctx.ativa) return null;
+            if (deps.limite && (await deps.limite(conversa, ctx)) === "so_link") return mensagemSoLink(ctx.loja.link_cardapio);
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
             const mensagens = montarMensagens(hist, texto);
@@ -91,12 +95,13 @@ export function criarResponder(deps: MotorDeps): Responder {
     };
 }
 
-export function motorPadrao(llm: Llm, store: Pick<IaStore, "historico">, acoes?: MotorDeps["acoes"]): Responder {
+export function motorPadrao(llm: Llm, store: Pick<IaStore, "historico">, acoes?: MotorDeps["acoes"], limite?: MotorDeps["limite"]): Responder {
     return criarResponder({
         llm,
         store,
         contexto: (loja, tel) => buscarContexto(loja, tel),
         acoes: acoes ?? (() => ({ chamarDono: async () => false, registrarPergunta: async () => undefined })),
+        limite,
         logger: defaultLogger,
     });
 }

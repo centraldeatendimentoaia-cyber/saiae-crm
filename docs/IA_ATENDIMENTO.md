@@ -31,3 +31,10 @@ Ordem: mensagens de um lote são tratadas por timestamp. Uma mensagem com proble
 
 ### Variáveis
 `IA_ATENDIMENTO` (`on` liga) e as da Cloud API (`WHATSAPP_CLOUD_SESSION_ID`, `META_WA_ACCESS_TOKEN`, `META_WA_PHONE_NUMBER_ID`). O envio usa a primeira sessão de `WHATSAPP_CLOUD_SESSION_ID`.
+
+## Limite mensal e consumo (Tarefa 9)
+
+- **Conta**: uma conversa = um cliente (telefone) numa loja, numa janela de 24 h, no mês de São Paulo (tabela `IaConsumo`, já existente). A contagem é feita pela primeira mensagem do cliente na janela, lendo `IaMensagem` (sem schema novo).
+- **Limite**: vem de `plano_limite_conversas` do contexto da Comanda (mesma fonte da tela do dono; `null` = sem limite). Passou do limite: a IA só envia o link do cardápio (sem chamar o modelo) e o responsável recebe **um** aviso no mês (template `ia_chamar_dono`, sem pausar a conversa).
+- **Aproximações da fase 1**: o "último limite visto" e o "já avisei este mês" ficam em memória (reiniciar o serviço apaga; pode repetir um aviso). Conversas em andamento quando o contador passa do limite também caem em "só link". Falha ao contar nunca silencia a IA.
+- **Rota para a Comanda**: `GET /api/integracao/comanda/v1/ia-consumo?codigo_loja=XXXXXX`, cabeçalhos `X-Saiae-Timestamp` (segundos) e `X-Saiae-Signature = sha256=` + HMAC(`COMANDA_IA_SEGREDO`, `${timestamp}.${codigo_loja}`), janela de 5 min, lista de segredos para rotação. Resposta `200 {mes: "AAAA-MM", conversas, limite}` (`limite` = último limite visto, ou `null`; loja desconhecida = `0` e `null`). `401` e `400` (código inválido) sem corpo; `503` sem corpo se não houver segredo configurado.
