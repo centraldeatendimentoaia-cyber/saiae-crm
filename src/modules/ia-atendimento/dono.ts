@@ -4,6 +4,9 @@ import type { TemplateInput } from "@/modules/whatsapp/provider/types";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import type { MotivoDono } from "./ferramentas";
 import { VENDAS, type ConversaRef, type IaStore } from "./store";
+import { diaSaoPaulo } from "./tempo";
+
+export { diaSaoPaulo };
 
 /**
  * Passar o atendimento para o responsável da loja: aviso por template aprovado (fora da janela de 24 h só template
@@ -32,13 +35,6 @@ export const pausadaAgora = (c: Pick<ConversaRef, "estado" | "pausadaAte">, agor
 
 /** Máximo de avisos ao responsável por loja por dia (São Paulo). Acima disso a IA pausa a conversa mas NÃO envia mais template. */
 export const MAX_AVISOS_DONO_DIA = 10;
-
-/** "AAAA-MM-DD" no fuso de São Paulo. */
-export function diaSaoPaulo(d: Date): string {
-    const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
-    const v = (t: string) => p.find((x) => x.type === t)?.value;
-    return `${v("year")}-${v("month")}-${v("day")}`;
-}
 
 export interface DonoDeps {
     /** Soma 1 ao contador (loja, chave) e devolve o novo total. Usa a tabela IaConsumo com chave "dono:AAAA-MM-DD". */

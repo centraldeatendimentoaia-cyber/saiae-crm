@@ -9,7 +9,7 @@ import { criarControleLimite, maxRespostasDia, prismaConsumo } from "./consumo";
 import { criarAvisoLimite, criarChamadorDono, criarLiberador } from "./dono";
 import { LlmAnthropic } from "./llm";
 import { motorPadrao } from "./motor";
-import { prismaLeads } from "./vendas/lead";
+import { prismaLeads } from "./vendas/lead-store";
 import { criarControleVendas, criarResponderVendas } from "./vendas/motor";
 import type { MotivoHumano } from "./vendas/ferramentas";
 import { VENDAS } from "./store";
