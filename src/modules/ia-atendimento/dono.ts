@@ -120,15 +120,15 @@ export function criarLiberador(over: Partial<LiberadorDeps> & Pick<LiberadorDeps
     };
 }
 
-/** Aviso único do mês: o limite de conversas da IA do plano acabou. Não pausa nada (a IA segue só com o link). */
+/** Aviso único por período: o limite de conversas do plano (mês) ou o teto diário da plataforma acabou. Não pausa nada (a IA segue só com o link). */
 export function criarAvisoLimite(enviarTemplate: DonoDeps["enviarTemplate"]) {
-    return async (ctx: IaContextoAtivo): Promise<void> => {
+    return async (ctx: IaContextoAtivo, motivo: "plano" | "global" = "plano"): Promise<void> => {
         const dono = normalizeBrPhone(ctx.ia.whatsapp_dono);
         if (!dono) return;
         await enviarTemplate(dono, {
             name: TEMPLATE_DONO,
             languageCode: "pt_BR",
-            bodyParameters: [param(ctx.loja.nome), "limite mensal de conversas da IA atingido; ela só envia o link do cardápio até o mês virar", "nenhum", "-"],
+            bodyParameters: [param(ctx.loja.nome), motivo === "global" ? "limite diário de respostas da IA atingido; ela só envia o link do cardápio até amanhã" : "limite mensal de conversas da IA atingido; ela só envia o link do cardápio até o mês virar", "nenhum", "-"],
         });
     };
 }
