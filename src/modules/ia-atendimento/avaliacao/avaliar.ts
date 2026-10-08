@@ -1,6 +1,6 @@
 import type { ConversaRef } from "../store";
 import type { Llm } from "../llm";
-import { criarResponder } from "../motor";
+import { criarResponder, MSG_FALHA } from "../motor";
 import { criarResponderVendas } from "../vendas/motor";
 import { CASOS, CTX_BASE, type Caso, type Execucao } from "./casos";
 import { CASOS_VENDAS, LINK_VENDAS } from "./casos-vendas";
@@ -68,7 +68,9 @@ export async function avaliar(llm: Llm, opts: { casos?: Caso[]; filtro?: string;
     for (const caso of casos) {
         let motivo: string | null;
         try {
-            motivo = caso.verificar(await executarCaso(llm, caso));
+            const execucao = await executarCaso(llm, caso);
+            // a mensagem de falha do motor (erro de API, créditos, rede) NÃO é uma resposta do modelo: o caso é inválido, nunca "passou"
+            motivo = execucao.resposta === MSG_FALHA ? "inválido: o motor devolveu a mensagem de falha (erro de API, créditos ou rede); nada foi avaliado" : caso.verificar(execucao);
         } catch (e) {
             motivo = `erro ao executar: ${(e as { name?: string })?.name ?? "erro"}`;
         }

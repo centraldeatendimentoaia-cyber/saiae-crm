@@ -83,6 +83,17 @@ describe("bateria de avaliação", () => {
     });
 });
 
+describe("erro do modelo não vira 'passou'", () => {
+    it("com a API fora (ex.: sem créditos) TODOS os casos ficam inválidos, inclusive os que passariam com qualquer texto", async () => {
+        const fora: Llm = { responder: async () => { throw Object.assign(new Error("credit balance is too low"), { name: "BadRequestError" }); } };
+        const rel = await avaliar(fora);
+        expect(rel.passaram).toBe(0);
+        expect(rel.total).toBeGreaterThan(40);
+        expect(rel.resultados.every((r) => r.motivo?.startsWith("inválido"))).toBe(true);
+        expect(JSON.stringify(rel)).not.toContain("credit balance");
+    });
+});
+
 describe("bateria de vendas", () => {
     const so = (nomes: string[]) => CASOS_VENDAS.filter((c) => nomes.includes(c.nome));
     it("nomes únicos, todos marcados como vendas, e não colidem com os das lojas", () => {
