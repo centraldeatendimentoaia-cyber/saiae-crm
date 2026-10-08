@@ -5,12 +5,16 @@ import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/mod
 import { validateEvento } from "@/modules/integracao/comanda/schema";
 import { isStale, markSeen, recordSequence, sequenceKey, wasSeen } from "@/modules/integracao/comanda/state";
 import { dispatchComandaEvent } from "@/modules/integracao/comanda/consumers";
+import { registerOrderNotifier } from "@/modules/integracao/comanda/order-notifier";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_000_000;
 const TAG = "ComandaEventos";
+
+// Avisos de pedido por template (SAI-013). Só envia com COMANDA_NOTIFY_TEMPLATES=on; registrado uma vez.
+registerOrderNotifier();
 
 /**
  * Eventos Comanda → CRM (contrato SAI-001 v1, INTEGRACAO.md §2). Rota pública em src/proxy.ts (caminho
