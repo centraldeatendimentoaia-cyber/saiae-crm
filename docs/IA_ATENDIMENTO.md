@@ -38,3 +38,8 @@ Ordem: mensagens de um lote são tratadas por timestamp. Uma mensagem com proble
 - **Limite**: vem de `plano_limite_conversas` do contexto da Comanda (mesma fonte da tela do dono; `null` = sem limite). Passou do limite: a IA só envia o link do cardápio (sem chamar o modelo) e o responsável recebe **um** aviso no mês (template `ia_chamar_dono`, sem pausar a conversa).
 - **Aproximações da fase 1**: o "último limite visto" e o "já avisei este mês" ficam em memória (reiniciar o serviço apaga; pode repetir um aviso). Conversas em andamento quando o contador passa do limite também caem em "só link". Falha ao contar nunca silencia a IA.
 - **Rota para a Comanda**: `GET /api/integracao/comanda/v1/ia-consumo?codigo_loja=XXXXXX`, cabeçalhos `X-Saiae-Timestamp` (segundos) e `X-Saiae-Signature = sha256=` + HMAC(`COMANDA_IA_SEGREDO`, `${timestamp}.${codigo_loja}`), janela de 5 min, lista de segredos para rotação. Resposta `200 {mes: "AAAA-MM", conversas, limite}` (`limite` = último limite visto, ou `null`; loja desconhecida = `0` e `null`). `401` e `400` (código inválido) sem corpo; `503` sem corpo se não houver segredo configurado.
+
+## Pendências antes de abrir para clientes reais
+
+- **Apagar conversas da IA quando o cliente apaga os dados na Comanda**: rota assinada no CRM (mesma assinatura HMAC), chamada pela `cliente_apagar_dados` da Comanda, que remove `IaConversa`/`IaMensagem` daquele telefone. Ainda NÃO implementado (hoje só vale a retenção de 30 dias).
+- Teto global de respostas por dia (`IA_MAX_RESPOSTAS_DIA`) e limite diário de avisos ao responsável: ver os PRs de segurança da IA.

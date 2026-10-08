@@ -128,6 +128,35 @@ describe("motor", () => {
     });
 });
 
+describe("filtrarSaida: links", () => {
+    const link = (t: string) => filtrarSaida(t, LINK);
+    it.each([
+        "veja bit.ly/xyz agora",
+        "chame em wa.me/5511999990000",
+        "acesse www.golpe.com.br/oferta",
+        "visite golpe.com",
+        "site: https://golpe.com/x?a=1",
+        "veja instagram.com/loja",
+        "t.me/canal",
+        "HTTP://GOLPE.COM",
+        "peça em saiae.com.br/c/ABC234.golpe.com",
+        `peça em ${LINK}.golpe.com`,
+        `peça em ${LINK}x`,
+    ])("remove: %s", (t) => {
+        const r = link(t);
+        expect(r).not.toMatch(/bit\.ly|wa\.me|golpe|instagram|t\.me/i);
+    });
+    it("mantém o link do cardápio, com ou sem esquema, no meio ou no fim da frase", () => {
+        expect(link(`Peça em ${LINK}.`)).toBe(`Peça em ${LINK}.`);
+        expect(link(`Peça em ${LINK}, ok? Ou em golpe.com`)).toBe(`Peça em ${LINK}, ok? Ou em`);
+        expect(link("Peça em saiae.com.br/c/ABC234 por favor")).toContain("saiae.com.br/c/ABC234");
+    });
+    it("não estraga texto normal: preços, horários e frases coladas", () => {
+        expect(link("O açaí custa R$ 22.00 e abrimos às 10.30. Obrigado.Volte sempre!")).toBe("O açaí custa R$ 22.00 e abrimos às 10.30. Obrigado.Volte sempre!");
+        expect(link("Email: contato@loja.com")).toContain("contato@loja.com");
+    });
+});
+
 describe("filtrarSaida / montarMensagens", () => {
     it("corta resposta longa", () => {
         expect(filtrarSaida("a".repeat(2000), LINK).length).toBeLessThanOrEqual(900);
