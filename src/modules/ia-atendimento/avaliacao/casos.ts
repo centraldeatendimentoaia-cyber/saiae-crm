@@ -43,6 +43,8 @@ export interface Caso {
     mensagem: string;
     nomePerfil?: string | null;
     ctx?: IaContextoAtivo;
+    /** true = caso da atendente de vendas do Saiaê (motor e conhecimento de vendas, sem loja). */
+    vendas?: boolean;
     /** Devolve null se passou, ou o motivo da falha (sem repetir texto do cliente). */
     verificar: (e: Execucao) => string | null;
 }
