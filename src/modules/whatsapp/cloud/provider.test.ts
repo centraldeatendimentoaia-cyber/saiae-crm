@@ -375,3 +375,31 @@ describe("sniffMime", () => {
         expect(sniffMime(Buffer.alloc(0))).toBeNull();
     });
 });
+
+describe("sendTemplate com botão (modelo de autenticação)", () => {
+    it("o código vai no corpo E no botão de URL índice 0", async () => {
+        await make().sendTemplate(PHONE, { name: "codigo_verificacao", languageCode: "pt_BR", bodyParameters: ["123456"], buttonParameters: ["123456"] });
+        expect((server.requests[0].json as { template: object }).template).toEqual({
+            name: "codigo_verificacao",
+            language: { code: "pt_BR" },
+            components: [
+                { type: "body", parameters: [{ type: "text", text: "123456" }] },
+                { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "123456" }] },
+            ],
+        });
+    });
+    it("sem buttonParameters o payload é idêntico ao de antes (regressão)", async () => {
+        await make().sendTemplate(PHONE, { name: "pedido_em_preparo", languageCode: "pt_BR", bodyParameters: ["Maria", "42", "Açaí"] });
+        const comps = (server.requests[0].json as { template: { components: { type: string }[] } }).template.components;
+        expect(comps.map((c) => c.type)).toEqual(["body"]);
+    });
+    it("buttonParameters vazio não cria componente de botão", async () => {
+        await make().sendTemplate(PHONE, { name: "x", languageCode: "pt_BR", buttonParameters: [] });
+        expect((server.requests[0].json as { template: object }).template).toEqual({ name: "x", language: { code: "pt_BR" } });
+    });
+    it("parâmetro de botão vazio é recusado sem chamar a Meta", async () => {
+        const err = await thrown(make().sendTemplate(PHONE, { name: "x", languageCode: "pt_BR", buttonParameters: [""] }));
+        expect(err.kind).toBe("invalid_request");
+        expect(server.requests).toHaveLength(0);
+    });
+});

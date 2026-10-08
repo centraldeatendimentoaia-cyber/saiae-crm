@@ -29,6 +29,11 @@ export interface TemplateInput {
     languageCode: string;
     /** Valores de {{1}}, {{2}}... do corpo, na ordem. */
     bodyParameters?: string[];
+    /**
+     * Parâmetro do botão de URL (índice 0). Modelos de AUTENTICAÇÃO exigem o código também no botão
+     * "copiar código"; sem isso a Meta recusa o envio.
+     */
+    buttonParameters?: string[];
     /** Componentes avançados (cabeçalho com mídia, botões) no formato da Meta, quando preciso. */
     components?: unknown[];
 }
