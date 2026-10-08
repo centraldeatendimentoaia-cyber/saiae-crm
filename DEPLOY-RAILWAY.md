@@ -62,6 +62,8 @@ Serviço **app** → *Settings* → **Networking** → **Generate Domain** (ou u
 3. *Variables*:
    - `DATABASE_URL` = `${{MySQL.MYSQL_URL}}`
    - `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET`, `BACKUP_S3_REGION` (`auto` no Cloudflare R2)
+   - A imagem usa `node:24-alpine3.22` (versão do Alpine fixada) e o build **falha** se o plugin `caching_sha2_password.so` do cliente não existir. O script lê `mariadb-dump --version` para decidir o `--skip-ssl` (rede privada do Railway) e, se aparecer o erro `Plugin caching_sha2_password could not be loaded`, imprime um aviso. Para trocar a versão do Alpine: altere `Dockerfile.backup`, faça o merge e clique **Run now**; confira nos logs a linha `Cliente de dump: ... -> MariaDB (--skip-ssl)` e depois `Backup enviado para o bucket`.
+   - Defina `MYSQLDUMP_PATH=mariadb-dump` (a imagem já traz esse valor padrão).
 4. Rode uma vez manualmente (*Deployments → Redeploy*) e confira nos logs a linha `Backup enviado para o bucket` e o arquivo `.sql.gz` no bucket.
 5. No bucket, crie uma regra de ciclo de vida para apagar arquivos com mais de 30 dias.
 
