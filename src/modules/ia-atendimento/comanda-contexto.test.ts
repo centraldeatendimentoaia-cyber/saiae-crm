@@ -186,9 +186,21 @@ describe("configuração e entradas inválidas (nem chama a Comanda)", () => {
         expect(await buscarContexto(codigo, TEL, deps)).toEqual(INATIVA);
         expect(fetchMock).not.toHaveBeenCalled();
     });
-    it.each(["", "123", "BR.13491208655302741918", "abc61999990001", "55619999900011111", "999990001"])("telefone inválido ou BSUID %j", async (tel) => {
-        expect(await buscarContexto(LOJA, tel, deps)).toEqual(INATIVA);
-        expect(fetchMock).not.toHaveBeenCalled();
+    it.each(["", "123", "BR.13491208655302741918", "abc61999990001", "55619999900011111", "999990001"])("telefone inválido ou BSUID %j: chama SEM telefone e nunca identifica o cliente", async (tel) => {
+        const r = await buscarContexto(LOJA, tel, deps);
+        expect(r.ativa).toBe(true);
+        expect(r.ativa && r.cliente).toBeNull(); // mesmo que a Comanda devolvesse um cliente
+        expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ codigo_loja: LOJA });
+    });
+    it("anônimo não vaza para quem tem telefone (chaves de cache diferentes)", async () => {
+        await buscarContexto(LOJA, "BR.123", deps);
+        const b = await buscarContexto(LOJA, TEL, deps);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(b.ativa && b.cliente).not.toBeNull();
+    });
+    it("Comanda recusa a chamada sem telefone: IA fica calada", async () => {
+        fetchMock.mockResolvedValue(new Response("{}", { status: 422 }));
+        expect(await buscarContexto(LOJA, "BR.123", deps)).toEqual(INATIVA);
     });
 });
 

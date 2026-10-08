@@ -120,7 +120,6 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
             c.ignoradas++;
             return;
         }
-        deps.vistos.set(m.messageId, true);
 
         const contactKey = m.from.contactKey;
         const jid = `${contactKey}@s.whatsapp.net`;
@@ -148,6 +147,8 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
             lojaCodigo: loja ?? SEM_LOJA, contactKey, providerMessageId: m.messageId,
             texto: semLoja || !emTexto ? `[${semLoja ? "sem loja" : m.type}]` : texto.slice(0, MAX_TEXTO), direcao: "in", em: m.timestamp,
         });
+        // só depois de gravar: se a gravação falhar, a reentrega da Meta ainda é processada (não fica marcada como vista)
+        deps.vistos.set(m.messageId, true);
         if (!registro.novo) {
             c.ignoradas++; // reentrega da Meta já gravada
             return;
