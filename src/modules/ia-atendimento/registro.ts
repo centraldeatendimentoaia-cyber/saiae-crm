@@ -4,6 +4,7 @@ import { CloudApiProvider } from "@/modules/whatsapp/cloud/provider";
 import { cloudSessionIds } from "@/modules/whatsapp/provider";
 import { registerInboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import { criarConsumidorIa, type IaDeps } from "./consumer";
+import { criarConfirmador } from "./confirmar-dono";
 import { criarControleLimite, prismaConsumo } from "./consumo";
 import { criarAvisoLimite, criarChamadorDono, criarLiberador } from "./dono";
 import { LlmAnthropic } from "./llm";
@@ -56,6 +57,13 @@ export function criarMotor(env: Record<string, string | undefined> = process.env
     );
 }
 
+/** Mensagens do responsável: "LIBERAR #CODIGO" ou "CONFIRMAR #CODIGO" (as duas só valem do WhatsApp cadastrado da loja). */
+export function criarLiberadorOuConfirmador(): NonNullable<IaDeps["liberar"]> {
+    const liberar = criarLiberador({ store: prismaStore });
+    const confirmar = criarConfirmador();
+    return async (texto, contactKey) => (await liberar(texto, contactKey)) ?? (await confirmar(texto, contactKey));
+}
+
 export function registrarIaAtendimento(over: Partial<IaDeps> = {}, env: Record<string, string | undefined> = process.env): void {
     const g = globalThis as unknown as { __iaAtendimentoRegistrado?: boolean };
     if (g.__iaAtendimentoRegistrado) return;
@@ -65,5 +73,5 @@ export function registrarIaAtendimento(over: Partial<IaDeps> = {}, env: Record<s
     const enviar = criarEnvioCloud(env) ?? (async () => {
         throw new Error("Cloud API não configurada");
     });
-    registerInboundConsumer(criarConsumidorIa({ enviar, responder: criarMotor(env), liberar: criarLiberador({ store: prismaStore }), ...over }));
+    registerInboundConsumer(criarConsumidorIa({ enviar, responder: criarMotor(env), liberar: criarLiberadorOuConfirmador(), ...over }));
 }
