@@ -47,3 +47,13 @@ Ordem: mensagens de um lote são tratadas por timestamp. Uma mensagem com proble
 ## Teto global de custo (`IA_MAX_RESPOSTAS_DIA`)
 
 Kill-switch da plataforma: no máximo `IA_MAX_RESPOSTAS_DIA` respostas do modelo por dia (fuso de São Paulo, padrão **500**; valor ausente, inválido ou ≤ 0 usa 500), somando todas as lojas e valendo também para lojas sem limite de plano. Ao passar, a IA só manda o link do cardápio (sem chamar o modelo) e o responsável de cada loja recebe **um** aviso no dia (template `ia_chamar_dono`). O contador fica em `IaConsumo` (loja `GLOBAL`, período `ia:AAAA-MM-DD`). Falha ao contar não silencia a IA.
+
+## Confirmação do WhatsApp do responsável
+
+A IA só avisa (e só aceita "LIBERAR") o número do responsável depois que ele provar que é dele. Fluxo:
+
+1. **Comanda → CRM**: `POST /api/integracao/comanda/v1/ia-dono-pedir-confirmacao` com `{"codigo_loja":"ABC234","telefone":"5561988887777"}` (telefone só dígitos com 55, vindo do banco da Comanda). Assinatura igual à do ia-contexto (`X-Saiae-Timestamp`, `X-Saiae-Signature = sha256=` + HMAC(`COMANDA_IA_SEGREDO`, `${timestamp}.${corpo}`), janela de 5 min, lista de segredos). O CRM envia o template `ia_chamar_dono` a **esse telefone** (a IA fica desligada até a confirmação, então o `ia-contexto` não serve para achar o número), com o motivo "confirmar este número como responsável da loja; responda CONFIRMAR #CODIGO". Resposta `200 {"enviado":true}` ou `200 {"enviado":false,"motivo":"sem_whatsapp"|"limite"|"falha_envio"}`; máximo de **3 pedidos por loja por dia** (contador em `IaConsumo`, chave `confirmar:AAAA-MM-DD`); `401`/`400`/`413`/`503` sem corpo.
+2. **Dono → CRM**: o dono responde `CONFIRMAR #CODIGO` do próprio número. O CRM chama `COMANDA_IA_DONO_CONFIRMAR_URL` (edge function `ia-dono-confirmar`) com `{"codigo_loja","telefone"}` assinado como o ia-contexto. **Quem compara o número é a Comanda** (DDD + 8 últimos dígitos). Só com `200 {"confirmado":true}` o dono recebe "Número confirmado"; `{"confirmado":false,...}`, erro ou rede: nada é respondido nem revelado (a mensagem segue como de cliente comum).
+3. Se o dono mudar o número na Comanda, a confirmação zera lá e a IA desliga.
+
+Observação do template `ia_chamar_dono`: o texto fixo termina com "responda aqui: LIBERAR #{{4}}". Para o pedido de confirmação o motivo ({{2}}) já diz para responder CONFIRMAR; se a Meta aprovar, vale considerar um template próprio só de confirmação para não misturar as instruções.
