@@ -1,9 +1,8 @@
 import cron from "node-cron";
 import { personalizeFor } from "@/lib/personalize";
-import { resolveSendJid } from "@/lib/wa-jid";
 import cronParser from "cron-parser";
 import { prisma } from "@/lib/prisma";
-import { waManager } from "@/modules/whatsapp/manager";
+import { getProvider } from "@/modules/whatsapp/provider";
 import { logger } from "./logger";
 import { assertCanSend, recordMessages } from "@/lib/plans";
 import { isOptedOut } from "@/lib/optout";
@@ -45,9 +44,9 @@ export function initScheduler() {
 
             let batchCount = 0;
             for (const msg of pendingMessages) {
-                const instance = waManager.getInstance(msg.session.sessionId);
+                const provider = getProvider(msg.session.sessionId);
 
-                if (!instance || !instance.socket) {
+                if (!provider || !provider.isConnected()) {
                     logger.warn("Cron", `Session ${msg.session.sessionId} not connected. Skipping.`);
                     // Optionally mark as FAILED or retry later
                     // keeping PENDING will define behavior (retry next minute)
@@ -82,31 +81,28 @@ export function initScheduler() {
                     
                     if (msg.mediaUrl) {
                         const type = msg.mediaType || "document";
-                        const to = await resolveSendJid(instance.socket, msg.jid);
+                        const to = await provider.resolveRecipient(msg.jid);
                         if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
                         if ((await onlyInteractedEnabled(msg.session.sessionId)) && !(await hasInteracted(msg.session.sessionId, to))) throw new Error(NO_INTERACTION_ERROR);
-                        const media = await resolveMedia(msg.mediaUrl);
-                        const src: any = media; // Buffer ou { url }
-                        let payload: any = {};
-                        if (msg.content) payload.caption = await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]);
+                        const media = await resolveMedia(msg.mediaUrl); // Buffer ou { url }
+                        const caption = msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : undefined;
 
-                        if (type === "image") {
-                            payload.image = src;
-                        } else if (type === "video") {
-                            payload.video = src;
-                        } else if (type === "audio") {
-                            payload = { audio: src };
+                        if (type === "image" || type === "video" || type === "audio") {
+                            await provider.sendMedia(to, { kind: type, data: media, caption });
                         } else {
-                            payload.document = src;
-                            payload.mimetype = "application/octet-stream";
-                            payload.fileName = msg.mediaUrl.split('/').pop() || "file";
+                            await provider.sendMedia(to, {
+                                kind: "document",
+                                data: media,
+                                caption,
+                                mimetype: "application/octet-stream",
+                                fileName: msg.mediaUrl.split('/').pop() || "file",
+                            });
                         }
-                        await instance.socket.sendMessage(to, payload);
                     } else {
-                        const to = await resolveSendJid(instance.socket, msg.jid);
+                        const to = await provider.resolveRecipient(msg.jid);
                         if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
                         if ((await onlyInteractedEnabled(msg.session.sessionId)) && !(await hasInteracted(msg.session.sessionId, to))) throw new Error(NO_INTERACTION_ERROR);
-                        await instance.socket.sendMessage(to, { text: msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "" });
+                        await provider.sendText(to, msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "");
                     }
 
                     await recordMessages(msg.session.userId, 1);
