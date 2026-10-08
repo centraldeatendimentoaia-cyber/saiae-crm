@@ -46,7 +46,7 @@ describe("registrarIaAtendimento", () => {
         const env = { IA_ATENDIMENTO: "on", WHATSAPP_CLOUD_SESSION_ID: "pilot" };
         vi.stubEnv("IA_ATENDIMENTO", "on");
         vi.stubEnv("WHATSAPP_CLOUD_SESSION_ID", "pilot");
-        registrarIaAtendimento({ enviar, store: { registrarMensagem: async () => ({ novo: false, conversa: { id: "c", lojaCodigo: "X", contactKey: "y", estado: "ia", pausadaAte: null } }), lojaDaConversa: async () => null, historico: async () => [] } }, env);
+        registrarIaAtendimento({ enviar, store: { registrarMensagem: async () => ({ novo: false, conversa: { id: "c", lojaCodigo: "X", contactKey: "y", estado: "ia", pausadaAte: null } }), lojaDaConversa: async () => null, historico: async () => [], pausar: async () => undefined, retomar: async () => undefined, retomarLoja: async () => 0 } }, env);
         registrarIaAtendimento({ enviar }, env);
         h.prisma.optOut.findUnique.mockResolvedValue(null);
         await dispatchInbound(normalizeMetaWebhook(fx.textMessage));

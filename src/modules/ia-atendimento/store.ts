@@ -39,6 +39,12 @@ export interface IaStore {
     lojaDaConversa(contactKey: string): Promise<string | null>;
     /** Últimas mensagens da conversa em ordem cronológica. */
     historico(conversaId: string, limite: number): Promise<{ direcao: "in" | "out"; texto: string }[]>;
+    /** Passa a conversa para o responsável da loja até `ate` (a IA fica calada). */
+    pausar(conversaId: string, ate: Date): Promise<void>;
+    /** Devolve a conversa à IA. */
+    retomar(conversaId: string): Promise<void>;
+    /** Devolve à IA todas as conversas pausadas da loja. Devolve quantas. */
+    retomarLoja(lojaCodigo: string): Promise<number>;
 }
 
 const isUniqueViolation = (e: unknown) => (e as { code?: string })?.code === "P2002";
@@ -75,6 +81,19 @@ export const prismaStore: IaStore = {
     async historico(conversaId, limite) {
         const rows = await prisma.iaMensagem.findMany({ where: { conversaId }, orderBy: { criadoEm: "desc" }, take: limite, select: { direcao: true, texto: true } });
         return rows.reverse().map((m) => ({ direcao: m.direcao === "out" ? "out" : "in", texto: m.texto }));
+    },
+
+    async pausar(conversaId, ate) {
+        await prisma.iaConversa.update({ where: { id: conversaId }, data: { estado: "humano", pausadaAte: ate } });
+    },
+
+    async retomar(conversaId) {
+        await prisma.iaConversa.update({ where: { id: conversaId }, data: { estado: "ia", pausadaAte: null } });
+    },
+
+    async retomarLoja(lojaCodigo) {
+        const r = await prisma.iaConversa.updateMany({ where: { lojaCodigo, estado: "humano" }, data: { estado: "ia", pausadaAte: null } });
+        return r.count;
     },
 };
 

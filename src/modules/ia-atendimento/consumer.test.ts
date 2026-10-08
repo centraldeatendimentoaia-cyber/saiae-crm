@@ -7,6 +7,7 @@ import {
     criarConsumidorIa, criarDepsPadrao, hashContato, LIMITE_POR_HORA, LIMITE_POR_MINUTO, MAX_TEXTO,
     MSG_ORIENTACAO, MSG_PARAR, MSG_TIPO_NAO_SUPORTADO, MSG_VOLTAR, type IaDeps,
 } from "./consumer";
+import { MSG_RESPONSAVEL_AVISADO } from "./dono";
 import { SEM_LOJA, type IaStore, type RegistroMensagem, type ConversaRef } from "./store";
 import type { NormalizedBatch, InboundMessage } from "@/modules/whatsapp/cloud/inbound";
 import { normalizeMetaWebhook } from "@/modules/whatsapp/cloud/inbound";
@@ -35,6 +36,9 @@ function memStore() {
             return all.length ? all[all.length - 1].lojaCodigo : null;
         },
         async historico() { return []; },
+        async pausar(id, ate) { for (const c of conversas.values()) if (c.id === id) { c.estado = "humano"; c.pausadaAte = ate; } },
+        async retomar(id) { for (const c of conversas.values()) if (c.id === id) { c.estado = "ia"; c.pausadaAte = null; } },
+        async retomarLoja(loja) { let n = 0; for (const c of conversas.values()) if (c.lojaCodigo === loja && c.estado === "humano") { c.estado = "ia"; c.pausadaAte = null; n++; } return n; },
     };
     return store;
 }
@@ -274,15 +278,33 @@ describe("pausa (dono chamado)", () => {
         };
         return { store };
     };
-    it("conversa em estado humano e dentro da pausa: grava, mas a IA não responde", async () => {
+    it("dentro da pausa: grava, a IA não responde e o cliente é avisado UMA vez", async () => {
         const { run, responder, enviar } = setup(humano(new Date(T0.getTime() + 3600_000)));
-        await run(lote(msg()));
+        await run(lote(msg({ messageId: "wamid.p1" })));
+        await run(lote(msg({ messageId: "wamid.p2", text: "alguém aí?" })));
         expect(responder).not.toHaveBeenCalled();
-        expect(enviar).not.toHaveBeenCalled();
+        expect(enviar).toHaveBeenCalledTimes(1);
+        expect(enviar).toHaveBeenCalledWith(PHONE, MSG_RESPONSAVEL_AVISADO);
     });
-    it("pausa vencida: a IA volta a responder", async () => {
-        const { run, responder } = setup(humano(new Date(T0.getTime() - 1000)));
+    it("pausa vencida: a IA volta a responder e a conversa é devolvida", async () => {
+        const over = humano(new Date(T0.getTime() - 1000));
+        const retomar = vi.spyOn(over.store!, "retomar");
+        const { run, responder } = setup(over);
         await run(lote(msg()));
+        expect(responder).toHaveBeenCalledTimes(1);
+        expect(retomar).toHaveBeenCalledTimes(1); // a resposta da IA regrava a conversa neste store de teste, então confere a chamada
+    });
+    it("LIBERAR do responsável: confirma e não chama a IA", async () => {
+        const liberar = vi.fn().mockResolvedValue("ok liberado");
+        const { run, responder, enviar } = setup({ liberar });
+        await run(lote(msg({ text: `LIBERAR #${LOJA}` })));
+        expect(liberar).toHaveBeenCalledWith(`LIBERAR #${LOJA}`, PHONE);
+        expect(enviar).toHaveBeenCalledWith(PHONE, "ok liberado");
+        expect(responder).not.toHaveBeenCalled();
+    });
+    it("liberar devolve null (não é o responsável): segue como cliente comum", async () => {
+        const { run, responder } = setup({ liberar: vi.fn().mockResolvedValue(null) });
+        await run(lote(msg({ text: `LIBERAR #${LOJA}` })));
         expect(responder).toHaveBeenCalledTimes(1);
     });
 });
