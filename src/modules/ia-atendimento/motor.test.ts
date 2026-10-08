@@ -194,7 +194,7 @@ describe("prompt: alergia", () => {
     it("manda nunca garantir segurança alimentar e sempre chamar o responsável", () => {
         const p = montarPromptSistema(ctx, { primeiraResposta: true });
         expect(p).toContain("ALERGIA, intolerância");
-        expect(p).toContain("NUNCA diga que um item é seguro");
+        expect(p).toContain("NUNCA garanta a ausência de um alérgeno");
         expect(p).toContain("SEMPRE use chamar_dono");
     });
 });

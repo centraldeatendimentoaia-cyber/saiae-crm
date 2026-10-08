@@ -1,5 +1,7 @@
 import { LlmAnthropic } from "../llm";
 import { avaliar, resumo } from "./avaliar";
+import { CASOS } from "./casos";
+import { CASOS_VENDAS } from "./casos-vendas";
 import { lerArgs } from "./args";
 import { formatarUso, medirUso } from "./custo";
 
@@ -7,7 +9,7 @@ import { formatarUso, medirUso } from "./custo";
  * `npm run ia:avaliar` — roda a bateria contra o modelo REAL (gasta dinheiro: cada rodada completa são dezenas de chamadas).
  * Lê IA_MODELO e ANTHROPIC_API_KEY do ambiente ou do arquivo `.env.avaliacao` (fora do git). Nunca imprime a chave,
  * as mensagens dos casos nem as respostas: só o nome do caso, o motivo da falha e as contagens de tokens.
- * Opções: `--caso=trecho` roda só os casos cujo nome contém o trecho; `--modelo=claude-haiku-5-5` troca o modelo só nesta
+ * Opções: `--caso=trecho` roda só os casos cujo nome contém o trecho; `--grupo=lojas|vendas` roda só os casos desse grupo; `--modelo=claude-haiku-5-5` troca o modelo só nesta
  * rodada (para comparar custo e qualidade). No fim imprime os tokens e o custo ESTIMADO da rodada.
  * Saída 0 = tudo passou, 1 = falhou, 2 = sem configuração.
  */
@@ -27,6 +29,7 @@ async function main() {
     const medido = medirUso(new LlmAnthropic({ modelo, onUso: () => undefined }));
     const rel = await avaliar(medido.llm, {
         filtro: args.caso,
+        casos: args.grupo === "lojas" ? CASOS : args.grupo === "vendas" ? CASOS_VENDAS : undefined,
         aoTerminarCaso: (r) => console.log(`${r.passou ? "OK   " : "FALHA"} [${r.categoria}] ${r.nome}${r.motivo ? ` - ${r.motivo}` : ""}`),
     });
     console.log(`\n${resumo(rel)}`);

@@ -72,9 +72,9 @@ describe("teto diário de avisos ao responsável", () => {
         expect(m.contar).toHaveBeenCalledWith("ABC234", "dono:2026-10-08");
         expect(m.enviarTemplate).toHaveBeenCalledTimes(1);
     });
-    it("acima do teto: pausa a conversa, NÃO envia template e devolve true", async () => {
+    it("acima do teto: pausa a conversa, NÃO envia template e devolve \"teto\"", async () => {
         const m = montar(MAX_AVISOS_DONO_DIA);
-        expect(await m.chamar(conversa(), ctx(DONO), "nao_sei")).toBe(true);
+        expect(await m.chamar(conversa(), ctx(DONO), "nao_sei")).toBe("teto");
         expect(m.enviarTemplate).not.toHaveBeenCalled();
         expect(m.store.pausar).toHaveBeenCalledTimes(1);
     });

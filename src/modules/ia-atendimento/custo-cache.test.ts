@@ -114,8 +114,11 @@ describe("custo estimado da bateria", () => {
 
 describe("argumentos de ia:avaliar", () => {
     it("--caso e --modelo", () => {
-        expect(lerArgs(["x", "y", "--caso=vendas-", "--modelo=claude-haiku-5-5"])).toEqual({ caso: "vendas-", modelo: "claude-haiku-5-5" });
-        expect(lerArgs([])).toEqual({ caso: undefined, modelo: undefined });
+        expect(lerArgs(["x", "y", "--caso=vendas-", "--modelo=claude-haiku-5-5"])).toEqual({ caso: "vendas-", grupo: undefined, modelo: "claude-haiku-5-5" });
+        expect(lerArgs([])).toEqual({ caso: undefined, grupo: undefined, modelo: undefined });
+        expect(lerArgs(["--grupo=lojas"]).grupo).toBe("lojas");
+        expect(lerArgs(["--grupo=vendas"]).grupo).toBe("vendas");
+        expect(lerArgs(["--grupo=outro"]).grupo).toBeUndefined();
     });
     it("modelo com caracteres estranhos é ignorado (não vai para a API)", () => {
         expect(lerArgs(["--modelo=a b;rm -rf"]).modelo).toBeUndefined();
