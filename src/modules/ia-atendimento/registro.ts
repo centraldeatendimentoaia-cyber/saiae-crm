@@ -42,7 +42,7 @@ export function criarMotor(env: Record<string, string | undefined> = process.env
         logger.warn("IaAtendimento", "Cloud API não configurada: a IA não vai responder");
         return undefined;
     }
-    const chamarDono = criarChamadorDono({ enviarTemplate: (to, t) => provider.sendTemplate!(to, t), store: prismaStore });
+    const chamarDono = criarChamadorDono({ enviarTemplate: (to, t) => provider.sendTemplate!(to, t), store: prismaStore, contar: prismaConsumo.incrementar });
     const limite = criarControleLimite({ store: prismaConsumo, avisarDono: criarAvisoLimite((to, t) => provider.sendTemplate!(to, t)) });
     return motorPadrao(
         new LlmAnthropic({ env }),

@@ -67,7 +67,7 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
                 if (!a.success) return { texto: "motivo inválido", erro: true };
                 const ok = await acoes.chamarDono(a.data.motivo);
                 return ok
-                    ? { texto: "O responsável da loja foi avisado e vai assumir a conversa. Diga isso ao cliente em uma frase, sem prometer prazo.", chamouDono: true }
+                    ? { texto: "A conversa foi passada ao responsável da loja. Diga ao cliente, em uma frase, que a loja vai responder assim que puder, sem prometer prazo.", chamouDono: true }
                     : { texto: "Não foi possível avisar o responsável agora. Peça desculpas e diga que a loja responderá assim que possível, sem prometer prazo.", erro: true };
             }
             case "registrar_pergunta_sem_resposta": {

@@ -4,7 +4,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import type { IaContextoAtivo } from "./comanda-contexto";
-import { criarChamadorDono, criarLiberador, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
+import { criarChamadorDono, criarLiberador, diaSaoPaulo, MAX_AVISOS_DONO_DIA, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
 import type { ConversaRef } from "./store";
 
 const T0 = new Date("2026-10-08T12:00:00Z");
@@ -54,6 +54,44 @@ describe("chamar o responsável", () => {
         const log = JSON.stringify([c.logger.info.mock.calls, c.logger.warn.mock.calls]);
         expect(log).not.toContain(DONO);
         expect(log).not.toContain(CLIENTE);
+    });
+});
+
+describe("teto diário de avisos ao responsável", () => {
+    const montar = (inicial: number) => {
+        let n = inicial;
+        const contar = vi.fn(async () => ++n);
+        const enviarTemplate = vi.fn(async () => ({}));
+        const store = { pausar: vi.fn(async () => undefined) };
+        const logger = { info: vi.fn(), warn: vi.fn() };
+        return { contar, enviarTemplate, store, chamar: criarChamadorDono({ enviarTemplate, store, contar, now: () => T0, logger }) };
+    };
+    it("até o teto envia o template; a chave é por loja e por dia de São Paulo", async () => {
+        const m = montar(MAX_AVISOS_DONO_DIA - 1);
+        expect(await m.chamar(conversa(), ctx(DONO), "nao_sei")).toBe(true);
+        expect(m.contar).toHaveBeenCalledWith("ABC234", "dono:2026-10-08");
+        expect(m.enviarTemplate).toHaveBeenCalledTimes(1);
+    });
+    it("acima do teto: pausa a conversa, NÃO envia template e devolve true", async () => {
+        const m = montar(MAX_AVISOS_DONO_DIA);
+        expect(await m.chamar(conversa(), ctx(DONO), "nao_sei")).toBe(true);
+        expect(m.enviarTemplate).not.toHaveBeenCalled();
+        expect(m.store.pausar).toHaveBeenCalledTimes(1);
+    });
+    it("virada do dia em São Paulo usa outra chave", () => {
+        expect(diaSaoPaulo(new Date("2026-10-09T02:30:00Z"))).toBe("2026-10-08");
+        expect(diaSaoPaulo(new Date("2026-10-09T03:00:00Z"))).toBe("2026-10-09");
+    });
+    it("conversa já pausada não gasta contador", async () => {
+        const m = montar(0);
+        await m.chamar(conversa({ estado: "humano", pausadaAte: new Date(T0.getTime() + 1000) }), ctx(DONO), "nao_sei");
+        expect(m.contar).not.toHaveBeenCalled();
+    });
+    it("falha na contagem não impede o aviso", async () => {
+        const enviarTemplate = vi.fn(async () => ({}));
+        const chamar = criarChamadorDono({ enviarTemplate, store: { pausar: async () => undefined }, contar: async () => { throw new Error("db"); }, now: () => T0, logger: { info: vi.fn(), warn: vi.fn() } });
+        expect(await chamar(conversa(), ctx(DONO), "nao_sei")).toBe(true);
+        expect(enviarTemplate).toHaveBeenCalledTimes(1);
     });
 });
 
