@@ -14,14 +14,14 @@ export function normalizePhone(raw: string): string {
  * (556199531848 e 5561999531848) viram a mesma chave. Aceita telefone ou JID.
  */
 export function canonicalPhone(raw: string): string {
-    let d = raw.split("@")[0].split(":")[0].replace(/D/g, "");
+    let d = raw.split("@")[0].split(":")[0].replace(/\D/g, "");
     if (d.startsWith("55") && d.length === 13 && d[4] === "9") d = d.slice(0, 4) + d.slice(5);
     return d;
 }
 
 /** Os dois formatos possíveis do mesmo número brasileiro (com e sem o 9º dígito), como JIDs. */
 export function jidVariants(jid: string): string[] {
-    const d = jid.split("@")[0].split(":")[0].replace(/D/g, "");
+    const d = jid.split("@")[0].split(":")[0].replace(/\D/g, "");
     const out = new Set<string>([`${d}@s.whatsapp.net`]);
     if (d.startsWith("55") && d.length === 13 && d[4] === "9") out.add(`${d.slice(0, 4)}${d.slice(5)}@s.whatsapp.net`);
     if (d.startsWith("55") && d.length === 12) out.add(`${d.slice(0, 4)}9${d.slice(4)}@s.whatsapp.net`);
