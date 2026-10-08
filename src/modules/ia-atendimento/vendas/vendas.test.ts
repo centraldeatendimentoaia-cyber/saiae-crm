@@ -184,6 +184,8 @@ describe("prompt de vendas", () => {
     });
     it("o conhecimento cobre os recursos reais e marca o que ainda não existe ou não se promete", () => {
         for (const t of ["Mesa, Balcão, Retirada e Entrega", "Cupons de desconto", "pedido grátis", "taxa de entrega", "FocusNFe", "app Android", "sem internet", "LGPD", "teste fechado"]) expect(CONHECIMENTO_SAIAE).toContain(t);
+        for (const t of ["Chamar o entregador", "código no WhatsApp", "Pix online"]) expect(CONHECIMENTO_SAIAE).toContain(t);
+        expect(CONHECIMENTO_SAIAE).not.toContain("ainda não está disponível e não se promete data");
         expect(CONHECIMENTO_SAIAE).toContain("AINDA NÃO EXISTE");
         expect(CONHECIMENTO_SAIAE).toMatch(/em validação/);
         expect(CONHECIMENTO_SAIAE).toMatch(/não se promete data|Não prometa data/);
