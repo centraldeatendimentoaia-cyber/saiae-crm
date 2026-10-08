@@ -35,7 +35,22 @@ export interface ProviderCapabilities {
     groups: boolean;
     polls: boolean;
     stickers: boolean;
+    /** Mensagem de lista interativa. */
+    lists: boolean;
+    contacts: boolean;
+    locations: boolean;
+    reactions: boolean;
+    /** Responder citando uma mensagem. */
+    replies: boolean;
+    forwarding: boolean;
+    deleteMessage: boolean;
+    editMessage: boolean;
+    starMessage: boolean;
+    /** Mencionar pessoas em texto de grupo. */
+    mentions: boolean;
 }
+
+export type Capability = keyof ProviderCapabilities;
 
 export type ProviderName = "baileys" | "cloud-api";
 

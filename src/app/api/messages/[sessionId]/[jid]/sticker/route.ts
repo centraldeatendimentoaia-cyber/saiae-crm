@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
+import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { fireSentWebhook } from "@/lib/webhook";
 import Sticker from "wa-sticker-formatter";
@@ -28,6 +29,9 @@ export async function POST(
         if (!canAccess) {
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
+
+        const unsupported = requireCapability(sessionId, "stickers");
+        if (unsupported) return unsupported;
 
         const instance = waManager.getInstance(sessionId);
         if (!instance?.socket) {
