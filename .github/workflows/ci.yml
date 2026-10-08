@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Valores falsos só para o build compilar. Nenhum segredo real é usado no CI.
+      DATABASE_URL: mysql://ci:ci@localhost:3306/ci
+      AUTH_SECRET: ci-only-not-a-secret-ci-only-not-a-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci --legacy-peer-deps
+
+      - name: Gerar o cliente Prisma
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  lint:
+    name: Lint (informativo)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # O projeto herdado tem centenas de erros de lint antigos (maioria no-explicit-any).
+    # Fica informativo até a limpeza; depois remova o continue-on-error para virar bloqueante.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx prisma generate
+      - run: npm run lint
