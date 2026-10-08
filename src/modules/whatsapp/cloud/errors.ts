@@ -58,7 +58,14 @@ export class WindowClosedError extends CloudApiError {
     }
 }
 
-/** Códigos conhecidos da Meta, agrupados. Fonte: lista de códigos de erro da Cloud API. */
+/**
+ * Códigos da Meta, agrupados por tipo.
+ *
+ * ATENÇÃO — NÃO VERIFICADOS um a um contra a documentação oficial (07/10/2026): 131047 (fora da janela de
+ * 24 h), 190 (token), 130429 e 131056 (limite de taxa), 80007 (limite), 131026 e 131030 (não entregável) e
+ * a faixa 132000-132999 (template). Vêm da lista de erros da Cloud API como o autor a conhece. Conferir
+ * na documentação da Meta antes de depender desta classificação em produção.
+ */
 export function classifyMetaError(status: number, code: number | null): CloudErrorKind {
     if (code === 131047) return "window_closed";
     if (code === 190 || status === 401) return "auth";
