@@ -1,26 +1,40 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Figtree, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { TopLoader } from "@/components/ui/top-loader";
 import { prisma } from "@/lib/prisma";
 
-const figtree = Figtree({
+// Fontes LOCAIS (src/app/fonts, licença OFL): o build não depende de baixar fonte do Google.
+const figtree = localFont({
   variable: "--font-figtree",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  src: [
+    { path: "./fonts/figtree-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/figtree-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/figtree-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/figtree-latin-700-normal.woff2", weight: "700", style: "normal" },
+  ],
 });
 
-const outfit = Outfit({
+const outfit = localFont({
   variable: "--font-outfit",
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+  display: "swap",
+  src: [
+    { path: "./fonts/outfit-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/outfit-latin-600-normal.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/outfit-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/outfit-latin-800-normal.woff2", weight: "800", style: "normal" },
+  ],
 });
 
-const jetbrains = JetBrains_Mono({
+const jetbrains = localFont({
   variable: "--font-jetbrains",
-  subsets: ["latin"],
-  weight: ["400", "600"],
+  display: "swap",
+  src: [
+    { path: "./fonts/jetbrains-mono-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/jetbrains-mono-latin-600-normal.woff2", weight: "600", style: "normal" },
+  ],
 });
 
 const APP_DESCRIPTION = "Disparos, respostas automáticas e atendimento no WhatsApp para o seu negócio. Parte da família Saiaê.";
