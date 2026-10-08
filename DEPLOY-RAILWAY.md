@@ -58,7 +58,7 @@ Serviço **app** → *Settings* → **Networking** → **Generate Domain** (ou u
 
 ## 7. Backup diário (serviço **backup**)
 1. No projeto: **+ New** → **GitHub Repo** → o mesmo repositório. Renomeie para `backup`.
-2. Configure à mão (o Railway não aceita mais Config as Code em serviços novos): variável `RAILWAY_DOCKERFILE_PATH=Dockerfile.backup` (imagem leve com mysqldump), *Settings → Deploy → Custom Start Command* `node scripts/backup-db.js`, *Cron Schedule* `0 6 * * *` (03:00 em Brasília) e *Restart Policy* `Never`. Sem domínio público e sem healthcheck.
+2. Configure à mão (o Railway não aceita mais Config as Code em serviços novos): variável `RAILWAY_DOCKERFILE_PATH=Dockerfile.backup` (imagem leve com mariadb-dump; a imagem fixa o Alpine 3.22 de propósito: o Alpine mais novo perdeu o plugin de login caching_sha2_password e o backup falha. Defina também `MYSQLDUMP_PATH=mariadb-dump`), *Settings → Deploy → Custom Start Command* `node scripts/backup-db.js`, *Cron Schedule* `0 6 * * *` (03:00 em Brasília) e *Restart Policy* `Never`. Sem domínio público e sem healthcheck.
 3. *Variables*:
    - `DATABASE_URL` = `${{MySQL.MYSQL_URL}}`
    - `BACKUP_S3_BUCKET`, `BACKUP_S3_ENDPOINT`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET`, `BACKUP_S3_REGION` (`auto` no Cloudflare R2)

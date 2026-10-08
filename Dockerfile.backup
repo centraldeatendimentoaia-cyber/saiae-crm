@@ -1,6 +1,6 @@
 # Imagem leve só para o backup diário do banco (serviço "backup" no Railway).
 # Não compila o app: apenas mariadb-dump + o script + o cliente S3.
-FROM node:24-alpine
+FROM node:24-alpine3.22
 # mariadb-connector-c traz o plugin caching_sha2_password (autenticação padrão do MySQL 8)
 RUN apk add --no-cache mariadb-client mariadb-connector-c ca-certificates
 WORKDIR /app

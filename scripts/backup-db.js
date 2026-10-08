@@ -14,7 +14,7 @@
  * Em produção (Railway) roda como serviço com Cron Schedule, enviando o arquivo
  * para o bucket (a cópia dentro do container some quando ele termina).
  */
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const { pipeline } = require("stream/promises");
 const fs = require("fs");
 const path = require("path");
@@ -85,7 +85,9 @@ async function main() {
     ];
     if (u.password) cnfLines.push(`password=${q(decodeURIComponent(u.password))}`);
     fs.writeFileSync(cnf, cnfLines.join(NL) + NL, { mode: 0o600 });
-    const isMaria = /maria/i.test(bin);
+    // MariaDB se o caminho ou o --version disser (o binário "mysqldump" do Alpine é só um atalho do mariadb-dump)
+    const versao = spawnSync(bin, ["--version"], { encoding: "utf8" });
+    const isMaria = /maria/i.test(bin) || /maria/i.test(`${versao.stdout || ""}`);
     const args = [
         `--defaults-extra-file=${cnf}`, // precisa ser o primeiro argumento
         "--single-transaction",
