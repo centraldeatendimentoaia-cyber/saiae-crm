@@ -22,6 +22,17 @@ export interface SendMediaInput {
     fileName?: string;
 }
 
+export interface TemplateInput {
+    /** Nome do template aprovado na Meta. */
+    name: string;
+    /** Idioma do template (ex.: "pt_BR"). */
+    languageCode: string;
+    /** Valores de {{1}}, {{2}}... do corpo, na ordem. */
+    bodyParameters?: string[];
+    /** Componentes avançados (cabeçalho com mídia, botões) no formato da Meta, quando preciso. */
+    components?: unknown[];
+}
+
 export interface SendResult {
     /** ID da mensagem no provedor, quando devolvido. */
     messageId: string | null;
@@ -71,4 +82,10 @@ export interface WhatsAppProvider {
 
     sendText(to: string, text: string): Promise<SendResult>;
     sendMedia(to: string, media: SendMediaInput): Promise<SendResult>;
+
+    /**
+     * Mensagem de template aprovada. Só existe onde `capabilities.templates` é true (Cloud API) e é o
+     * único tipo que pode iniciar conversa fora da janela de 24 h.
+     */
+    sendTemplate?(to: string, template: TemplateInput): Promise<SendResult>;
 }
