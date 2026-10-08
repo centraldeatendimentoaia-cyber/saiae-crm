@@ -3,7 +3,7 @@ import { normalizeBrPhone } from "@/modules/integracao/comanda/order-notifier";
 import type { TemplateInput } from "@/modules/whatsapp/provider/types";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import type { MotivoDono } from "./ferramentas";
-import type { ConversaRef, IaStore } from "./store";
+import { VENDAS, type ConversaRef, type IaStore } from "./store";
 
 /**
  * Passar o atendimento para o responsável da loja: aviso por template aprovado (fora da janela de 24 h só template
@@ -95,6 +95,8 @@ const LIBERAR = /^\s*liberar\s+#?([A-Za-z0-9]{6})\s*$/i;
 
 export interface LiberadorDeps {
     contexto: (codigoLoja: string, telefone: string) => Promise<IaContexto>;
+    /** WhatsApp da equipe do Saiaê (IA_VENDAS_WHATSAPP_RESPONSAVEL): vale para "LIBERAR #VENDAS". */
+    responsavelVendas?: () => string | undefined;
     store: Pick<IaStore, "retomarLoja">;
     logger: { info: (tag: string, msg: string) => void };
 }
@@ -105,15 +107,21 @@ export interface LiberadorDeps {
  * válido (qualquer outro remetente segue como cliente comum e nada é revelado).
  */
 export function criarLiberador(over: Partial<LiberadorDeps> & Pick<LiberadorDeps, "store">) {
-    const deps: LiberadorDeps = { contexto: (l, t) => buscarContexto(l, t), logger: defaultLogger, ...over };
+    const deps: LiberadorDeps = { contexto: (l, t) => buscarContexto(l, t), responsavelVendas: () => process.env.IA_VENDAS_WHATSAPP_RESPONSAVEL, logger: defaultLogger, ...over };
     return async (texto: string, contactKey: string): Promise<string | null> => {
         const m = LIBERAR.exec(texto);
         if (!m) return null;
         const codigo = m[1].toUpperCase();
         const remetente = normalizeBrPhone(contactKey);
         if (!remetente) return null;
-        const ctx = await deps.contexto(codigo, remetente);
-        if (!ctx.ativa || normalizeBrPhone(ctx.ia.whatsapp_dono) !== remetente) return null;
+        if (codigo === VENDAS) {
+            // a "loja" da atendente de vendas não existe na Comanda: o responsável é o número configurado no CRM
+            const equipe = normalizeBrPhone(deps.responsavelVendas?.());
+            if (!equipe || equipe !== remetente) return null;
+        } else {
+            const ctx = await deps.contexto(codigo, remetente);
+            if (!ctx.ativa || normalizeBrPhone(ctx.ia.whatsapp_dono) !== remetente) return null;
+        }
         const n = await deps.store.retomarLoja(codigo);
         deps.logger.info(TAG, `conversas devolvidas à IA: ${n}`);
         return MSG_IA_REATIVADA;

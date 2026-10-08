@@ -8,7 +8,7 @@ import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
 import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
 import { MAX_TEXTO } from "./constantes";
 import { extrairCodigoLoja } from "./loja";
-import { prismaStore, SEM_LOJA, type ConversaRef, type IaStore } from "./store";
+import { prismaStore, SEM_LOJA, VENDAS, type ConversaRef, type IaStore } from "./store";
 
 /**
  * Consumidor de ENTRADA da IA (fase 1): recebe os eventos normalizados do webhook da Meta e cuida de tudo
@@ -32,6 +32,8 @@ export interface IaDeps {
     /** Envia texto livre ao cliente (dentro da janela de 24 h). Devolve o id da mensagem, se houver. */
     enviar: (contactKey: string, texto: string) => Promise<string | null>;
     responder?: Responder;
+    /** Atendente de vendas do Saiaê (IA_VENDAS=on): atende quem chega sem código de loja. */
+    vendas?: Responder;
     /** Trata "LIBERAR #CODIGO" do responsável: devolve o texto de confirmação, ou null se não for um pedido válido. */
     liberar?: (texto: string, contactKey: string) => Promise<string | null>;
     optOut: {
@@ -67,6 +69,9 @@ export const MSG_PARAR = "Tudo certo, não vou mais te responder por aqui. Se mu
 export const MSG_VOLTAR = "Que bom ter você de volta! Como posso ajudar?";
 
 const TIPOS_TEXTO = new Set(["text", "button_reply", "list_reply"]);
+
+/** Texto de quem veio do panfleto ("Oi! Quero ser testador do sai aê (vi no panfleto)"): vai para a atendente de vendas. */
+export const INTENCAO_VENDAS = /panfleto|testador/i;
 
 export function criarDepsPadrao(over: Partial<IaDeps> = {}): IaDeps {
     return {
@@ -141,7 +146,13 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
         // Toda mensagem aceita é gravada ANTES de qualquer resposta: é ela que abre a janela de 24 h da Cloud API.
         // Sem loja, vai para a conversa "sem loja" (sem guardar o conteúdo).
         const codigo = extrairCodigoLoja(texto);
-        const loja = codigo ?? (await deps.store.lojaDaConversa(contactKey));
+        const vendasLigado = deps.vendas !== undefined && deps.env.IA_VENDAS?.trim().toLowerCase() === "on";
+        // roteamento: #CODIGO manda para a loja; quem veio do panfleto ou já está em conversa de vendas continua nela;
+        // sem nada disso e sem conversa de loja, vai para a atendente de vendas (se ligada)
+        let loja: string | null = codigo;
+        if (!loja && !(vendasLigado && emTexto && INTENCAO_VENDAS.test(texto))) loja = await deps.store.lojaDaConversa(contactKey);
+        if (!loja && vendasLigado) loja = VENDAS;
+        if (loja === VENDAS && !vendasLigado) loja = null; // vendas desligada: conversa antiga de vendas não vira "loja"
         const semLoja = !loja;
         const registro = await deps.store.registrarMensagem({
             lojaCodigo: loja ?? SEM_LOJA, contactKey, providerMessageId: m.messageId,
@@ -201,9 +212,10 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
             }
             await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
         }
-        if (!deps.responder) return;
+        const motor = loja === VENDAS ? deps.vendas : deps.responder;
+        if (!motor) return;
 
-        const resposta = await deps.responder({ conversa: registro.conversa, texto: texto.slice(0, MAX_TEXTO), nomePerfil: m.from.name, contactKey });
+        const resposta = await motor({ conversa: registro.conversa, texto: texto.slice(0, MAX_TEXTO), nomePerfil: m.from.name, contactKey });
         if (resposta) await responderTexto(contactKey, registro.conversa, resposta);
     }
 
