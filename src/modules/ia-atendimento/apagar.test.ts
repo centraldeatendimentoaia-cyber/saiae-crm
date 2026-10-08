@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
-import { apagarConversasDoCliente, variantesDoTelefone } from "./apagar";
+import { apagarConversasDaLoja, apagarConversasDoCliente, variantesDoTelefone } from "./apagar";
 import { SEM_LOJA } from "./store";
 
 describe("variantesDoTelefone", () => {
@@ -43,5 +43,13 @@ describe("apagarConversasDoCliente", () => {
         const logger = { info: vi.fn() };
         expect(await apagarConversasDoCliente("ABC234", "5561988887777", { apagar: async () => 0, logger })).toBe(0);
         expect(JSON.stringify(logger.info.mock.calls)).not.toContain("5561988887777");
+    });
+});
+
+describe("apagarConversasDaLoja", () => {
+    it("apaga a loja inteira e devolve a contagem", async () => {
+        const apagarLoja = vi.fn(async () => 7);
+        expect(await apagarConversasDaLoja("ABC234", { apagarLoja, logger: { info: vi.fn() } })).toBe(7);
+        expect(apagarLoja).toHaveBeenCalledWith("ABC234");
     });
 });

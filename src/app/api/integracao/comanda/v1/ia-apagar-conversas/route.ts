@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
-import { apagarConversasDoCliente } from "@/modules/ia-atendimento/apagar";
+import { apagarConversasDaLoja, apagarConversasDoCliente } from "@/modules/ia-atendimento/apagar";
 import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/modules/integracao/comanda/signature";
 
 export const runtime = "nodejs";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_024;
 const TAG = "IaApagarRota";
-const corpoSchema = z.object({ codigo_loja: z.string().regex(/^[A-Z0-9]{6}$/), telefone: z.string().regex(/^[0-9]{10,13}$/) });
+const corpoSchema = z.object({ codigo_loja: z.string().regex(/^[A-Z0-9]{6}$/), telefone: z.string().regex(/^[0-9]{10,13}$/).optional() });
 
 /** Mesmo segredo do ia-contexto (COMANDA_IA_SEGREDO). Rotação: lista separada por vírgula; cada um com 16+ caracteres. */
 function segredos(env: Record<string, string | undefined> = process.env): string[] {
@@ -21,7 +21,7 @@ const vazio = (status: number) => new NextResponse(null, { status, headers: { "C
 /**
  * POST /api/integracao/comanda/v1/ia-apagar-conversas {codigo_loja, telefone}. Rota pública em src/proxy.ts (caminho exato);
  * a proteção é a assinatura HMAC (timestamp + "." + corpo, janela de 5 min). Apaga as conversas da IA daquele telefone nessa
- * loja (e a conversa "sem loja" do mesmo telefone). Idempotente: 200 {apagadas: n}, inclusive 0. 401/400/413/503 sem corpo.
+ * loja (e a conversa "sem loja" do mesmo telefone). SEM o campo `telefone`: apaga TODAS as conversas da loja (exclusão de conta). Idempotente: 200 {apagadas: n}, inclusive 0. 401/400/413/503 sem corpo.
  * Nunca registra o código da loja nem o telefone.
  */
 export async function POST(request: NextRequest) {
@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     if (!corpo.success) return vazio(400);
 
     try {
-        const apagadas = await apagarConversasDoCliente(corpo.data.codigo_loja, corpo.data.telefone);
+        // sem o campo telefone = exclusão de conta: apaga todas as conversas da loja (telefone presente porém inválido já deu 400)
+        const apagadas = corpo.data.telefone === undefined ? await apagarConversasDaLoja(corpo.data.codigo_loja) : await apagarConversasDoCliente(corpo.data.codigo_loja, corpo.data.telefone);
         if (apagadas === null) return vazio(400);
         return NextResponse.json({ apagadas }, { headers: { "Cache-Control": "no-store" } });
     } catch (e) {

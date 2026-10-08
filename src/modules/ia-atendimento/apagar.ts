@@ -22,6 +22,8 @@ export function variantesDoTelefone(telefone: string): string[] | null {
 
 export interface ApagarDeps {
     apagar: (lojas: string[], contactKeys: string[]) => Promise<number>;
+    /** Apaga TODAS as conversas de uma loja (exclusão de conta). */
+    apagarLoja: (lojaCodigo: string) => Promise<number>;
     logger: { info: (tag: string, msg: string) => void };
 }
 
@@ -30,9 +32,22 @@ const prismaApagar: ApagarDeps["apagar"] = async (lojas, contactKeys) => {
     return r.count;
 };
 
+const prismaApagarLoja: ApagarDeps["apagarLoja"] = async (lojaCodigo) => {
+    const r = await prisma.iaConversa.deleteMany({ where: { lojaCodigo } });
+    return r.count;
+};
+
+/** Exclusão de conta da loja: apaga todas as conversas da IA daquela loja (inclusive de quem nunca pediu na Comanda). */
+export async function apagarConversasDaLoja(lojaCodigo: string, over: Partial<ApagarDeps> = {}): Promise<number> {
+    const deps: ApagarDeps = { apagar: prismaApagar, apagarLoja: prismaApagarLoja, logger: defaultLogger, ...over };
+    const n = await deps.apagarLoja(lojaCodigo);
+    deps.logger.info("IaApagar", `conversas da loja apagadas: ${n}`);
+    return n;
+}
+
 /** Devolve quantas conversas foram apagadas, ou null se o telefone não é válido. */
 export async function apagarConversasDoCliente(lojaCodigo: string, telefone: string, over: Partial<ApagarDeps> = {}): Promise<number | null> {
-    const deps: ApagarDeps = { apagar: prismaApagar, logger: defaultLogger, ...over };
+    const deps: ApagarDeps = { apagar: prismaApagar, apagarLoja: prismaApagarLoja, logger: defaultLogger, ...over };
     const chaves = variantesDoTelefone(telefone);
     if (!chaves) return null;
     const n = await deps.apagar([lojaCodigo, SEM_LOJA], chaves);

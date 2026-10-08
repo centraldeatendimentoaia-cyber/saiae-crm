@@ -41,6 +41,11 @@ describe("POST ia-apagar-conversas", () => {
         expect(where.lojaCodigo.in).toEqual(["ABC234", "SEM-LOJA"]);
         expect(where.contactKey.in).toEqual(expect.arrayContaining([TEL, "556188887777"]));
     });
+    it("sem telefone: apaga TODAS as conversas da loja (exclusão de conta), só dela", async () => {
+        const r = await enviar({ codigo_loja: "ABC234" });
+        expect(await r.json()).toEqual({ apagadas: 3 });
+        expect(h.deleteMany).toHaveBeenCalledWith({ where: { lojaCodigo: "ABC234" } });
+    });
     it("idempotente: nada para apagar também é 200", async () => {
         h.deleteMany.mockResolvedValue({ count: 0 });
         expect(await (await enviar({ codigo_loja: "ABC234", telefone: TEL })).json()).toEqual({ apagadas: 0 });
@@ -58,7 +63,8 @@ describe("POST ia-apagar-conversas", () => {
     });
     it.each([
         [{ codigo_loja: "abc234", telefone: TEL }],
-        [{ codigo_loja: "ABC234" }],
+        [{ codigo_loja: "ABC234", telefone: "" }],
+        [{ codigo_loja: "ABC234", telefone: null }],
         [{ codigo_loja: "ABC234", telefone: "BR.123" }],
         [{ codigo_loja: "ABC234", telefone: "12345678901234" }],
     ])("400 sem corpo: %j", async (b) => {
