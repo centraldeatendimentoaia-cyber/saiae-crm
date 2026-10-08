@@ -4,7 +4,8 @@ import { CloudApiProvider } from "@/modules/whatsapp/cloud/provider";
 import { cloudSessionIds } from "@/modules/whatsapp/provider";
 import { registerInboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import { criarConsumidorIa, type IaDeps } from "./consumer";
-import { criarChamadorDono, criarLiberador } from "./dono";
+import { criarControleLimite, prismaConsumo } from "./consumo";
+import { criarAvisoLimite, criarChamadorDono, criarLiberador } from "./dono";
 import { LlmAnthropic } from "./llm";
 import { motorPadrao } from "./motor";
 import { IaWindowStore, prismaStore } from "./store";
@@ -42,11 +43,17 @@ export function criarMotor(env: Record<string, string | undefined> = process.env
         return undefined;
     }
     const chamarDono = criarChamadorDono({ enviarTemplate: (to, t) => provider.sendTemplate!(to, t), store: prismaStore });
-    return motorPadrao(new LlmAnthropic({ env }), prismaStore, (conversa, ctx) => ({
-        chamarDono: (motivo) => chamarDono(conversa, ctx, motivo),
-        // sem tabela própria na fase 1: só conta no log (nunca o texto da pergunta)
-        registrarPergunta: async () => logger.info("IaAtendimento", "pergunta sem resposta registrada"),
-    }));
+    const limite = criarControleLimite({ store: prismaConsumo, avisarDono: criarAvisoLimite((to, t) => provider.sendTemplate!(to, t)) });
+    return motorPadrao(
+        new LlmAnthropic({ env }),
+        prismaStore,
+        (conversa, ctx) => ({
+            chamarDono: (motivo) => chamarDono(conversa, ctx, motivo),
+            // sem tabela própria na fase 1: só conta no log (nunca o texto da pergunta)
+            registrarPergunta: async () => logger.info("IaAtendimento", "pergunta sem resposta registrada"),
+        }),
+        limite,
+    );
 }
 
 export function registrarIaAtendimento(over: Partial<IaDeps> = {}, env: Record<string, string | undefined> = process.env): void {
