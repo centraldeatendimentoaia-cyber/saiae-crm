@@ -566,3 +566,17 @@ model IaConsumo {
 
   @@unique([lojaCodigo, mes])
 }
+
+/// Interessados que chegam pela atendente de vendas do Saiae (mesmo numero das lojas). Guarda so o necessario para a
+/// equipe retomar o contato: telefone (contactKey), nome, tipo de negocio, cidade e origem (panfleto | outro).
+/// Nunca guarda o texto das conversas. Apagada junto com os dados do telefone (rota ia-apagar-conversas).
+model IaLead {
+  id           String   @id @default(cuid())
+  contactKey   String   @unique
+  nome         String?
+  negocio      String?
+  cidade       String?
+  origem       String   @default("outro") // panfleto | outro
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
