@@ -1,12 +1,11 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { waManager } from "@/modules/whatsapp/manager";
+import { getProvider } from "@/modules/whatsapp/provider";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import { z } from "zod";
 import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/lib/plans";
 import { personalizeFor } from "@/lib/personalize";
-import { resolveSendJid } from "@/lib/wa-jid";
 import { getSafeMode, safeGate, gateMessage, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
 import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
@@ -65,8 +64,8 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Forbidden", error: "Forbidden" }, { status: 403 });
         }
 
-        const instance = waManager.getInstance(sessionId);
-        if (!instance?.socket) {
+        const provider = getProvider(sessionId);
+        if (!provider?.isConnected()) {
             return NextResponse.json({ status: false, message: "Session not ready", error: "Session not ready" }, { status: 503 });
         }
 
@@ -159,7 +158,7 @@ export async function POST(
 
                 try {
                     // Resolve o JID real (corrige o 9º dígito dos números brasileiros)
-                    const targetJid = await resolveSendJid(instance.socket, jid);
+                    const targetJid = await provider!.resolveRecipient(jid);
                     if (sentTargets.has(targetJid)) throw new Error("Número repetido na lista (Repetido)");
                     // proteção contra envio em dobro: já recebeu esta mesma mensagem recentemente?
                     const already = await prisma.broadcastRecipient.findFirst({
@@ -176,9 +175,9 @@ export async function POST(
                     if (onlyInteracted && !(await hasInteracted(sessionId, targetJid))) throw new Error(NO_INTERACTION_ERROR);
                     const personalized = await personalizeFor(sessionId, targetJid, copyFor(i), [jid]);
                     if (mediaBuffer) {
-                        await instance.socket!.sendMessage(targetJid, { image: mediaBuffer, caption: personalized || undefined });
+                        await provider!.sendMedia(targetJid, { kind: "image", data: mediaBuffer, caption: personalized || undefined });
                     } else {
-                        await instance.socket!.sendMessage(targetJid, { text: personalized });
+                        await provider!.sendText(targetJid, personalized);
                     }
                     sent++;
                     sentTargets.add(targetJid);
