@@ -1,7 +1,9 @@
-/** Argumentos de `npm run ia:avaliar`: `--caso=trecho` e `--modelo=nome-do-modelo`. Sem dependências (testável). */
+/** Argumentos de `npm run ia:avaliar`: `--caso=trecho[,trecho]`, `--grupo=lojas|vendas` e `--modelo=nome-do-modelo`. Sem dependências (testável). */
 export interface ArgsAvaliar {
     caso?: string;
     modelo?: string;
+    /** "lojas" ou "vendas": roda só os casos desse grupo. */
+    grupo?: "lojas" | "vendas";
 }
 
 export function lerArgs(argv: string[]): ArgsAvaliar {
@@ -11,5 +13,6 @@ export function lerArgs(argv: string[]): ArgsAvaliar {
         return v || undefined;
     };
     const modelo = pega("modelo");
-    return { caso: pega("caso"), modelo: modelo && /^[A-Za-z0-9._-]{3,80}$/.test(modelo) ? modelo : undefined };
+    const grupo = pega("grupo");
+    return { caso: pega("caso"), grupo: grupo === "lojas" || grupo === "vendas" ? grupo : undefined, modelo: modelo && /^[A-Za-z0-9._-]{3,80}$/.test(modelo) ? modelo : undefined };
 }

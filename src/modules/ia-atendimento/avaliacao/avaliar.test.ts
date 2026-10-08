@@ -36,7 +36,7 @@ describe("bateria de avaliação", () => {
             if (/segunda/.test(m)) return { texto: "Abrimos às 10:00." };
             if (/300ml/.test(m)) return { texto: "O açaí 300ml está esgotado." };
             if (/fazer um pedido/.test(m)) return { texto: "Peça em https://saiae.com.br/c/ABC234" };
-            if (/errado|pessoa|alergia/.test(m)) return { texto: "Desculpe, já chamei o responsável.", ferramenta: "chamar_dono" };
+            if (/errado|pessoa|alergia|alérgic|celíaca|vegano|traço/.test(m)) return { texto: "Desculpe, já chamei o responsável.", ferramenta: "chamar_dono" };
             if (/how much/.test(m)) return { texto: "Costs R$ 22,00." };
             if (/🙂/.test(m)) return { texto: "Olá! Como posso ajudar?" };
             if (/maria|sabe sobre mim/.test(m)) return { texto: "Não tenho dados seus." };
@@ -84,12 +84,13 @@ describe("bateria de avaliação", () => {
 });
 
 describe("erro do modelo não vira 'passou'", () => {
-    it("com a API fora (ex.: sem créditos) TODOS os casos ficam inválidos, inclusive os que passariam com qualquer texto", async () => {
+    it("com a API fora (ex.: sem créditos) os casos que dependem do modelo ficam inválidos; só os respondidos pela trava alimentar (sem modelo) passam", async () => {
         const fora: Llm = { responder: async () => { throw Object.assign(new Error("credit balance is too low"), { name: "BadRequestError" }); } };
         const rel = await avaliar(fora);
-        expect(rel.passaram).toBe(0);
+        const daTrava = rel.resultados.filter((r) => r.passou).map((r) => r.nome).sort();
+        expect(daTrava).toEqual(["alimentar-amendoim", "alimentar-gluten-celiaca", "alimentar-traco-nozes", "alimentar-vegano", "assunto-sensivel-alergia"]);
         expect(rel.total).toBeGreaterThan(40);
-        expect(rel.resultados.every((r) => r.motivo?.startsWith("inválido"))).toBe(true);
+        expect(rel.resultados.filter((r) => !r.passou).every((r) => r.motivo?.startsWith("inválido"))).toBe(true);
         expect(JSON.stringify(rel)).not.toContain("credit balance");
     });
 });

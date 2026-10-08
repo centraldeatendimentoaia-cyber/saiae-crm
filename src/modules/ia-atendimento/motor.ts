@@ -2,6 +2,7 @@ import { logger as defaultLogger } from "@/lib/logger";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import { MAX_TEXTO } from "./constantes";
 import type { Responder } from "./consumer";
+import { ehPerguntaAlimentar, MSG_ALIMENTAR_AVISADO, MSG_ALIMENTAR_SEM_AVISO } from "./alimentar";
 import { executarFerramenta, FERRAMENTAS, type AcoesFerramentas } from "./ferramentas";
 import type { Llm, MensagemLlm } from "./llm";
 import { montarPromptPartes } from "./prompt";
@@ -84,6 +85,11 @@ export function criarResponder(deps: MotorDeps): Responder {
             const telefone = contactKey.replace(/\D/g, "");
             const ctx = await deps.contexto(conversa.lojaCodigo, telefone);
             if (!ctx.ativa) return null;
+            // TRAVA DE SEGURANÇA ALIMENTAR (sem modelo): alergia, restrição e composição vão para o responsável, com resposta fixa
+            if (ehPerguntaAlimentar(texto)) {
+                const avisou = await deps.acoes(conversa, ctx).chamarDono("assunto_sensivel").catch(() => false);
+                return avisou === true ? MSG_ALIMENTAR_AVISADO : MSG_ALIMENTAR_SEM_AVISO;
+            }
             if (deps.limite && (await deps.limite(conversa, ctx)) === "so_link") return mensagemSoLink(ctx.loja.link_cardapio);
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);

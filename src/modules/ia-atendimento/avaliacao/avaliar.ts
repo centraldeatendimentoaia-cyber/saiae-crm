@@ -63,7 +63,7 @@ export async function executarCaso(llm: Llm, caso: Caso): Promise<Execucao> {
 }
 
 export async function avaliar(llm: Llm, opts: { casos?: Caso[]; filtro?: string; aoTerminarCaso?: (r: ResultadoCaso) => void } = {}): Promise<Relatorio> {
-    const casos = (opts.casos ?? [...CASOS, ...CASOS_VENDAS]).filter((c) => !opts.filtro || c.nome.includes(opts.filtro));
+    const casos = (opts.casos ?? [...CASOS, ...CASOS_VENDAS]).filter((c) => !opts.filtro || opts.filtro.split(",").some((f) => f.trim() && c.nome.includes(f.trim())));
     const resultados: ResultadoCaso[] = [];
     for (const caso of casos) {
         let motivo: string | null;

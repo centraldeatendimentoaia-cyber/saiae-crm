@@ -14,7 +14,7 @@ export type MotivoDono = (typeof MOTIVOS_DONO)[number];
 
 export interface AcoesFerramentas {
     /** Avisa o responsável da loja (Task 7). Devolve true se o aviso foi (ou já tinha sido) feito. */
-    chamarDono: (motivo: MotivoDono) => Promise<boolean>;
+    chamarDono: (motivo: MotivoDono) => Promise<boolean | "teto">;
     /** Guarda a pergunta que a IA não soube responder (só contagem/uso interno; nunca em log). */
     registrarPergunta: (pergunta: string) => Promise<void>;
 }

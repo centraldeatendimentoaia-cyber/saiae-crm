@@ -45,10 +45,10 @@ export interface DonoDeps {
     logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void };
 }
 
-/** Devolve `(conversa, ctx, motivo) => avisou?`. true também quando a conversa já estava pausada (já foi avisado). */
+/** Devolve `(conversa, ctx, motivo) => avisou?`. true também quando a conversa já estava pausada (já foi avisado); "teto" = pausou sem avisar (teto diário); false = falhou. */
 export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "enviarTemplate" | "store">) {
     const deps: DonoDeps = { now: () => new Date(), logger: defaultLogger, ...over };
-    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoDono): Promise<boolean> => {
+    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoDono): Promise<boolean | "teto"> => {
         const agora = deps.now();
         if (pausadaAgora(conversa, agora)) return true;
         const dono = normalizeBrPhone(ctx.ia.whatsapp_dono);
@@ -67,7 +67,7 @@ export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "envi
                 // teto diário: pausa a conversa (a IA cala) mas não envia mais template para não inundar o responsável nem gerar custo
                 await deps.store.pausar(conversa.id, new Date(agora.getTime() + PAUSA_HORAS * 3_600_000));
                 deps.logger.warn(TAG, "teto diário de avisos ao responsável atingido: conversa pausada sem novo aviso");
-                return true;
+                return "teto"; // pausou, mas NÃO avisou: quem chama não pode dizer "já avisei"
             }
         }
         const cliente = normalizeBrPhone(conversa.contactKey);

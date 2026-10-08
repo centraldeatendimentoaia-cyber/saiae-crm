@@ -75,10 +75,15 @@ const MOTIVO_HUMANO_PARA_DONO: Record<MotivoHumano, MotivoDono> = {
  * IA_MODELO, ANTHROPIC_API_KEY e Cloud API como a IA das lojas; IA_VENDAS_WHATSAPP_RESPONSAVEL (a equipe do Saiaê, que
  * recebe o aviso e pode mandar "LIBERAR #VENDAS") e IA_VENDAS_LINK_CADASTRO (o único link que ela pode mandar).
  */
+/** Modelo da atendente de vendas: IA_MODELO_VENDAS, ou IA_MODELO se ausente (lojas e vendas podem usar modelos diferentes). */
+export function modeloDeVendas(env: Record<string, string | undefined>): string | undefined {
+    return env.IA_MODELO_VENDAS?.trim() || env.IA_MODELO?.trim() || undefined;
+}
+
 export function criarMotorVendas(env: Record<string, string | undefined> = process.env): IaDeps["vendas"] | undefined {
     if (env.IA_VENDAS?.trim().toLowerCase() !== "on") return undefined;
-    if (!env.IA_MODELO?.trim() || !env.ANTHROPIC_API_KEY?.trim()) {
-        logger.warn("IaVendas", "IA_MODELO ou ANTHROPIC_API_KEY ausente: a atendente de vendas não vai responder");
+    if (!modeloDeVendas(env) || !env.ANTHROPIC_API_KEY?.trim()) {
+        logger.warn("IaVendas", "IA_MODELO_VENDAS/IA_MODELO ou ANTHROPIC_API_KEY ausente: a atendente de vendas não vai responder");
         return undefined;
     }
     const provider = criarProviderCloud(env);
@@ -102,10 +107,10 @@ export function criarMotorVendas(env: Record<string, string | undefined> = proce
         logger,
     });
     return criarResponderVendas({
-        llm: new LlmAnthropic({ env }),
+        llm: new LlmAnthropic({ env, modelo: modeloDeVendas(env) }),
         store: prismaStore,
         linkCadastro,
-        chamarHumano: (conversa, motivo) => chamarDono({ ...conversa, lojaCodigo: VENDAS }, equipe, MOTIVO_HUMANO_PARA_DONO[motivo]),
+        chamarHumano: async (conversa, motivo) => (await chamarDono({ ...conversa, lojaCodigo: VENDAS }, equipe, MOTIVO_HUMANO_PARA_DONO[motivo])) !== false,
         lead: prismaLeads,
         limite,
         now: () => new Date(),
