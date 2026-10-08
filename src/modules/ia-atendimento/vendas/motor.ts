@@ -5,7 +5,8 @@ import { diaSaoPaulo } from "../dono";
 import type { Llm } from "../llm";
 import { filtrarSaida, MAX_HISTORICO, MAX_PASSOS, montarMensagens, MSG_FALHA } from "../motor";
 import type { ConversaRef, IaStore } from "../store";
-import { executarFerramentaVendas, FERRAMENTAS_VENDAS, type AcoesVendas, type MotivoHumano } from "./ferramentas";
+import { executarFerramentaVendas, FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD, type AcoesVendas, type MotivoHumano } from "./ferramentas";
+import { origemDoTexto, type LeadStore } from "./lead";
 import { montarPromptVendas } from "./prompt";
 
 /**
@@ -26,6 +27,8 @@ export interface VendasDeps {
     /** Link oficial de cadastro/teste (IA_VENDAS_LINK_CADASTRO) ou null. */
     linkCadastro: string | null;
     chamarHumano: (conversa: ConversaRef, motivo: MotivoHumano) => Promise<boolean>;
+    /** Onde guardar o lead (um por telefone). Ausente: sem lead e sem a ferramenta registrar_lead. */
+    lead?: LeadStore;
     /** Teto diário (vendas e global). "so_link" = só manda o link de cadastro, sem chamar o modelo. */
     limite?: (conversa: ConversaRef) => Promise<"ok" | "so_link">;
     now: () => Date;
@@ -36,18 +39,26 @@ export const mensagemSoLinkVendas = (link: string | null) =>
     link ? `No momento estou com muitas conversas. Para conhecer e testar o Saiaê, acesse: ${link}` : "No momento estou com muitas conversas. Uma pessoa da equipe vai responder assim que puder.";
 
 export function criarResponderVendas(deps: VendasDeps): Responder {
-    return async ({ conversa, texto, nomePerfil }) => {
+    return async ({ conversa, texto, nomePerfil, contactKey }) => {
         try {
+            // todo contato de vendas vira lead (origem pela mensagem); falha aqui nunca impede a resposta
+            await deps.lead?.garantir(contactKey, origemDoTexto(texto)).catch((e: unknown) => deps.logger.warn(TAG, `lead não gravado: ${e instanceof Error ? e.name : "erro"}`));
             if (deps.limite && (await deps.limite(conversa)) === "so_link") return mensagemSoLinkVendas(deps.linkCadastro);
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
             const mensagens = montarMensagens(hist, texto.slice(0, MAX_TEXTO));
             const sistema = montarPromptVendas({ nomePerfil, primeiraResposta: !hist.some((h) => h.direcao === "out"), agora: deps.now() });
-            const acoes: AcoesVendas = { linkCadastro: deps.linkCadastro, chamarHumano: (motivo) => deps.chamarHumano(conversa, motivo) };
+            const lead = deps.lead;
+            const acoes: AcoesVendas = {
+                linkCadastro: deps.linkCadastro,
+                chamarHumano: (motivo) => deps.chamarHumano(conversa, motivo),
+                registrarLead: lead ? (campos) => lead.atualizar(contactKey, campos) : undefined,
+            };
+            const ferramentas = lead ? [...FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD] : FERRAMENTAS_VENDAS;
             const linkPermitido = deps.linkCadastro ?? LINK_AUSENTE;
 
             for (let passo = 0; passo < MAX_PASSOS; passo++) {
-                const saida = await deps.llm.responder({ sistema, mensagens, ferramentas: FERRAMENTAS_VENDAS });
+                const saida = await deps.llm.responder({ sistema, mensagens, ferramentas });
                 if (saida.chamadas.length === 0) {
                     const final = saida.texto ? filtrarSaida(saida.texto, linkPermitido) : "";
                     if (!final) {

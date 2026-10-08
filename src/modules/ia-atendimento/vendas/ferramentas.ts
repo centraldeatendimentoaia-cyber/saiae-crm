@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DefinicaoFerramenta } from "../llm";
+import { limparCampo, type CamposLead } from "./lead";
 
 /**
  * Ferramentas da atendente de vendas. Seguras por construção: o link de cadastro sai SEMPRE da configuração
@@ -13,6 +14,8 @@ export interface AcoesVendas {
     chamarHumano: (motivo: MotivoHumano) => Promise<boolean>;
     /** Link oficial de cadastro/teste, ou null se ainda não configurado. */
     linkCadastro: string | null;
+    /** Anota nome / negócio / cidade do interessado. Ausente = ferramenta indisponível. */
+    registrarLead?: (campos: CamposLead) => Promise<void>;
 }
 
 export const FERRAMENTAS_VENDAS: DefinicaoFerramenta[] = [
@@ -33,6 +36,18 @@ export const FERRAMENTAS_VENDAS: DefinicaoFerramenta[] = [
     },
 ];
 
+/** Ferramenta extra, oferecida só quando há onde guardar o lead. */
+export const FERRAMENTA_REGISTRAR_LEAD: DefinicaoFerramenta = {
+    nome: "registrar_lead",
+    descricao: "Anota o interesse da pessoa para a equipe retomar o contato. Use SÓ com o que a pessoa disse espontaneamente: nome, tipo de negócio (ex.: açaiteria, barraca de pastel) e cidade. Nunca peça CPF, CNPJ, e-mail nem dados de pagamento.",
+    esquema: {
+        type: "object",
+        properties: { nome: { type: "string", maxLength: 80 }, negocio: { type: "string", maxLength: 80 }, cidade: { type: "string", maxLength: 80 } },
+        additionalProperties: false,
+    },
+};
+
+const argsLead = z.object({ nome: z.unknown().optional(), negocio: z.unknown().optional(), cidade: z.unknown().optional() });
 const argsHumano = z.object({ motivo: z.enum(MOTIVOS_HUMANO) });
 
 export interface ResultadoVendas {
@@ -53,6 +68,15 @@ export async function executarFerramentaVendas(nome: string, argumentos: unknown
                 return (await acoes.chamarHumano(a.data.motivo))
                     ? { texto: "A conversa foi passada para a equipe do Saiaê. Diga à pessoa, em uma frase, que alguém vai responder assim que puder, sem prometer prazo." }
                     : { texto: "Não foi possível avisar a equipe agora. Peça desculpas e diga que a equipe responderá assim que possível, sem prometer prazo.", erro: true };
+            }
+            case "registrar_lead": {
+                if (!acoes.registrarLead) return { texto: "ferramenta desconhecida", erro: true };
+                const a = argsLead.safeParse(argumentos);
+                if (!a.success) return { texto: "campos inválidos", erro: true };
+                const campos: CamposLead = { nome: limparCampo(a.data.nome), negocio: limparCampo(a.data.negocio), cidade: limparCampo(a.data.cidade) };
+                if (!campos.nome && !campos.negocio && !campos.cidade) return { texto: "nada para anotar", erro: true };
+                await acoes.registrarLead(campos);
+                return { texto: "anotado" };
             }
             default:
                 return { texto: "ferramenta desconhecida", erro: true };

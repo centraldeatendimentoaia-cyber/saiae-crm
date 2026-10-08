@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import crypto from "crypto";
 import { NextRequest } from "next/server";
 
-const h = vi.hoisted(() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, deleteMany: vi.fn() }));
+const h = vi.hoisted(() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, deleteMany: vi.fn(), leadDeleteMany: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ logger: h.logger }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn().mockResolvedValue(null) }));
-vi.mock("@/lib/prisma", () => ({ prisma: { iaConversa: { deleteMany: h.deleteMany } } }));
+vi.mock("@/lib/prisma", () => ({ prisma: { iaConversa: { deleteMany: h.deleteMany }, iaLead: { deleteMany: h.leadDeleteMany } } }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import { POST } from "./route";
@@ -28,6 +28,7 @@ function enviar(b: Record<string, unknown> | null, o: { ts?: number; secret?: st
 beforeEach(() => {
     vi.stubEnv("COMANDA_IA_SEGREDO", SECRET);
     h.deleteMany.mockReset().mockResolvedValue({ count: 3 });
+    h.leadDeleteMany.mockReset().mockResolvedValue({ count: 1 });
     Object.values(h.logger).forEach((f) => f.mockReset());
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -45,6 +46,13 @@ describe("POST ia-apagar-conversas", () => {
         const r = await enviar({ codigo_loja: "ABC234" });
         expect(await r.json()).toEqual({ apagadas: 3 });
         expect(h.deleteMany).toHaveBeenCalledWith({ where: { lojaCodigo: "ABC234" } });
+    });
+    it("com telefone: apaga também o lead de vendas do mesmo número; sem telefone (loja inteira) não mexe em leads", async () => {
+        await enviar({ codigo_loja: "ABC234", telefone: TEL });
+        expect(h.leadDeleteMany.mock.calls[0][0].where.contactKey.in).toEqual(expect.arrayContaining([TEL, "556188887777"]));
+        h.leadDeleteMany.mockClear();
+        await enviar({ codigo_loja: "ABC234" });
+        expect(h.leadDeleteMany).not.toHaveBeenCalled();
     });
     it("idempotente: nada para apagar também é 200", async () => {
         h.deleteMany.mockResolvedValue({ count: 0 });

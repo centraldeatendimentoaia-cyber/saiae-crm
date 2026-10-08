@@ -73,3 +73,7 @@ Ligada por `IA_VENDAS=on` (além de `IA_ATENDIMENTO=on`; padrão desligada). Rot
 **Template próprio (`IA_TEMPLATE_CONFIRMAR`)**: com a env definida (ex.: `ia_confirmar_responsavel`, utilidade, pt_BR, corpo "Olá! A loja {{1}} cadastrou este número como responsável pelo atendimento da IA no Sai aê. Para confirmar que o número é seu, responda aqui: CONFIRMAR #{{2}}. Se você não reconhece este pedido, ignore esta mensagem.") o pedido usa esse template com {{1}} = `nome_loja` (campo opcional do corpo da Comanda; sem ele, "sua loja") e {{2}} = código. Sem a env continua o `ia_chamar_dono`.
 
 Observação (só vale sem a env) do template `ia_chamar_dono`: o texto fixo termina com "responda aqui: LIBERAR #{{4}}". Para o pedido de confirmação o motivo ({{2}}) já diz para responder CONFIRMAR; se a Meta aprovar, vale considerar um template próprio só de confirmação para não misturar as instruções.
+
+### Lead da atendente de vendas
+
+Cada contato de vendas vira um lead (tabela `IaLead`, um por telefone): `contactKey`, nome, tipo de negócio, cidade e origem (`panfleto` se a mensagem contiver "panfleto", senão `outro`). A ferramenta `registrar_lead` anota nome, negócio e cidade só com o que a pessoa disse (cada campo: uma linha, até 80 caracteres, sem controles). **Nunca guarda o texto da conversa** (as mensagens seguem a retenção de 30 dias). O lead sai junto quando a Comanda chama `ia-apagar-conversas` com o telefone da pessoa (a exclusão da loja inteira, sem telefone, não mexe em leads). Para ver os leads, hoje só pelo banco (`IaLead`); uma tela fica para depois.
