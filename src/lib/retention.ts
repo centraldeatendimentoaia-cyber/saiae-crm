@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { limparMensagensAntigas } from "@/modules/ia-atendimento/store";
+import { limparLeadsAntigos } from "@/modules/ia-atendimento/vendas/lead-store";
 
 /**
  * Limpeza diária (03:30, Brasília) para o banco não crescer sem parar e o custo ficar baixo:
@@ -63,6 +64,22 @@ export async function runRetention(): Promise<void> {
             // tabela ainda não criada ou banco indisponível: nunca derruba a limpeza das outras tabelas
             logger.warn("Retention", `limpeza das mensagens da IA falhou: ${e instanceof Error ? e.name : "erro"}`);
         }
+
+        // Leads do panfleto: 12 meses sem contato (Política de Privacidade).
+
+        try {
+
+            const leads = await limparLeadsAntigos();
+
+            if (leads) logger.info("Retention", `${leads} leads com mais de 12 meses sem contato apagados`);
+
+        } catch (e) {
+
+            logger.warn("Retention", `limpeza dos leads falhou: ${e instanceof Error ? e.name : "erro"}`);
+
+        }
+
+        
 
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);
         if (logDays > 0) {
