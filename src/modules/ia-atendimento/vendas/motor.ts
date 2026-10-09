@@ -8,6 +8,7 @@ import type { ConversaRef, IaStore } from "../store";
 import { executarFerramentaVendas, FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD, type AcoesVendas, type MotivoHumano } from "./ferramentas";
 import { origemDoTexto, type LeadStore } from "./lead";
 import { INTENCAO_VENDAS } from "../intencao";
+import { protegerSaida } from "./saida";
 import { MSG_NEGOCIACAO_AVISADA, MSG_NEGOCIACAO_SEM_AVISO, pedeNegociacao } from "./negociacao";
 import { montarPromptVendasPartes } from "./prompt";
 
@@ -73,7 +74,10 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
                         deps.logger.warn(TAG, "modelo sem resposta utilizável");
                         return MSG_FALHA;
                     }
-                    return final;
+                    // TRAVA NA SAÍDA: pedido de cartão/CVV/senha/CPF/token ou cobrança vira frase fixa segura
+                    const segura = protegerSaida(final);
+                    if (segura.trocada) deps.logger.warn(TAG, "saída do modelo pedia dado sensível ou cobrava: trocada pela frase segura");
+                    return segura.texto;
                 }
                 mensagens.push({ papel: "assistant", texto: saida.texto, chamadas: saida.chamadas });
                 const resultados = [];

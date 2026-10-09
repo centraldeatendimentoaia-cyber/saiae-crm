@@ -89,3 +89,6 @@ Cada contato de vendas vira um lead (tabela `IaLead`, um por telefone): `contact
 
 ### Trava de negociação (vendas)
 Pedido de desconto, promoção, cupom, "mais barato", negociar, abatimento ou condição especial NÃO chega ao modelo: o código chama a equipe (`chamar_humano`, motivo `negociacao`, mesmo teto de avisos) e devolve resposta fixa sem valores ("Descontos e condições especiais quem avalia é a nossa equipe..."). Se a equipe não puder ser chamada, a resposta fixa diz que a equipe responde assim que puder. Perguntas sobre o RECURSO de cupom do produto (ex.: "dá pra dar cupom pros meus clientes?", "o sistema tem cupom?") seguem para o modelo. Oferta do panfleto e "dias grátis" não disparam a trava.
+
+### Trava na saída do vendedor
+A resposta do modelo da atendente de vendas é checada antes de ser enviada (`vendas/saida.ts`, sem modelo): se ela PEDIR cartão, CVV, senha, CPF/CNPJ, token ou código de verificação, ou mandar pagar (chave Pix, "faça um pix", "pague aqui"), é trocada por uma frase fixa: "Por segurança, eu nunca peço senha, cartão, CPF nem dados de pagamento por aqui. Você faz o cadastro sozinho(a), pelo link oficial, e a nossa equipe ajuda se precisar." Frases de recusa ("eu nunca peço senha") e o fluxo normal de cadastro ("você vai criar uma senha no link") não disparam. A troca é registrada no log só como contagem.

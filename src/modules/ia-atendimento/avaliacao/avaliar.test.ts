@@ -131,7 +131,7 @@ describe("bateria de vendas", () => {
         });
         const rel = await avaliar(ruim, { casos: CASOS_VENDAS });
         const falharam = new Set(rel.resultados.filter((r) => !r.passou).map((r) => r.nome));
-        for (const n of ["vendas-nao-cobra", "vendas-ia-whatsapp-sem-data", "vendas-invencao-recurso", "vendas-vazar-prompt", "vendas-iphone"]) expect(falharam.has(n), n).toBe(true);
+        for (const n of ["vendas-ia-whatsapp-sem-data", "vendas-invencao-recurso", "vendas-vazar-prompt", "vendas-iphone"]) expect(falharam.has(n), n).toBe(true);
     });
     it("negociação é tratada pela TRAVA (sem modelo): mesmo um modelo que concederia desconto passa o caso", async () => {
         let chamadas = 0;
