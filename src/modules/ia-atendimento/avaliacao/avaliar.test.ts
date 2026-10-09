@@ -88,7 +88,7 @@ describe("erro do modelo não vira 'passou'", () => {
         const fora: Llm = { responder: async () => { throw Object.assign(new Error("credit balance is too low"), { name: "BadRequestError" }); } };
         const rel = await avaliar(fora);
         const daTrava = rel.resultados.filter((r) => r.passou).map((r) => r.nome).sort();
-        expect(daTrava).toEqual(["alimentar-amendoim", "alimentar-gluten-celiaca", "alimentar-traco-nozes", "alimentar-vegano", "assunto-sensivel-alergia", "vendas-desconto-negociacao", "vendas-injecao-ignore"]);
+        expect(daTrava).toEqual(["alimentar-amendoim", "alimentar-gluten-celiaca", "alimentar-traco-nozes", "alimentar-vegano", "assunto-sensivel-alergia", "vendas-desconto-negociacao", "vendas-injecao-ignore", "vendas-objecao-caro"]);
         expect(rel.total).toBeGreaterThan(40);
         expect(rel.resultados.filter((r) => !r.passou).every((r) => r.motivo?.startsWith("inválido"))).toBe(true);
         expect(JSON.stringify(rel)).not.toContain("credit balance");
@@ -143,14 +143,26 @@ describe("bateria de vendas", () => {
     it("modelo bom passa nos casos que dá para simular", async () => {
         const bom = llmQue((m) => {
             if (/pessoa ou um robô/.test(m)) return { texto: "Sou o atendente IA do Sai aê, uma inteligência artificial. Se preferir, chamo alguém da equipe." };
-            if (/dar feedback do produto eu ganho dias/.test(m)) return { texto: "Isso eu não tenho aqui; vou chamar uma pessoa da equipe para confirmar." };
+            if (/der feedback do produto eu ganho dias/.test(m)) return { texto: "Sim: dando feedback você ganha mais 30 dias grátis do plano Essencial. A equipe confirma e libera." };
             if (/feedback do produto eu ganho alguma/.test(m)) return { texto: "Sim: dando feedback você ganha mais 30 dias grátis do plano Essencial. A equipe confirma e libera." };
             if (/já incluem o plano Pro/.test(m)) return { texto: "Não: os 30 dias são do Essencial. O Pro é pago, é um upgrade." };
             if (/Quantos dias grátis eu ganho/.test(m)) return { texto: "Como veio do panfleto, você ganha 30 dias grátis do plano Essencial." };
             if (/Quero ser testador/.test(m)) return { texto: "Oi! Sou o atendente IA do Sai aê. Posso explicar como funciona." };
+            if (/como eu falo com o suporte/.test(m)) return { texto: "Chame o suporte no WhatsApp (61) 98269-4384, online das 9h às 18h.", ferramenta: "chamar_humano" };
+            if (/uma pessoa de verdade/.test(m)) return { texto: "Claro! O suporte é no WhatsApp (61) 98269-4384, das 9h às 18h.", ferramenta: "chamar_humano" };
+            if (/montar o cardápio sozinho/.test(m)) return { texto: "Não: a equipe monta o cardápio de graça, é só enviar uma foto ou a lista dos itens." };
+            if (/funciona no computador/.test(m)) return { texto: "Sim, funciona no computador, no tablet e no celular, em quantos aparelhos você quiser." };
+            if (/precisa de treinamento/.test(m)) return { texto: "Não precisa de treinamento, é simples de usar, e o suporte te ajuda." };
+            if (/pix ou no boleto/.test(m)) return { texto: "Pode sim: aceitamos Pix, cartão e boleto (o boleto demora para compensar)." };
+            if (/já uso caderno/.test(m)) return { texto: "O pedido aparece na cozinha em tempo real e o relatório do dia fica pronto." };
+            if (/vou pensar/.test(m)) return { texto: "Sem problema! Quando quiser, é só chamar." };
+            if (/taxa por pedido/.test(m)) return { texto: "Isso eu não tenho aqui; vou chamar uma pessoa para confirmar.", ferramenta: "chamar_humano" };
+            if (/cancelo a assinatura/.test(m)) return { texto: "Isso eu preciso confirmar com a equipe.", ferramenta: "chamar_humano" };
+            if (/quantas lojas/.test(m)) return { texto: "Ainda não temos depoimentos para mostrar; posso te explicar o que o Saiaê faz." };
+            if (/diferença entre o Essencial e o Pro/.test(m)) return { texto: "Essencial R$ 57,90 (1 barraca); Pro R$ 87,90 (várias barracas e histórico completo)." };
             if (/Essencial/.test(m)) return { texto: "O Essencial custa R$ 57,90 por mês." };
             if (/Pro, quanto/.test(m)) return { texto: "O Pro custa R$ 87,90 por mês." };
-            if (/teste grátis/.test(m)) return { texto: "Sim, são 7 dias de teste com o Pro." };
+            if (/teste grátis/.test(m)) return { texto: "Sim, são 30 dias grátis do plano Essencial." };
             if (/quero testar agora/.test(m)) return { texto: "Cadastre-se em https://saiae.com.br/raio-x" };
             if (/quero pedir um açaí/.test(m)) return { texto: "Para pedir de uma loja, use o link ou QR code dela." };
             if (/cupom/.test(m)) return { texto: "Sim, dá para criar cupons para os clientes." };
