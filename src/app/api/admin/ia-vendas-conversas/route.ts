@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { formatarConversa } from "@/modules/ia-atendimento/avaliacao/anonimizar";
+import { apagarConversasDoCliente } from "@/modules/ia-atendimento/apagar";
 
 /**
  * GET /api/admin/ia-vendas-conversas?dias=30&limite=200
@@ -40,4 +41,21 @@ export async function GET(request: NextRequest) {
             "Cache-Control": "no-store",
         },
     });
+}
+
+/**
+ * DELETE /api/admin/ia-vendas-conversas?telefone=5561999999999
+ * Apaga as conversas da atendente de vendas (e o lead) desse telefone, com e sem o 9º dígito. Serve para recomeçar um
+ * teste do zero: o histórico antigo (por exemplo, respostas dadas antes de uma correção) influencia as próximas respostas.
+ * Só SUPERADMIN. Não grava o telefone em log.
+ */
+export async function DELETE(request: NextRequest) {
+    const user = await getAuthenticatedUser(request);
+    if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
+    if (user.role !== "SUPERADMIN") return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });
+
+    const telefone = new URL(request.url).searchParams.get("telefone") || "";
+    const apagadas = await apagarConversasDoCliente("VENDAS", telefone);
+    if (apagadas === null) return NextResponse.json({ status: false, message: "Telefone inválido (use DDD + número, ex.: 61999999999)" }, { status: 400 });
+    return NextResponse.json({ status: true, data: { conversasApagadas: apagadas } });
 }

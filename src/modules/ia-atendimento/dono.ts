@@ -1,5 +1,6 @@
 import { logger as defaultLogger } from "@/lib/logger";
 import { normalizeBrPhone } from "@/modules/integracao/comanda/order-notifier";
+import { canonicalPhone } from "@/lib/phone";
 import type { TemplateInput } from "@/modules/whatsapp/provider/types";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import type { MotivoDono } from "./ferramentas";
@@ -91,6 +92,9 @@ export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "envi
     };
 }
 
+/** Mesmo número, com ou sem o 9º dígito: o WhatsApp entrega o remetente de um jeito e o cadastro pode estar do outro. */
+const mesmoTelefone = (a: string | null, b: string | null) => !!a && !!b && canonicalPhone(a) === canonicalPhone(b);
+
 const LIBERAR = /^\s*liberar\s+#?([A-Za-z0-9]{6})\s*$/i;
 
 export interface LiberadorDeps {
@@ -117,10 +121,10 @@ export function criarLiberador(over: Partial<LiberadorDeps> & Pick<LiberadorDeps
         if (codigo === VENDAS) {
             // a "loja" da atendente de vendas não existe na Comanda: o responsável é o número configurado no CRM
             const equipe = normalizeBrPhone(deps.responsavelVendas?.());
-            if (!equipe || equipe !== remetente) return null;
+            if (!mesmoTelefone(equipe, remetente)) return null;
         } else {
             const ctx = await deps.contexto(codigo, remetente);
-            if (!ctx.ativa || normalizeBrPhone(ctx.ia.whatsapp_dono) !== remetente) return null;
+            if (!ctx.ativa || !mesmoTelefone(normalizeBrPhone(ctx.ia.whatsapp_dono), remetente)) return null;
         }
         const n = await deps.store.retomarLoja(codigo);
         deps.logger.info(TAG, `conversas devolvidas à IA: ${n}`);

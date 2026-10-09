@@ -124,6 +124,13 @@ describe("liberar #VENDAS (equipe do Saiaê)", () => {
         expect(l.store.retomarLoja).toHaveBeenCalledWith("VENDAS");
         expect(l.contexto).not.toHaveBeenCalled();
     });
+    it("reconhece o responsável mesmo se o WhatsApp entregar o número sem o 9º dígito (e o contrário)", async () => {
+        const com9 = criarLiberador({ store: { retomarLoja: vi.fn(async () => 1) }, contexto: vi.fn(async () => ({ ativa: false }) as const), responsavelVendas: () => "61982694384", logger: { info: vi.fn() } });
+        expect(await com9("LIBERAR #VENDAS", "556182694384")).toBe(MSG_IA_REATIVADA);
+        const sem9 = criarLiberador({ store: { retomarLoja: vi.fn(async () => 1) }, contexto: vi.fn(async () => ({ ativa: false }) as const), responsavelVendas: () => "556182694384", logger: { info: vi.fn() } });
+        expect(await sem9("LIBERAR #VENDAS", "5561982694384")).toBe(MSG_IA_REATIVADA);
+        expect(await sem9("LIBERAR #VENDAS", "5561982694385")).toBeNull();
+    });
     it("de outro número, ou sem a env configurada: ignora", async () => {
         const l = montar();
         expect(await l.liberar("LIBERAR #VENDAS", CLIENTE)).toBeNull();
