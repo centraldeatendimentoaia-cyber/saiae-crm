@@ -83,7 +83,7 @@ describe("motor de vendas", () => {
             { chamadas: [{ id: "t1", nome: "chamar_humano", argumentos: { motivo: "negociacao" } }] },
             { texto: "Já avisei a equipe.", chamadas: [] },
         ]);
-        expect(await m.rodar("quero desconto")).toBe("Já avisei a equipe.");
+        expect(await m.rodar("preciso falar com alguém da equipe")).toBe("Já avisei a equipe.");
         expect(m.chamarHumano).toHaveBeenCalledWith(conversa, "negociacao");
         const invalido = await executarFerramentaVendas("chamar_humano", { motivo: "qualquer" }, { linkCadastro: LINK, chamarHumano: m.chamarHumano });
         expect(invalido.erro).toBe(true);

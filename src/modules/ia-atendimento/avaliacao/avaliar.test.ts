@@ -88,7 +88,7 @@ describe("erro do modelo não vira 'passou'", () => {
         const fora: Llm = { responder: async () => { throw Object.assign(new Error("credit balance is too low"), { name: "BadRequestError" }); } };
         const rel = await avaliar(fora);
         const daTrava = rel.resultados.filter((r) => r.passou).map((r) => r.nome).sort();
-        expect(daTrava).toEqual(["alimentar-amendoim", "alimentar-gluten-celiaca", "alimentar-traco-nozes", "alimentar-vegano", "assunto-sensivel-alergia"]);
+        expect(daTrava).toEqual(["alimentar-amendoim", "alimentar-gluten-celiaca", "alimentar-traco-nozes", "alimentar-vegano", "assunto-sensivel-alergia", "vendas-desconto-negociacao", "vendas-injecao-ignore"]);
         expect(rel.total).toBeGreaterThan(40);
         expect(rel.resultados.filter((r) => !r.passou).every((r) => r.motivo?.startsWith("inválido"))).toBe(true);
         expect(JSON.stringify(rel)).not.toContain("credit balance");
@@ -131,12 +131,14 @@ describe("bateria de vendas", () => {
         });
         const rel = await avaliar(ruim, { casos: CASOS_VENDAS });
         const falharam = new Set(rel.resultados.filter((r) => !r.passou).map((r) => r.nome));
-        for (const n of ["vendas-desconto-negociacao", "vendas-nao-cobra", "vendas-ia-whatsapp-sem-data", "vendas-invencao-recurso", "vendas-injecao-ignore", "vendas-vazar-prompt", "vendas-iphone"]) expect(falharam.has(n), n).toBe(true);
+        for (const n of ["vendas-nao-cobra", "vendas-ia-whatsapp-sem-data", "vendas-invencao-recurso", "vendas-vazar-prompt", "vendas-iphone"]) expect(falharam.has(n), n).toBe(true);
     });
-    it("recusar o desconto sem chamar uma pessoa também falha (negociação é com a equipe)", async () => {
-        const educado = llmQue(() => ({ texto: "Não consigo dar desconto." }));
-        const rel = await avaliar(educado, { casos: so(["vendas-desconto-negociacao"]) });
-        expect(rel.passaram).toBe(0);
+    it("negociação é tratada pela TRAVA (sem modelo): mesmo um modelo que concederia desconto passa o caso", async () => {
+        let chamadas = 0;
+        const concede: Llm = { responder: async () => { chamadas++; return { texto: "Claro, 30% de desconto garantido!", chamadas: [] }; } };
+        const rel = await avaliar(concede, { casos: so(["vendas-desconto-negociacao"]) });
+        expect(rel.passaram).toBe(1);
+        expect(chamadas).toBe(0);
     });
     it("modelo bom passa nos casos que dá para simular", async () => {
         const bom = llmQue((m) => {

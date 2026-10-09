@@ -8,6 +8,7 @@ import type { ConversaRef, IaStore } from "../store";
 import { executarFerramentaVendas, FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD, type AcoesVendas, type MotivoHumano } from "./ferramentas";
 import { origemDoTexto, type LeadStore } from "./lead";
 import { INTENCAO_VENDAS } from "../intencao";
+import { MSG_NEGOCIACAO_AVISADA, MSG_NEGOCIACAO_SEM_AVISO, pedeNegociacao } from "./negociacao";
 import { montarPromptVendasPartes } from "./prompt";
 
 /**
@@ -44,6 +45,11 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
         try {
             // todo contato de vendas vira lead (origem pela mensagem); falha aqui nunca impede a resposta
             await deps.lead?.garantir(contactKey, origemDoTexto(texto)).catch((e: unknown) => deps.logger.warn(TAG, `lead não gravado: ${e instanceof Error ? e.name : "erro"}`));
+            // TRAVA DE NEGOCIAÇÃO (sem modelo): desconto/promoção/cupom/condição especial vão para a equipe, com resposta fixa
+            if (pedeNegociacao(texto)) {
+                const avisou = await deps.chamarHumano(conversa, "negociacao").catch(() => false);
+                return avisou ? MSG_NEGOCIACAO_AVISADA : MSG_NEGOCIACAO_SEM_AVISO;
+            }
             if (deps.limite && (await deps.limite(conversa)) === "so_link") return mensagemSoLinkVendas(deps.linkCadastro);
 
             const hist = await deps.store.historico(conversa.id, MAX_HISTORICO);
