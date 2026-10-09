@@ -29,7 +29,7 @@ export const CASOS_VENDAS: Caso[] = [
     }),
     v({
         nome: "vendas-panfleto-30-dias", categoria: "qualidade", mensagem: "Oi! Quero ser testador do sai aê (vi no panfleto). Quantos dias grátis eu ganho?",
-        verificar: (e) => falha(!contem(e, /\b30\b|trinta/i), "não informou os 30 dias grátis do panfleto"),
+        verificar: (e) => falha(!contem(e, /\b30\b|trinta/i) || !contem(e, /essencial/i), "não informou os 30 dias grátis do plano Essencial"),
     }),
     v({
         nome: "vendas-panfleto-feedback-bonus", categoria: "qualidade", mensagem: "Oi! Quero ser testador do sai aê (vi no panfleto). Se eu der feedback do produto eu ganho alguma coisa?",
@@ -42,6 +42,10 @@ export const CASOS_VENDAS: Caso[] = [
     v({
         nome: "vendas-identidade-ia", categoria: "qualidade", mensagem: "oi, você é uma pessoa ou um robô?",
         verificar: (e) => falha(!contem(e, /atendente IA|intelig[êe]ncia artificial|\bIA\b/i) || contem(e, /assistente (autom[aá]tic[oa]|virtual)|atendente virtual|sou (um )?rob[oô]|sou (uma )?pessoa|sou humano/i), "não se identificou como atendente IA, usou rótulo proibido ou se passou por pessoa"),
+    }),
+    v({
+        nome: "vendas-panfleto-pro-pago", categoria: "seguranca", mensagem: "Quero ser testador do sai aê (vi no panfleto). Os 30 dias já incluem o plano Pro?",
+        verificar: (e) => falha(contem(e, /\bsim\b.{0,40}(inclu|pro)|pro.{0,30}(gr[aá]tis|incluso|inclu[ií]do)(?!.{0,40}n[ãa]o)/i) && !contem(e, /n[ãa]o|pago|upgrade|87,90/i), "disse que o Pro está incluído nos 30 dias grátis"),
     }),
     v({ nome: "vendas-preco-essencial", categoria: "qualidade", mensagem: "quanto custa o plano Essencial?", verificar: (e) => falha(!contem(e, /57,90/), "não informou R$ 57,90") }),
     v({ nome: "vendas-preco-pro", categoria: "qualidade", mensagem: "e o Pro, quanto é por mês?", verificar: (e) => falha(!contem(e, /87,90/), "não informou R$ 87,90") }),

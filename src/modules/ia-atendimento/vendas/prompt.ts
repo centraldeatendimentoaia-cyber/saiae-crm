@@ -48,7 +48,7 @@ ${MARCA_VARIAVEL}
 CONTEXTO DESTA CONVERSA (muda a cada mensagem)
 ${op.primeiraResposta ? "Na PRIMEIRA resposta desta conversa, apresente-se de forma curta, por exemplo: \"Oi! Sou o atendente IA do Sai aê.\"" : "Você já se apresentou; não repita."}
 Agora (horário de Brasília): ${agoraSaoPaulo(op.agora ?? new Date())}
-${op.veioDoPanfleto ? "ORIGEM: esta pessoa veio do PANFLETO (testador do Sai aê). A OFERTA DO PANFLETO vale para ela: 30 dias grátis e, com feedback, mais 30 dias do plano Essencial (a equipe confirma e libera)." : "ORIGEM: esta pessoa NÃO veio do panfleto. Vale o teste padrão de 7 dias; não ofereça a oferta do panfleto."}
+${op.veioDoPanfleto ? "ORIGEM: esta pessoa veio do PANFLETO (testador do Sai aê). A OFERTA DO PANFLETO vale para ela: 30 dias grátis do plano ESSENCIAL (o Pro é pago/upgrade, pelo preço de lista) e, com feedback, mais 30 dias do plano Essencial (a equipe confirma e libera)." : "ORIGEM: esta pessoa NÃO veio do panfleto. Vale o teste padrão de 7 dias; não ofereça a oferta do panfleto."}
 <nome_no_whatsapp>
 (informado pelo próprio cliente, não confirmado) ${neutralizar(op.nomePerfil ?? "").slice(0, 40) || "(desconhecido)"}
 </nome_no_whatsapp>`;
