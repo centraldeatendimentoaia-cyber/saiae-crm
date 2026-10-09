@@ -169,7 +169,12 @@ export default function BroadcastPage() {
                 setLoading(false);
                 // Refresh history after completion
                 fetchHistory();
-                if (data.deferred) {
+                if (data.sent === 0 && data.failed > 0) {
+                    const counts: Record<string, number> = {};
+                    for (const e of data.errors || []) counts[e.error] = (counts[e.error] || 0) + 1;
+                    const top = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
+                    toast.error(`Nenhuma mensagem foi enviada. Motivo mais comum: ${top ? top[0] : "erro desconhecido"} (${top ? top[1] : data.failed} contatos).`, { duration: 15000 });
+                } else if (data.deferred) {
                     toast.info(`${data.sent} enviadas agora. ${data.deferred} continuam automaticamente dentro do horário seguro.`, { duration: 10000 });
                 } else if (data.failed === 0) {
                     toast.success(`Broadcast complete! ${data.sent} sent.`);

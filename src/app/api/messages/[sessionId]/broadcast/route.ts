@@ -69,6 +69,12 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Session not ready", error: "Session not ready" }, { status: 503 });
         }
 
+        // trava contra disparo duplo, mas se o registro já não está "em andamento" (cancelado, interrompido) a trava se desfaz sozinha
+        const activeId = running.get(sessionId);
+        if (activeId) {
+            const active = await prisma.broadcastLog.findUnique({ where: { id: activeId }, select: { status: true } });
+            if (active?.status !== "running") running.delete(sessionId);
+        }
         if (running.has(sessionId)) {
             return NextResponse.json({ status: false, message: "Já existe um disparo em andamento neste número. Espere terminar ou cancele-o antes de começar outro.", code: "BROADCAST_RUNNING" }, { status: 409 });
         }
@@ -97,7 +103,6 @@ export async function POST(
 
         const io = (global as any).io;
         const broadcastId = log.id;
-        running.set(sessionId, broadcastId);
 
         // Emit initial state
         if (io) {
@@ -117,6 +122,7 @@ export async function POST(
         // Modo Seguro: só quando o Anti-Spam do número está ligado
         const safe = await getSafeMode(sessionId);
         const onlyInteracted = await onlyInteractedEnabled(sessionId);
+        running.set(sessionId, broadcastId); // só depois de tudo pronto: um erro antes daqui não deixa a trava presa
 
         (async () => {
             let sent = 0;
