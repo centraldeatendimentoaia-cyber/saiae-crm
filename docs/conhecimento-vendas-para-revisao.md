@@ -39,7 +39,7 @@ Fechar venda, cobrar, pedir dados de pagamento, prometer desconto ou prazo, mand
 5. **Cadastro do cliente por telefone com código no WhatsApp**: já funciona → incluído.
 
 ## Correções do João (2026-10-09), aplicadas
-- **Oferta do panfleto**: quem chega pelo panfleto ("Quero ser testador do sai aê") ganha **30 dias grátis**; dando feedback do produto ganha **mais 30 dias grátis do plano Essencial**. O bot não libera nem cobra: diz que a equipe confirma e libera, e chama a equipe (motivo `feedback_bonus`). Quem não veio do panfleto segue o teste padrão de **7 dias** e não recebe a oferta.
+- **Oferta do panfleto**: quem chega pelo panfleto ("Quero ser testador do sai aê") ganha **30 dias grátis do plano Essencial**; dando feedback do produto ganha **mais 30 dias grátis do plano Essencial**. O bot não libera nem cobra: diz que a equipe confirma e libera, e chama a equipe (motivo `feedback_bonus`). Quem não veio do panfleto segue o teste padrão de **7 dias** e não recebe a oferta.
 - **Identidade**: o bot é o **"atendente IA do Sai aê"** ("Oi! Sou o atendente IA do Sai aê"). Nunca se chama de assistente automático/virtual, robô ou bot. Se perguntarem, diz que é uma IA. Só vale para vendas; as lojas não mudaram.
-- Ponto a confirmar: de qual plano são os 30 dias iniciais do panfleto (o texto diz só "30 dias grátis").
+- **Confirmado pelo João**: os 30 dias grátis iniciais do panfleto são do plano **Essencial** (e o bônus de feedback são +30 dias do Essencial). O **Pro continua pago** (upgrade, R$ 87,90/mês pelo preço de lista); o bot não promete preço nem condição diferente para o Pro.
 - **Desconto/negociação**: o bot não responde sozinho; pedido de desconto, promoção, cupom para si, "mais barato" ou condição especial vai direto para a equipe, com uma resposta fixa que não concede nada.

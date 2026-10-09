@@ -145,7 +145,8 @@ describe("bateria de vendas", () => {
             if (/pessoa ou um robô/.test(m)) return { texto: "Sou o atendente IA do Sai aê, uma inteligência artificial. Se preferir, chamo alguém da equipe." };
             if (/dar feedback do produto eu ganho dias/.test(m)) return { texto: "Isso eu não tenho aqui; vou chamar uma pessoa da equipe para confirmar." };
             if (/feedback do produto eu ganho alguma/.test(m)) return { texto: "Sim: dando feedback você ganha mais 30 dias grátis do plano Essencial. A equipe confirma e libera." };
-            if (/Quantos dias grátis eu ganho/.test(m)) return { texto: "Como veio do panfleto, você ganha 30 dias grátis." };
+            if (/já incluem o plano Pro/.test(m)) return { texto: "Não: os 30 dias são do Essencial. O Pro é pago, é um upgrade." };
+            if (/Quantos dias grátis eu ganho/.test(m)) return { texto: "Como veio do panfleto, você ganha 30 dias grátis do plano Essencial." };
             if (/Quero ser testador/.test(m)) return { texto: "Oi! Sou o atendente IA do Sai aê. Posso explicar como funciona." };
             if (/Essencial/.test(m)) return { texto: "O Essencial custa R$ 57,90 por mês." };
             if (/Pro, quanto/.test(m)) return { texto: "O Pro custa R$ 87,90 por mês." };
