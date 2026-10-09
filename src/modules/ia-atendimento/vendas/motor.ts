@@ -29,7 +29,7 @@ export interface VendasDeps {
     store: Pick<IaStore, "historico">;
     /** Link oficial de cadastro/teste (IA_VENDAS_LINK_CADASTRO) ou null. */
     linkCadastro: string | null;
-    chamarHumano: (conversa: ConversaRef, motivo: MotivoHumano) => Promise<boolean>;
+    chamarHumano: (conversa: ConversaRef, motivo: MotivoHumano, duvida?: string) => Promise<boolean>;
     /** Onde guardar o lead (um por telefone). Ausente: sem lead e sem a ferramenta registrar_lead. */
     lead?: LeadStore;
     /** Teto diário (vendas e global). "so_link" = só manda o link de cadastro, sem chamar o modelo. */
@@ -48,7 +48,7 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
             await deps.lead?.garantir(contactKey, origemDoTexto(texto)).catch((e: unknown) => deps.logger.warn(TAG, `lead não gravado: ${e instanceof Error ? e.name : "erro"}`));
             // TRAVA DE NEGOCIAÇÃO (sem modelo): desconto/promoção/cupom/condição especial vão para a equipe, com resposta fixa
             if (pedeNegociacao(texto)) {
-                const avisou = await deps.chamarHumano(conversa, "negociacao").catch(() => false);
+                const avisou = await deps.chamarHumano(conversa, "negociacao", texto).catch(() => false);
                 return avisou ? MSG_NEGOCIACAO_AVISADA : MSG_NEGOCIACAO_SEM_AVISO;
             }
             if (deps.limite && (await deps.limite(conversa)) === "so_link") return mensagemSoLinkVendas(deps.linkCadastro);
@@ -60,7 +60,8 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
             const lead = deps.lead;
             const acoes: AcoesVendas = {
                 linkCadastro: deps.linkCadastro,
-                chamarHumano: (motivo) => deps.chamarHumano(conversa, motivo),
+                // se o modelo não resumiu a dúvida, vai a própria mensagem do cliente: a equipe nunca é chamada às cegas
+                chamarHumano: (motivo, duvida) => deps.chamarHumano(conversa, motivo, duvida?.trim() || texto),
                 registrarLead: lead ? (campos) => lead.atualizar(contactKey, campos) : undefined,
             };
             const ferramentas = lead ? [...FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD] : FERRAMENTAS_VENDAS;

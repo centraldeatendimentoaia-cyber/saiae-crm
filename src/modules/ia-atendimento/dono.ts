@@ -16,6 +16,8 @@ export { diaSaoPaulo };
  */
 
 export const TEMPLATE_DONO = "ia_chamar_dono";
+/** Variante com a dúvida do cliente (5 variáveis). Só é usada se o nome estiver em IA_TEMPLATE_CHAMAR_DONO_DUVIDA (precisa estar aprovada na Meta). */
+export const ENV_TEMPLATE_DONO_DUVIDA = "IA_TEMPLATE_CHAMAR_DONO_DUVIDA";
 export const PAUSA_HORAS = 12;
 export const MSG_RESPONSAVEL_AVISADO = "O responsável da loja já foi avisado e vai falar com você por aqui assim que puder. Obrigado pela paciência!";
 export const MSG_IA_REATIVADA = "Pronto, a IA voltou a atender as conversas pausadas desta loja.";
@@ -38,6 +40,20 @@ const param = (v: string, max = 60) => (v.replace(/\s+/g, " ").trim() || "-").sl
 
 export const pausadaAgora = (c: Pick<ConversaRef, "estado" | "pausadaAte">, agora: Date) => c.estado === "humano" && c.pausadaAte !== null && c.pausadaAte > agora;
 
+/**
+ * A dúvida do cliente como parâmetro de template: uma linha, sem links (um link na mão do responsável é risco de golpe),
+ * sem espaços repetidos, no máximo 200 caracteres. Vazia vira null.
+ */
+export function limparDuvida(texto: string | null | undefined): string | null {
+    if (typeof texto !== "string") return null;
+    const t = texto
+        .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "[link]")
+        .replace(/[\u0000-\u001f\u007f]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    return t ? t.slice(0, 200) : null;
+}
+
 /** Máximo de avisos ao responsável por loja por dia (São Paulo). Acima disso a IA pausa a conversa mas NÃO envia mais template. */
 export const MAX_AVISOS_DONO_DIA = 10;
 
@@ -47,13 +63,15 @@ export interface DonoDeps {
     enviarTemplate: (to: string, template: TemplateInput) => Promise<unknown>;
     store: Pick<IaStore, "pausar">;
     now: () => Date;
+    /** Nome do template com a dúvida do cliente (padrão: variável IA_TEMPLATE_CHAMAR_DONO_DUVIDA). */
+    templateDuvida?: string;
     logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void };
 }
 
 /** Devolve `(conversa, ctx, motivo) => avisou?`. true também quando a conversa já estava pausada (já foi avisado); "teto" = pausou sem avisar (teto diário); false = falhou. */
 export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "enviarTemplate" | "store">) {
     const deps: DonoDeps = { now: () => new Date(), logger: defaultLogger, ...over };
-    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoAviso): Promise<boolean | "teto"> => {
+    return async (conversa: ConversaRef, ctx: IaContextoAtivo, motivo: MotivoAviso, duvida?: string | null): Promise<boolean | "teto"> => {
         const agora = deps.now();
         if (pausadaAgora(conversa, agora)) return true;
         const dono = normalizeBrPhone(ctx.ia.whatsapp_dono);
@@ -77,11 +95,22 @@ export function criarChamadorDono(over: Partial<DonoDeps> & Pick<DonoDeps, "envi
         }
         const cliente = normalizeBrPhone(conversa.contactKey);
         try {
-            await deps.enviarTemplate(dono, {
-                name: TEMPLATE_DONO,
-                languageCode: "pt_BR",
-                bodyParameters: [param(ctx.loja.nome), MOTIVOS[motivo], cliente ?? "número não disponível", conversa.lojaCodigo],
-            });
+            const templateDuvida = (deps.templateDuvida ?? process.env[ENV_TEMPLATE_DONO_DUVIDA])?.trim();
+            const pergunta = limparDuvida(duvida);
+            if (templateDuvida && pergunta) {
+                // variáveis: {{1}} loja, {{2}} motivo, {{3}} cliente, {{4}} dúvida, {{5}} código (ver docs/templates-meta-ia.md)
+                await deps.enviarTemplate(dono, {
+                    name: templateDuvida,
+                    languageCode: "pt_BR",
+                    bodyParameters: [param(ctx.loja.nome), MOTIVOS[motivo], cliente ?? "número não disponível", param(pergunta, 200), conversa.lojaCodigo],
+                });
+            } else {
+                await deps.enviarTemplate(dono, {
+                    name: TEMPLATE_DONO,
+                    languageCode: "pt_BR",
+                    bodyParameters: [param(ctx.loja.nome), MOTIVOS[motivo], cliente ?? "número não disponível", conversa.lojaCodigo],
+                });
+            }
         } catch (e) {
             deps.logger.warn(TAG, `aviso ao responsável falhou: ${e instanceof Error ? e.name : "erro"}`);
             return false;

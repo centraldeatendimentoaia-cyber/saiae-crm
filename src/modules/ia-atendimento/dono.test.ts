@@ -4,7 +4,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
 import type { IaContextoAtivo } from "./comanda-contexto";
-import { criarAvisoLimite, criarChamadorDono, criarLiberador, diaSaoPaulo, MAX_AVISOS_DONO_DIA, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
+import { criarAvisoLimite, criarChamadorDono, criarLiberador, diaSaoPaulo, limparDuvida, MAX_AVISOS_DONO_DIA, MSG_IA_REATIVADA, PAUSA_HORAS, TEMPLATE_DONO } from "./dono";
 import type { ConversaRef } from "./store";
 
 const T0 = new Date("2026-10-08T12:00:00Z");
@@ -21,6 +21,38 @@ function chamador(enviar: () => Promise<unknown> = async () => ({})) {
     const logger = { info: vi.fn(), warn: vi.fn() };
     return { chamar: criarChamadorDono({ enviarTemplate, store, now: () => T0, logger }), enviarTemplate, store, logger };
 }
+
+describe("dúvida do cliente no aviso ao responsável", () => {
+    const comTemplate = () => {
+        const enviarTemplate = vi.fn(async () => ({}));
+        const store = { pausar: vi.fn(async () => undefined) };
+        const chamar = criarChamadorDono({ enviarTemplate, store, now: () => T0, logger: { info: vi.fn(), warn: vi.fn() }, templateDuvida: "ia_chamar_dono_duvida" });
+        return { chamar, enviarTemplate };
+    };
+    it("com o template da dúvida configurado: usa 5 variáveis, com a dúvida limpa na 4ª e o código na 5ª", async () => {
+        const c = comTemplate();
+        await c.chamar(conversa(), ctx(DONO), "nao_sei", "Vocês cobram taxa por pedido? veja https://x.com/golpe  ok");
+        expect(c.enviarTemplate).toHaveBeenCalledWith(`55${DONO}`, expect.objectContaining({
+            name: "ia_chamar_dono_duvida",
+            bodyParameters: ["Açaí do Zé", "dúvida que a IA não soube responder", CLIENTE, "Vocês cobram taxa por pedido? veja [link] ok", "ABC234"],
+        }));
+    });
+    it("sem a dúvida, ou sem o template configurado: continua com o template de 4 variáveis", async () => {
+        const c = comTemplate();
+        await c.chamar(conversa(), ctx(DONO), "nao_sei");
+        expect(c.enviarTemplate).toHaveBeenLastCalledWith(`55${DONO}`, expect.objectContaining({ name: TEMPLATE_DONO, bodyParameters: expect.arrayContaining(["ABC234"]) }));
+        const sem = chamador();
+        await sem.chamar(conversa(), ctx(DONO), "nao_sei", "uma dúvida qualquer");
+        expect(sem.enviarTemplate).toHaveBeenCalledWith(`55${DONO}`, expect.objectContaining({ name: TEMPLATE_DONO, bodyParameters: ["Açaí do Zé", "dúvida que a IA não soube responder", CLIENTE, "ABC234"] }));
+    });
+    it("limparDuvida: uma linha, sem links, até 200 caracteres; vazio vira null", () => {
+        expect(limparDuvida("  oi\n\ntudo   bem?  ")).toBe("oi tudo bem?");
+        expect(limparDuvida("veja www.golpe.com agora")).toBe("veja [link] agora");
+        expect(limparDuvida("a".repeat(500))).toHaveLength(200);
+        expect(limparDuvida("   ")).toBeNull();
+        expect(limparDuvida(undefined)).toBeNull();
+    });
+});
 
 describe("chamar o responsável", () => {
     it("envia o template ao dono (telefone normalizado) e pausa por 12 h", async () => {

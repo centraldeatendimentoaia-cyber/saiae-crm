@@ -29,3 +29,26 @@ Exemplo para a aprovação: `Açaí do Zé`, `reclamação`, `5511999990001`, `A
 4. Loja sem WhatsApp do responsável válido: a IA não consegue chamar, não pausa e diz ao cliente que a loja responderá assim que possível.
 
 Variáveis de ambiente (Railway, definidas pelo dono): `IA_ATENDIMENTO=on`, `IA_MODELO`, `ANTHROPIC_API_KEY`, `COMANDA_IA_SEGREDO`, `COMANDA_IA_URL` e as da Cloud API. Sem `IA_MODELO` ou `ANTHROPIC_API_KEY` a IA só registra mensagens e não responde.
+
+## Variante com a dúvida do cliente: `ia_chamar_dono_duvida`
+
+O aviso `ia_chamar_dono` não diz o que o cliente perguntou. Esta variante traz a dúvida (5 variáveis). Ela só é usada se o nome estiver na variável `IA_TEMPLATE_CHAMAR_DONO_DUVIDA` (Railway). Sem a variável, ou se não houver dúvida, o aviso segue com o template de 4 variáveis acima.
+
+| Campo | Valor |
+|---|---|
+| Nome | `ia_chamar_dono_duvida` |
+| Categoria | Utilidade (UTILITY) |
+| Idioma | Português (BR) `pt_BR` |
+| Botões | nenhum |
+
+Corpo sugerido:
+
+```
+Atendimento da IA na loja {{1}}: um cliente precisa de você ({{2}}). Cliente: {{3}}. Dúvida dele: {{4}}. Fale com ele direto pelo WhatsApp. Para a IA voltar a atender, responda aqui: LIBERAR #{{5}}
+```
+
+Exemplo para a aprovação: `Açaí do Zé`, `dúvida que a IA não soube responder`, `5511999990001`, `Vocês cobram taxa por pedido?`, `ABC234`.
+
+- {{4}} é a pergunta do cliente em uma frase (até 200 caracteres, sem links, sem quebra de linha).
+- A ordem das variáveis é esta; trocar a ordem na Meta quebra o aviso.
+- Na atendente de vendas, a IA resume a dúvida; se não resumir, vai a própria mensagem do cliente.

@@ -84,10 +84,13 @@ describe("motor de vendas", () => {
             { texto: "Já avisei a equipe.", chamadas: [] },
         ]);
         expect(await m.rodar("preciso falar com alguém da equipe")).toBe("Já avisei a equipe.");
-        expect(m.chamarHumano).toHaveBeenCalledWith(conversa, "negociacao");
+        expect(m.chamarHumano).toHaveBeenCalledWith(conversa, "negociacao", expect.any(String));
+        const comDuvida = await executarFerramentaVendas("chamar_humano", { motivo: "fora_do_conhecimento", duvida: "tem taxa por pedido?" }, { linkCadastro: LINK, chamarHumano: m.chamarHumano });
+        expect(comDuvida.erro).toBeUndefined();
+        expect(m.chamarHumano).toHaveBeenLastCalledWith("fora_do_conhecimento", "tem taxa por pedido?");
         const invalido = await executarFerramentaVendas("chamar_humano", { motivo: "qualquer" }, { linkCadastro: LINK, chamarHumano: m.chamarHumano });
         expect(invalido.erro).toBe(true);
-        expect(m.chamarHumano).toHaveBeenCalledTimes(1);
+        expect(m.chamarHumano).toHaveBeenCalledTimes(2);
     });
     it("limita os passos de ferramenta", async () => {
         const loop = Array.from({ length: MAX_PASSOS + 2 }, (_, i) => ({ chamadas: [{ id: `t${i}`, nome: "enviar_link_cadastro", argumentos: {} }] }));

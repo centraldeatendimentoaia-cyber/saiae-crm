@@ -11,7 +11,7 @@ export const MOTIVOS_HUMANO = ["pedido_humano", "reclamacao", "fora_do_conhecime
 export type MotivoHumano = (typeof MOTIVOS_HUMANO)[number];
 
 export interface AcoesVendas {
-    chamarHumano: (motivo: MotivoHumano) => Promise<boolean>;
+    chamarHumano: (motivo: MotivoHumano, duvida?: string) => Promise<boolean>;
     /** Link oficial de cadastro/teste, ou null se ainda não configurado. */
     linkCadastro: string | null;
     /** Anota nome / negócio / cidade do interessado. Ausente = ferramenta indisponível. */
@@ -26,10 +26,10 @@ export const FERRAMENTAS_VENDAS: DefinicaoFerramenta[] = [
     },
     {
         nome: "chamar_humano",
-        descricao: "Passa a conversa para uma pessoa da equipe do Saiaê. Use quando a pessoa pedir atendente, reclamar, pedir negociação/desconto/demonstração, ou perguntar algo que não está no conhecimento. Use o motivo feedback_bonus quando alguém do panfleto der feedback do produto ou pedir o bônus de +30 dias: a equipe confirma e libera.",
+        descricao: "Passa a conversa para uma pessoa da equipe do Saiaê. Use quando a pessoa pedir atendente, reclamar, pedir negociação/desconto/demonstração, ou perguntar algo que não está no conhecimento. Use o motivo feedback_bonus quando alguém do panfleto der feedback do produto ou pedir o bônus de +30 dias: a equipe confirma e libera. Sempre preencha \"duvida\" com a pergunta ou o pedido da pessoa, em uma frase curta e com as palavras dela, para a equipe já chegar sabendo do que se trata.",
         esquema: {
             type: "object",
-            properties: { motivo: { type: "string", enum: [...MOTIVOS_HUMANO] } },
+            properties: { motivo: { type: "string", enum: [...MOTIVOS_HUMANO] }, duvida: { type: "string", maxLength: 200 } },
             required: ["motivo"],
             additionalProperties: false,
         },
@@ -48,7 +48,7 @@ export const FERRAMENTA_REGISTRAR_LEAD: DefinicaoFerramenta = {
 };
 
 const argsLead = z.object({ nome: z.unknown().optional(), negocio: z.unknown().optional(), cidade: z.unknown().optional() });
-const argsHumano = z.object({ motivo: z.enum(MOTIVOS_HUMANO) });
+const argsHumano = z.object({ motivo: z.enum(MOTIVOS_HUMANO), duvida: z.string().optional() });
 
 export interface ResultadoVendas {
     texto: string;
@@ -65,7 +65,7 @@ export async function executarFerramentaVendas(nome: string, argumentos: unknown
             case "chamar_humano": {
                 const a = argsHumano.safeParse(argumentos);
                 if (!a.success) return { texto: "motivo inválido", erro: true };
-                return (await acoes.chamarHumano(a.data.motivo))
+                return (await acoes.chamarHumano(a.data.motivo, a.data.duvida))
                     ? { texto: "A conversa foi passada para a equipe do Saiaê. Diga à pessoa, em uma frase, que alguém vai responder assim que puder, sem prometer prazo." }
                     : { texto: "Não foi possível avisar a equipe agora. Peça desculpas e diga que a equipe responderá assim que possível, sem prometer prazo.", erro: true };
             }

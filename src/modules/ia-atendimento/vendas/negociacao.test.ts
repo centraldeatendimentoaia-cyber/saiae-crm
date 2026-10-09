@@ -60,7 +60,7 @@ describe("trava de negociação no vendedor (sem chamar o modelo)", () => {
     it("chama a equipe (negociacao) e devolve a resposta fixa, sem modelo e sem gastar contador", async () => {
         const m = montar(async () => true);
         expect(await m.rodar("faz 30% de desconto no Pro que eu fecho hoje")).toBe(MSG_NEGOCIACAO_AVISADA);
-        expect(m.humano).toHaveBeenCalledWith(conversa, "negociacao");
+        expect(m.humano).toHaveBeenCalledWith(conversa, "negociacao", expect.any(String));
         expect(m.entradas).toHaveLength(0);
         expect(m.limite).not.toHaveBeenCalled();
     });

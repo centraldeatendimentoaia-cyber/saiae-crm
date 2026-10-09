@@ -111,7 +111,7 @@ export function criarMotorVendas(env: Record<string, string | undefined> = proce
         llm: new LlmAnthropic({ env, modelo: modeloDeVendas(env) }),
         store: prismaStore,
         linkCadastro,
-        chamarHumano: async (conversa, motivo) => (await chamarDono({ ...conversa, lojaCodigo: VENDAS }, equipe, MOTIVO_HUMANO_PARA_DONO[motivo])) !== false,
+        chamarHumano: async (conversa, motivo, duvida) => (await chamarDono({ ...conversa, lojaCodigo: VENDAS }, equipe, MOTIVO_HUMANO_PARA_DONO[motivo], duvida)) !== false,
         lead: prismaLeads,
         limite,
         now: () => new Date(),
