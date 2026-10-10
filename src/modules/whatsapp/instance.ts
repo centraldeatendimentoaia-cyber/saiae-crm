@@ -1,6 +1,7 @@
 import makeWASocket, {
     DisconnectReason,
     fetchLatestBaileysVersion,
+    generateMessageID,
     makeCacheableSignalKeyStore,
     WASocket,
     ConnectionState
@@ -15,6 +16,8 @@ import { syncGroups } from "./store/groups";
 import { bindContactSync } from "./store/contacts";
 import { bindAutoReply } from "./store/autoreply";
 import { bindOptOut } from "./store/optout";
+import { bindAgenteSalao } from "@/modules/agente-salao/agente";
+import { marcarEnviadaPeloCrm } from "@/modules/agente-salao/enviados";
 import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
 import { logger } from "@/lib/logger";
@@ -78,7 +81,10 @@ export class WhatsAppInstance {
         const sessionId = this.sessionId;
         this.socket.sendMessage = async function (jid: string, content: any, options?: any) {
             await antispam.enqueue(sessionId, jid, content);
-            return originalSendMessage(jid, content, options);
+            // registra o ID: o agente do salão distingue o que o CRM enviou do que uma pessoa escreveu pelo celular
+            const messageId = options?.messageId || generateMessageID();
+            marcarEnviadaPeloCrm(messageId);
+            return originalSendMessage(jid, content, { ...options, messageId });
         } as any;
 
         // Bind Store for DB Sync
@@ -272,6 +278,7 @@ export class WhatsAppInstance {
 
                 bindAutoReply(this.socket as WASocket, this.sessionId);
                 bindOptOut(this.socket as WASocket, this.sessionId);
+                bindAgenteSalao(this.socket as WASocket, this.sessionId);
                 bindPpGuard(this.socket as WASocket, this.sessionId);
 
                 await prisma.session.update({

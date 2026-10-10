@@ -8,6 +8,7 @@ import { assertCanSend, recordMessages } from "@/lib/plans";
 import { isOptedOut } from "@/lib/optout";
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
 import { startRetention } from "@/lib/retention";
+import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
@@ -154,5 +155,6 @@ export function initScheduler() {
     });
     
     startRetention();
+    startFollowUps();
     logger.info("Cron", "Scheduler initialized");
 }

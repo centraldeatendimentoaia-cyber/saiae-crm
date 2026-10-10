@@ -580,3 +580,49 @@ model IaLead {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------------------------
+// Agente de atendimento por sessão (QR/Baileys): a "Lavínia" do salão. Tabelas novas, só acréscimo.
+// ---------------------------------------------------------------------------------------------
+
+/// Configuração do agente de um número (sessão). `conhecimento` é o texto que o dono edita; vazio = texto padrão da Lavínia.
+model AgenteConfig {
+  sessionId        String   @id // ID da sessão (string do Baileys)
+  ativo            Boolean  @default(false)
+  nome             String   @default("Lavínia")
+  conhecimento     String?  @db.MediumText
+  promocoes        String?  @db.Text
+  linkAgendamento  String?
+  grupoRecepcaoJid String? // grupo de WhatsApp da recepção (recebe "Cliente aguardando resposta - bot")
+  numerosIgnorados Json? // telefones (só dígitos) que a IA nunca atende: equipe, dono
+  followUpHoras    Int      @default(12)
+  pausaHoras       Int      @default(12) // quanto a IA fica calada depois que uma pessoa assume ou a recepção é chamada
+  diasAbertos      String   @default("2,3,4,5,6") // 0=domingo ... 6=sábado (terça a sábado)
+  horaAbre         Int      @default(9)
+  horaFecha        Int      @default(18)
+  atualizadoEm     DateTime @updatedAt
+}
+
+/// Estado de cada conversa atendida pelo agente (uma por contato e sessão).
+model AgenteConversa {
+  id                String    @id @default(cuid())
+  sessionId         String
+  jid               String // chat como o WhatsApp entrega (telefone ou @lid)
+  telefone          String? // só dígitos, quando conhecido
+  nomePerfil        String?
+  servico           String?
+  estado            String    @default("ia") // ia | humano
+  pausadaAte        DateTime?
+  motivoPausa       String?
+  ultimaInboundAt   DateTime?
+  ultimaIaAt        DateTime?
+  ultimaIaPerguntou Boolean   @default(false)
+  ultimaHumanoAt    DateTime?
+  followUpEm        DateTime?
+  criadoEm          DateTime  @default(now())
+  atualizadoEm      DateTime  @updatedAt
+
+  @@unique([sessionId, jid])
+  @@index([sessionId, estado])
+  @@index([sessionId, ultimaIaAt])
+}

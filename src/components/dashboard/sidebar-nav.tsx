@@ -88,6 +88,7 @@ const navGroups: NavGroup[] = [
             { href: "/dashboard/bot-settings", label: "Configurações do Bot", icon: Bot },
             { href: "/dashboard/autoreply", label: "Resposta automática", icon: MessageCircleReply },
             { href: "/dashboard/atendente-ia", label: "Atendente IA", icon: Bot, superadminOnly: true },
+            { href: "/dashboard/agente-ia", label: "Agente de atendimento", icon: Bot, superadminOnly: true },
             { href: "/dashboard/profile", label: "Perfil do bot", icon: UserCircle },
             { href: "/dashboard/scheduler", label: "Agendador", icon: CalendarClock },
             { href: "/dashboard/webhooks", label: "Webhooks e API", icon: Webhook },
