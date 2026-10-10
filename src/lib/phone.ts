@@ -54,3 +54,11 @@ export function parseRecipients(text: string): string[] {
     }
     return out;
 }
+
+/** 5561999531848 -> +55 61 99953-1848. Chave sem telefone (ex.: BSUID) vira "Contato sem número". */
+export function formatPhoneBr(raw: string): string {
+    if (/[A-Za-z]/.test(raw)) return "Contato sem número";
+    const d = raw.replace(/\D/g, "");
+    const m = /^55(\d{2})(9?\d{4})(\d{4})$/.exec(d);
+    return m ? `+55 ${m[1]} ${m[2]}-${m[3]}` : d ? `+${d}` : "Contato sem número";
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizePhone, canonicalPhone, jidVariants, parseRecipients } from "./phone";
+import { normalizePhone, canonicalPhone, jidVariants, parseRecipients, formatPhoneBr } from "./phone";
 
 describe("normalizePhone", () => {
     it("acrescenta o DDI 55 em números brasileiros de 10 e 11 dígitos", () => {
@@ -65,5 +65,19 @@ describe("parseRecipients", () => {
     });
     it("preserva JIDs completos (grupos)", () => {
         expect(parseRecipients("120363123456789@g.us")).toEqual(["120363123456789@g.us"]);
+    });
+});
+
+describe("formatPhoneBr", () => {
+    it("formata celular brasileiro, com e sem o 9º dígito", () => {
+        expect(formatPhoneBr("5561999531848")).toBe("+55 61 99953-1848");
+        expect(formatPhoneBr("556199531848")).toBe("+55 61 9953-1848");
+    });
+    it("não mostra identificador interno: BSUID vira 'Contato sem número'", () => {
+        expect(formatPhoneBr("BR.13491208655302741918")).toBe("Contato sem número");
+        expect(formatPhoneBr("")).toBe("Contato sem número");
+    });
+    it("número estrangeiro só ganha o +", () => {
+        expect(formatPhoneBr("14155550123")).toBe("+14155550123");
     });
 });
