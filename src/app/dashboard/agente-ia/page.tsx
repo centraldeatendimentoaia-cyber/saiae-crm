@@ -15,6 +15,11 @@ import { SessionGuard } from "@/components/dashboard/session-guard";
 interface Config {
     ativo: boolean;
     nome: string;
+    nomeNegocio: string;
+    etiquetasInteresse: string[];
+    etiquetaAguardando: string;
+    etiquetaFollowUp: string;
+    etiquetaAnuncio: string;
     conhecimento: string;
     promocoes: string;
     linkAgendamento: string;
@@ -35,6 +40,7 @@ export default function AgenteIaPage() {
     const [cfg, setCfg] = useState<Config | null>(null);
     const [grupos, setGrupos] = useState<Grupo[]>([]);
     const [ignorados, setIgnorados] = useState("");
+    const [interesses, setInteresses] = useState("");
     const [salvando, setSalvando] = useState(false);
 
     const carregar = useCallback(async () => {
@@ -43,6 +49,7 @@ export default function AgenteIaPage() {
         if (c?.status) {
             setCfg(c.data);
             setIgnorados((c.data.numerosIgnorados as string[]).join("\n"));
+            setInteresses((c.data.etiquetasInteresse as string[]).join("\n"));
         }
         if (g?.status) setGrupos((g.data as Grupo[]).filter((x) => x.jid?.endsWith("@g.us")));
     }, [sessionId]);
@@ -58,6 +65,11 @@ export default function AgenteIaPage() {
             const corpo = {
                 ativo: cfg.ativo,
                 nome: cfg.nome,
+                nomeNegocio: cfg.nomeNegocio || null,
+                etiquetasInteresse: interesses.split("\n").map((e) => e.trim()).filter(Boolean),
+                etiquetaAguardando: cfg.etiquetaAguardando || null,
+                etiquetaFollowUp: cfg.etiquetaFollowUp || null,
+                etiquetaAnuncio: cfg.etiquetaAnuncio || null,
                 conhecimento: cfg.conhecimento,
                 promocoes: cfg.promocoes,
                 linkAgendamento: cfg.linkAgendamento || null,
@@ -117,6 +129,29 @@ export default function AgenteIaPage() {
                                         <Label>Link de agendamento (Avec)</Label>
                                         <Input value={cfg.linkAgendamento} onChange={(e) => set("linkAgendamento", e.target.value)} placeholder="https://agendamento.avec.beauty/?slug=..." />
                                     </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Identidade e etiquetas</CardTitle>
+                                <CardDescription>Como a atendente se apresenta e quais etiquetas do WhatsApp ela usa. Os nomes das etiquetas precisam ser exatamente iguais aos do WhatsApp (sincronize em Etiquetas). Em branco = não etiqueta.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="space-y-1"><Label>Nome da atendente</Label><Input value={cfg.nome} onChange={(e) => set("nome", e.target.value)} /></div>
+                                    <div className="space-y-1"><Label>Nome do negócio</Label><Input value={cfg.nomeNegocio} onChange={(e) => set("nomeNegocio", e.target.value)} placeholder="Ex.: LAVI Concept" /></div>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>Etiquetas de interesse (uma por linha)</Label>
+                                    <Textarea value={interesses} onChange={(e) => setInteresses(e.target.value)} className="min-h-[90px]" placeholder={"Interesse: Unhas\nInteresse: Corte/Cor"} />
+                                    <p className="text-xs text-muted-foreground">Explique no texto da atendente (abaixo) quando usar cada uma. Trocando de negócio, troque estas etiquetas e a seção de etiquetas do texto.</p>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="space-y-1"><Label>Ao chamar a recepção</Label><Input value={cfg.etiquetaAguardando} onChange={(e) => set("etiquetaAguardando", e.target.value)} /></div>
+                                    <div className="space-y-1"><Label>Ao mandar o lembrete</Label><Input value={cfg.etiquetaFollowUp} onChange={(e) => set("etiquetaFollowUp", e.target.value)} /></div>
+                                    <div className="space-y-1"><Label>Conversa vinda de anúncio do Meta</Label><Input value={cfg.etiquetaAnuncio} onChange={(e) => set("etiquetaAnuncio", e.target.value)} /></div>
                                 </div>
                             </CardContent>
                         </Card>

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "@/modules/agente-salao/conhecimento-lavinia";
 import { limparCacheConfigAgente } from "@/modules/agente-salao/agente";
+import { ETIQUETAS_INTERESSE_PADRAO } from "@/modules/agente-salao/motor";
 
 async function guard(request: NextRequest, sessionId: string) {
     const user = await getAuthenticatedUser(request);
@@ -15,6 +16,11 @@ async function guard(request: NextRequest, sessionId: string) {
 const corpo = z.object({
     ativo: z.boolean().optional(),
     nome: z.string().trim().min(1).max(40).optional(),
+    nomeNegocio: z.string().trim().max(60).nullable().optional(),
+    etiquetasInteresse: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
+    etiquetaAguardando: z.string().trim().max(80).nullable().optional(),
+    etiquetaFollowUp: z.string().trim().max(80).nullable().optional(),
+    etiquetaAnuncio: z.string().trim().max(80).nullable().optional(),
     conhecimento: z.string().max(40_000).nullable().optional(),
     promocoes: z.string().max(4_000).nullable().optional(),
     linkAgendamento: z.string().trim().max(300).nullable().optional().refine((v) => !v || /^https:\/\/\S+$/i.test(v), "O link precisa começar com https://"),
@@ -38,6 +44,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         data: {
             ativo: c?.ativo ?? false,
             nome: c?.nome ?? "Lavínia",
+            nomeNegocio: c?.nomeNegocio ?? "",
+            etiquetasInteresse: Array.isArray(c?.etiquetasInteresse) ? c!.etiquetasInteresse : [...ETIQUETAS_INTERESSE_PADRAO],
+            etiquetaAguardando: c ? c.etiquetaAguardando ?? "" : "Aguardando resposta",
+            etiquetaFollowUp: c ? c.etiquetaFollowUp ?? "" : "Sumiu - follow up",
+            etiquetaAnuncio: c ? c.etiquetaAnuncio ?? "" : "Vindo de anúncio do Meta",
             conhecimento: c?.conhecimento?.trim() ? c.conhecimento : CONHECIMENTO_LAVINIA_PADRAO,
             promocoes: c?.promocoes ?? "",
             linkAgendamento: c?.linkAgendamento ?? "",
@@ -67,6 +78,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const dados = {
         ...(d.ativo !== undefined ? { ativo: d.ativo } : {}),
         ...(d.nome !== undefined ? { nome: d.nome } : {}),
+        ...(d.nomeNegocio !== undefined ? { nomeNegocio: d.nomeNegocio?.trim() || null } : {}),
+        ...(d.etiquetasInteresse !== undefined ? { etiquetasInteresse: d.etiquetasInteresse } : {}),
+        ...(d.etiquetaAguardando !== undefined ? { etiquetaAguardando: d.etiquetaAguardando?.trim() || null } : {}),
+        ...(d.etiquetaFollowUp !== undefined ? { etiquetaFollowUp: d.etiquetaFollowUp?.trim() || null } : {}),
+        ...(d.etiquetaAnuncio !== undefined ? { etiquetaAnuncio: d.etiquetaAnuncio?.trim() || null } : {}),
         ...(d.conhecimento !== undefined ? { conhecimento: d.conhecimento && d.conhecimento.trim() !== CONHECIMENTO_LAVINIA_PADRAO.trim() ? d.conhecimento : null } : {}),
         ...(d.promocoes !== undefined ? { promocoes: d.promocoes?.trim() || null } : {}),
         ...(d.linkAgendamento !== undefined ? { linkAgendamento: d.linkAgendamento || null } : {}),

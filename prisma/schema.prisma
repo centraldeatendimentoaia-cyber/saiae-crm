@@ -590,6 +590,11 @@ model AgenteConfig {
   sessionId        String   @id // ID da sessão (string do Baileys)
   ativo            Boolean  @default(false)
   nome             String   @default("Lavínia")
+  nomeNegocio      String? // como a atendente se apresenta: "assistente virtual da <negócio>"
+  etiquetasInteresse Json? // nomes exatos das etiquetas de interesse (vazio = as do salão)
+  etiquetaAguardando String? @default("Aguardando resposta") // ao chamar a recepção (em branco = não etiqueta)
+  etiquetaFollowUp   String? @default("Sumiu - follow up") // ao mandar o lembrete (em branco = não etiqueta)
+  etiquetaAnuncio    String? @default("Vindo de anúncio do Meta") // conversa vinda de anúncio (em branco = não etiqueta)
   conhecimento     String?  @db.MediumText
   promocoes        String?  @db.Text
   linkAgendamento  String?

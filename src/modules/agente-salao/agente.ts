@@ -9,7 +9,7 @@ import { MAX_TEXTO } from "@/modules/ia-atendimento/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
-import { MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type EtiquetaInteresse, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
+import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 
 /**
  * Liga o agente do salão ao socket do WhatsApp (QR/Baileys) de UMA sessão.
@@ -29,6 +29,11 @@ export interface ConfigAgente {
     sessionId: string;
     ativo: boolean;
     nome: string;
+    nomeNegocio: string | null;
+    etiquetasInteresse: string[];
+    etiquetaAguardando: string | null;
+    etiquetaFollowUp: string | null;
+    etiquetaAnuncio: string | null;
     conhecimento: string;
     promocoes: string | null;
     linkAgendamento: string | null;
@@ -57,6 +62,11 @@ export async function carregarConfigAgente(sessionId: string): Promise<ConfigAge
               sessionId,
               ativo: r.ativo,
               nome: r.nome,
+              nomeNegocio: r.nomeNegocio?.trim() || null,
+              etiquetasInteresse: Array.isArray(r.etiquetasInteresse) ? (r.etiquetasInteresse as unknown[]).map(String).filter(Boolean) : [...ETIQUETAS_INTERESSE_PADRAO],
+              etiquetaAguardando: r.etiquetaAguardando?.trim() || null,
+              etiquetaFollowUp: r.etiquetaFollowUp?.trim() || null,
+              etiquetaAnuncio: r.etiquetaAnuncio?.trim() || null,
               conhecimento: r.conhecimento?.trim() || CONHECIMENTO_LAVINIA_PADRAO,
               promocoes: r.promocoes,
               linkAgendamento: r.linkAgendamento,
@@ -261,7 +271,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 where: { id: conv.id },
                 data: { estado: "humano", pausadaAte: new Date(Date.now() + cfg.pausaHoras * 3_600_000), motivoPausa: pedido.motivo, ...(pedido.servico ? { servico: pedido.servico } : {}) },
             });
-            await aplicarEtiqueta(sock, sessionId, jid, "Aguardando resposta");
+            if (cfg.etiquetaAguardando) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAguardando);
             return true;
         };
 
@@ -286,6 +296,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 { llm, historico, logger },
                 {
                     conhecimento: cfg.conhecimento,
+                    nome: cfg.nome,
+                    negocio: cfg.nomeNegocio,
                     promocoes: cfg.promocoes,
                     nomePerfil,
                     salaoAberto: salaoAberto(cfg, agora),
@@ -294,7 +306,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                     acoes: {
                         linkAgendamento: cfg.linkAgendamento,
                         chamarRecepcao,
-                        etiquetar: (e: EtiquetaInteresse) => aplicarEtiqueta(sock, sessionId, jid, e),
+                        etiquetasPermitidas: cfg.etiquetasInteresse,
+                        etiquetar: (e: string) => aplicarEtiqueta(sock, sessionId, jid, e),
                     },
                 }
             );
@@ -386,7 +399,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 const primeira = !(await prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid } }, select: { id: true } }));
                 await garantirConversa(sessionId, jid, { telefone, nomePerfil: msg.pushName ?? null });
                 await prisma.agenteConversa.update({ where: { sessionId_jid: { sessionId, jid } }, data: { ultimaInboundAt: new Date(), followUpEm: null } });
-                if (primeira && veioDeAnuncioMeta(msg)) await aplicarEtiqueta(sock, sessionId, jid, "Vindo de anúncio do Meta");
+                if (primeira && cfg.etiquetaAnuncio && veioDeAnuncioMeta(msg)) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAnuncio);
 
                 const p = pendentes.get(jid) ?? { textos: [], audio: false, naoTexto: false, msg, timer: null, processando: false };
                 if (c.texto) p.textos.push(c.texto);

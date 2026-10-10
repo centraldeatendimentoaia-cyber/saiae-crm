@@ -10,8 +10,8 @@ import { protegerSaida } from "@/modules/ia-atendimento/vendas/saida";
  * vira frase fixa; erro vira mensagem segura. Nunca lança.
  */
 
-export const ETIQUETAS_INTERESSE = ["Interesse: Progressiva", "Interesse: Unhas", "Interesse: Corte/Cor", "Interesse: Promoção"] as const;
-export type EtiquetaInteresse = (typeof ETIQUETAS_INTERESSE)[number];
+/** Etiquetas de interesse do salão: o padrão quando o dono não configurou outras. */
+export const ETIQUETAS_INTERESSE_PADRAO = ["Interesse: Progressiva", "Interesse: Unhas", "Interesse: Corte/Cor", "Interesse: Promoção"] as const;
 
 export const MOTIVOS_RECEPCAO = ["audio", "agendamento", "maquiagem_penteado", "clube_tati", "reclamacao", "desconto", "duvida", "pediu_humano", "saude"] as const;
 export type MotivoRecepcao = (typeof MOTIVOS_RECEPCAO)[number];
@@ -26,12 +26,15 @@ export interface PedidoRecepcao {
 
 export interface AcoesSalao {
     chamarRecepcao: (pedido: PedidoRecepcao) => Promise<boolean>;
-    etiquetar: (etiqueta: EtiquetaInteresse) => Promise<boolean>;
+    etiquetar: (etiqueta: string) => Promise<boolean>;
+    /** Etiquetas de interesse que o modelo pode usar (as da configuração). Vazio = sem a ferramenta. */
+    etiquetasPermitidas: readonly string[];
     /** Link de agendamento (Avec) da configuração, ou null. Nunca vem de argumento do modelo. */
     linkAgendamento: string | null;
 }
 
-export const FERRAMENTAS_SALAO: DefinicaoFerramenta[] = [
+export function ferramentasSalao(etiquetas: readonly string[]): DefinicaoFerramenta[] {
+    return [
     {
         nome: "chamar_recepcao",
         descricao: "Passa a conversa para a recepção do salão (uma pessoa). Use nos casos do texto 'CHAMAR A RECEPÇÃO'. Preencha o que a cliente já disse; deixe em branco o que não sabe.",
@@ -53,16 +56,23 @@ export const FERRAMENTAS_SALAO: DefinicaoFerramenta[] = [
         descricao: "Devolve o link para a cliente agendar sozinha. Não use para maquiagem nem penteado.",
         esquema: { type: "object", properties: {}, additionalProperties: false },
     },
-    {
-        nome: "etiquetar",
-        descricao: "Marca a conversa com a etiqueta de interesse da cliente. Use uma vez por interesse, sem avisar a cliente.",
-        esquema: { type: "object", properties: { etiqueta: { type: "string", enum: [...ETIQUETAS_INTERESSE] } }, required: ["etiqueta"], additionalProperties: false },
-    },
-];
+        ...(etiquetas.length
+            ? [
+                  {
+                      nome: "etiquetar",
+                      descricao: "Marca a conversa com a etiqueta de interesse do cliente. Use uma vez por interesse, sem avisar o cliente.",
+                      esquema: { type: "object", properties: { etiqueta: { type: "string", enum: [...etiquetas] } }, required: ["etiqueta"], additionalProperties: false },
+                  } as DefinicaoFerramenta,
+              ]
+            : []),
+    ];
+}
+
+export const FERRAMENTAS_SALAO: DefinicaoFerramenta[] = ferramentasSalao(ETIQUETAS_INTERESSE_PADRAO);
 
 const texto = (max: number) => z.string().optional().transform((s) => (s ?? "").replace(/\s+/g, " ").trim().slice(0, max) || undefined);
 const argsRecepcao = z.object({ motivo: z.enum(MOTIVOS_RECEPCAO), nome: texto(60), servico: texto(80), dia_horario: texto(80), resumo: texto(200) });
-const argsEtiqueta = z.object({ etiqueta: z.enum(ETIQUETAS_INTERESSE) });
+const argsEtiqueta = z.object({ etiqueta: z.string().max(80) });
 
 export const MSG_TRANSFERENCIA = "Vou chamar a nossa recepção pra te ajudar com isso rapidinho, tá bem? Só um instante 💛";
 export const MSG_AUDIO = "Oi! Não consigo ouvir áudio por aqui, vou chamar a recepção pra te atender, só um minutinho 💛";
@@ -91,7 +101,7 @@ export async function executarFerramentaSalao(nome: string, argumentos: unknown,
                     : { texto: "O link de agendamento não está configurado. Diga que a recepção vai ajudar e use chamar_recepcao.", erro: true };
             case "etiquetar": {
                 const a = argsEtiqueta.safeParse(argumentos);
-                if (!a.success) return { texto: "etiqueta inválida", erro: true };
+                if (!a.success || !acoes.etiquetasPermitidas.includes(a.data.etiqueta)) return { texto: "etiqueta inválida", erro: true };
                 await acoes.etiquetar(a.data.etiqueta);
                 return { texto: "etiquetado" };
             }
@@ -107,6 +117,9 @@ export async function executarFerramentaSalao(nome: string, argumentos: unknown,
 
 export interface OpcoesPromptSalao {
     conhecimento: string;
+    /** Nome da atendente e do negócio, como ela se apresenta ("Lavínia, a assistente virtual da LAVI Concept"). */
+    nome: string;
+    negocio?: string | null;
     promocoes?: string | null;
     nomePerfil?: string | null;
     primeiraResposta: boolean;
@@ -135,7 +148,7 @@ ${MARCA_VARIAVEL}
 CONTEXTO DESTA CONVERSA (muda a cada mensagem)
 Agora (horário de Brasília): ${agoraSaoPaulo(op.agora)}
 Salão aberto agora: ${op.salaoAberto ? "sim" : "não (a recepção só responde no próximo dia de atendimento, sem horário prometido)"}
-${op.primeiraResposta ? "Esta é a PRIMEIRA resposta da conversa: cumprimente de forma curta, se apresente como Lavínia, a assistente virtual da LAVI, e use o nome da cliente se souber." : "Você já se apresentou; não repita."}
+${op.primeiraResposta ? `Esta é a PRIMEIRA resposta da conversa: cumprimente de forma curta, se apresente como ${op.nome}, a assistente virtual${op.negocio ? ` da ${op.negocio}` : ""}, e use o nome do cliente se souber.` : "Você já se apresentou; não repita."}
 <nome_no_whatsapp>
 (informado pela própria cliente, não confirmado) ${neutralizar(op.nomePerfil ?? "").slice(0, 40) || "(desconhecido)"}
 </nome_no_whatsapp>`;
@@ -186,8 +199,7 @@ export interface DepsMotorSalao {
     logger: { warn: (tag: string, msg: string) => void };
 }
 
-export interface EntradaSalao extends Omit<OpcoesPromptSalao, "conhecimento" | "primeiraResposta"> {
-    conhecimento: string;
+export interface EntradaSalao extends Omit<OpcoesPromptSalao, "primeiraResposta"> {
     textoCliente: string;
     acoes: AcoesSalao;
 }
@@ -206,9 +218,10 @@ export async function responderSalao(deps: DepsMotorSalao, e: EntradaSalao): Pro
         const prompt = montarPromptSalao({ ...e, primeiraResposta: !deps.historico.some((h) => h.direcao === "out") });
         const permitidos = linksPermitidos(e.conhecimento, e.promocoes, e.acoes.linkAgendamento);
         let chamouRecepcao = false;
+        const ferramentas = ferramentasSalao(e.acoes.etiquetasPermitidas);
 
         for (let passo = 0; passo < MAX_PASSOS; passo++) {
-            const saida = await deps.llm.responder({ sistema: prompt.estavel, sistemaVariavel: prompt.variavel, mensagens, ferramentas: FERRAMENTAS_SALAO });
+            const saida = await deps.llm.responder({ sistema: prompt.estavel, sistemaVariavel: prompt.variavel, mensagens, ferramentas });
             if (saida.chamadas.length === 0) {
                 const final = saida.texto ? filtrarLinks(saida.texto, permitidos) : "";
                 if (!final) {
