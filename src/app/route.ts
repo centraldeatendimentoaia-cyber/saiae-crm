@@ -85,6 +85,7 @@ const BANNER = `
 const WA = "https://wa.me/5561999531848";
 
 /** Se os links da Stripe estiverem configurados, os botões dos planos abrem o pagamento direto. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function applyStripeLinks(html: string): string {
     const links: Record<string, string | undefined> = {
         Essencial: process.env.STRIPE_LINK_ESSENCIAL,
@@ -104,7 +105,8 @@ function applyStripeLinks(html: string): string {
 
 export function GET() {
     const file = path.join(process.cwd(), "src", "landing", "crm.html");
-    let html = applyStripeLinks(readFileSync(file, "utf8"));
+    // Preço sob consulta: os botões dos planos abrem o WhatsApp, então os links diretos da Stripe não se aplicam (applyStripeLinks fica para quando houver preço na página).
+    let html = readFileSync(file, "utf8");
 
     const ads = adsConfig();
     if (ads) {
