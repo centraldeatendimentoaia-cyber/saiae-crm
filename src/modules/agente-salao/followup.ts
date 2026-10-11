@@ -46,7 +46,7 @@ export async function rodarFollowUps(agora: Date = new Date()): Promise<number> 
                 if (!devidoFollowUp(c, cfg, agora)) continue;
                 if (c.telefone && (await isOptedOut(sessionId, `${c.telefone}@s.whatsapp.net`))) continue;
                 try {
-                    await sock.sendMessage(c.jid, { text: textoFollowUp(primeiroNome(c.nomePerfil), c.servico) });
+                    await sock.sendMessage(c.jid, { text: textoFollowUp(primeiroNome(c.nomePerfil), c.servico, cfg.followUpTexto) });
                     await prisma.agenteConversa.update({ where: { id: c.id }, data: { followUpEm: new Date(), ultimaIaPerguntou: false } });
                     if (cfg.etiquetaFollowUp) await aplicarEtiquetaNaSessao(sock, sessionId, c.jid, cfg.etiquetaFollowUp);
                     enviados++;

@@ -16,6 +16,8 @@ interface Config {
     ativo: boolean;
     nome: string;
     nomeNegocio: string;
+    emailAviso: string;
+    followUpTexto: string;
     etiquetasInteresse: string[];
     etiquetaAguardando: string;
     etiquetaFollowUp: string;
@@ -66,6 +68,8 @@ export default function AgenteIaPage() {
                 ativo: cfg.ativo,
                 nome: cfg.nome,
                 nomeNegocio: cfg.nomeNegocio || null,
+                emailAviso: cfg.emailAviso || null,
+                followUpTexto: cfg.followUpTexto || null,
                 etiquetasInteresse: interesses.split("\n").map((e) => e.trim()).filter(Boolean),
                 etiquetaAguardando: cfg.etiquetaAguardando || null,
                 etiquetaFollowUp: cfg.etiquetaFollowUp || null,
@@ -79,6 +83,7 @@ export default function AgenteIaPage() {
                 pausaHoras: cfg.pausaHoras,
                 horaAbre: cfg.horaAbre,
                 horaFecha: cfg.horaFecha,
+                diasAbertos: cfg.diasAbertos.replace(/,+/g, ",").replace(/^,|,$/g, "") || "2,3,4,5,6",
                 ...extra,
             };
             const res = await fetch(`/api/agente/${sessionId}/config`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
@@ -109,7 +114,7 @@ export default function AgenteIaPage() {
                         <Card>
                             <CardHeader>
                                 <CardTitle>Ligar o agente</CardTitle>
-                                <CardDescription>Desligado por padrão. Para ligar é preciso escolher o grupo da recepção e informar o link de agendamento.</CardDescription>
+                                <CardDescription>Desligado por padrão. Para ligar é preciso um canal de aviso (grupo da recepção e/ou e-mail) e o link que a atendente envia (agendamento ou cadastro).</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
@@ -126,7 +131,12 @@ export default function AgenteIaPage() {
                                         <p className="text-xs text-muted-foreground">O número do salão precisa estar nesse grupo. Os avisos "Cliente aguardando resposta - bot" vão para lá.</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <Label>Link de agendamento (Avec)</Label>
+                                        <Label>E-mail para avisos (opcional)</Label>
+                                        <Input value={cfg.emailAviso} onChange={(e) => set("emailAviso", e.target.value)} placeholder="equipe@suaempresa.com.br" />
+                                        <p className="text-xs text-muted-foreground">Recebe o mesmo aviso do grupo. Use no lugar do grupo, ou junto.</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label>Link de agendamento ou de cadastro</Label>
                                         <Input value={cfg.linkAgendamento} onChange={(e) => set("linkAgendamento", e.target.value)} placeholder="https://agendamento.avec.beauty/?slug=..." />
                                     </div>
                                 </div>
@@ -161,15 +171,25 @@ export default function AgenteIaPage() {
                                 <CardTitle>Regras de funcionamento</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
+                                <div className="space-y-1">
+                                    <Label>Dias de atendimento da equipe (0 = domingo ... 6 = sábado, separados por vírgula)</Label>
+                                    <Input value={cfg.diasAbertos} onChange={(e) => set("diasAbertos", e.target.value.replace(/[^0-6,]/g, ""))} placeholder="2,3,4,5,6" />
+                                    <p className="text-xs text-muted-foreground">Define quando o lembrete pode ser enviado e o que a IA diz sobre o atendimento humano. Terça a sábado = 2,3,4,5,6. Segunda a sexta = 1,2,3,4,5.</p>
+                                </div>
                                 <div className="grid gap-4 sm:grid-cols-4">
                                     <div className="space-y-1"><Label>Lembrete após (horas)</Label><Input type="number" min={1} max={30} value={cfg.followUpHoras} onChange={(e) => set("followUpHoras", Number(e.target.value) || 12)} /></div>
                                     <div className="space-y-1"><Label>IA calada após pessoa assumir (horas)</Label><Input type="number" min={1} max={72} value={cfg.pausaHoras} onChange={(e) => set("pausaHoras", Number(e.target.value) || 12)} /></div>
-                                    <div className="space-y-1"><Label>Salão abre às</Label><Input type="number" min={0} max={23} value={cfg.horaAbre} onChange={(e) => set("horaAbre", Number(e.target.value))} /></div>
-                                    <div className="space-y-1"><Label>Salão fecha às</Label><Input type="number" min={1} max={24} value={cfg.horaFecha} onChange={(e) => set("horaFecha", Number(e.target.value))} /></div>
+                                    <div className="space-y-1"><Label>Equipe atende a partir das</Label><Input type="number" min={0} max={23} value={cfg.horaAbre} onChange={(e) => set("horaAbre", Number(e.target.value))} /></div>
+                                    <div className="space-y-1"><Label>Equipe atende até às</Label><Input type="number" min={1} max={24} value={cfg.horaFecha} onChange={(e) => set("horaFecha", Number(e.target.value))} /></div>
                                 </div>
                                 <div className="space-y-1">
                                     <Label>Números que a IA nunca atende (equipe, dono), um por linha</Label>
                                     <Textarea value={ignorados} onChange={(e) => setIgnorados(e.target.value)} className="min-h-[80px]" placeholder={"5561999990000"} />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label>Texto do lembrete (opcional)</Label>
+                                    <Textarea value={cfg.followUpTexto} onChange={(e) => set("followUpTexto", e.target.value)} className="min-h-[70px]" placeholder={"Oi, {nome}! Passando pra ver se ficou alguma dúvida. Se quiser, é só me chamar 💛"} />
+                                    <p className="text-xs text-muted-foreground">{"{nome}"} vira o primeiro nome da pessoa. Vazio = texto padrão do salão ("...eu passo pra recepção ver um horário").</p>
                                 </div>
                                 <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                                     <li>O lembrete é uma única mensagem, só para quem escreveu e não respondeu, e só no horário de atendimento (terça a sábado).</li>

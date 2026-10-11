@@ -38,7 +38,7 @@ describe("prompt", () => {
         expect(p.estavel).toContain("Dia da Noiva: 10% só no Pix");
         expect(p.estavel).toContain("REGRAS DO SISTEMA");
         expect(p.variavel).toContain("terça");
-        expect(p.variavel).toContain("Salão aberto agora: não");
+        expect(p.variavel).toContain("disponível agora: não");
         expect(p.variavel).toContain("PRIMEIRA resposta");
         expect(p.variavel.match(/<\/nome_no_whatsapp>/g)).toHaveLength(1); // o nome malicioso não fecha a marca
     });
@@ -135,10 +135,10 @@ describe("responderSalao", () => {
 describe("nome, negócio e etiquetas configuráveis", () => {
     it("a apresentação usa o nome e o negócio da configuração", () => {
         const p = montarPromptSalao({ conhecimento: "Você atende a Pizzaria do Zé.", nome: "Bia", negocio: "Pizzaria do Zé", primeiraResposta: true, salaoAberto: true, agora: T0 });
-        expect(p.variavel).toContain("se apresente como Bia, a assistente virtual da Pizzaria do Zé");
+        expect(p.variavel).toContain("se apresente como Bia (Pizzaria do Zé)");
         expect(p.variavel).not.toContain("LAVI");
         const sem = montarPromptSalao({ conhecimento: "x", nome: "Bia", primeiraResposta: true, salaoAberto: true, agora: T0 });
-        expect(sem.variavel).toContain("se apresente como Bia, a assistente virtual,");
+        expect(sem.variavel).toContain("se apresente como Bia, do jeito descrito");
     });
     it("a ferramenta etiquetar só aceita as etiquetas da configuração; lista vazia = sem a ferramenta", () => {
         const f = ferramentasSalao(["Pedido: Pizza", "Pedido: Bebida"]);

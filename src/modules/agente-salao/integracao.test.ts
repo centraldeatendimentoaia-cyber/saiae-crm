@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---- banco em memória (só o que o agente usa)
+const mailer = vi.hoisted(() => ({ sendMail: vi.fn(async (_m: { to: string; subject: string; text: string }) => true) }));
+vi.mock("@/lib/mailer", () => ({ sendMail: mailer.sendMail }));
+
 const db = vi.hoisted(() => {
     const convs = new Map<string, Record<string, any>>();
     const key = (w: any) => `${w.sessionId_jid.sessionId}|${w.sessionId_jid.jid}`;
@@ -45,7 +48,7 @@ const GRUPO = "120363000000000000@g.us";
 const CLIENTE = "5561999990001@s.whatsapp.net";
 const T0 = new Date("2026-10-13T13:00:00Z"); // terça 10h em Brasília
 
-function montar(llmTexto = "A escova custa R$ 50. Quer agendar?") {
+function montar(llmTexto = "A escova custa R$ 50. Quer agendar?", extra: { transcrever?: (m: WAMessage) => Promise<string | null>; llm?: Llm } = {}) {
     const handlers: Record<string, (e: any) => Promise<void>> = {};
     const enviados: { jid: string; texto: string }[] = [];
     const sock = {
@@ -54,8 +57,8 @@ function montar(llmTexto = "A escova custa R$ 50. Quer agendar?") {
         sendPresenceUpdate: vi.fn(async () => undefined),
         addChatLabel: vi.fn(async () => undefined),
     } as unknown as WASocket;
-    const llm: Llm = { responder: vi.fn(async () => ({ texto: llmTexto, chamadas: [] })) };
-    bindAgenteSalao(sock, SESSAO, { llm, debounceMs: 7000, rapido: true });
+    const llm: Llm = extra.llm ?? { responder: vi.fn(async () => ({ texto: llmTexto, chamadas: [] })) };
+    bindAgenteSalao(sock, SESSAO, { llm, debounceMs: 7000, rapido: true, transcrever: extra.transcrever });
     const msg = (texto: string | null, over: { jid?: string; fromMe?: boolean; id?: string; audio?: boolean } = {}): WAMessage => ({
         key: { remoteJid: over.jid ?? CLIENTE, fromMe: over.fromMe ?? false, id: over.id ?? `M${Math.random()}` },
         messageTimestamp: Math.floor(Date.now() / 1000),
@@ -152,6 +155,64 @@ describe("agente do salão (integração com socket falso)", () => {
         expect(paraGrupo[0].texto).toContain("Cliente aguardando resposta - bot");
         expect(paraGrupo[0].texto).toContain("Motivo: áudio");
         expect([...db.estado.convs.values()][0].estado).toBe("humano");
+    });
+    it("áudio transcrito: a IA responde ao que foi dito, sem chamar a recepção", async () => {
+        const t = montar("O corte feminino custa R$ 50. Quer agendar?", { transcrever: async () => "quanto custa o corte" });
+        await t.emitir(t.msg(null, { audio: true }));
+        await esperar(8000);
+        expect(t.llm.responder).toHaveBeenCalledTimes(1);
+        const entrada = (t.llm.responder as ReturnType<typeof vi.fn>).mock.calls[0][0] as { mensagens: { texto?: string }[]; sistema: string };
+        expect(JSON.stringify(entrada.mensagens)).toContain("[áudio transcrito] quanto custa o corte");
+        expect(t.enviados.map((e) => e.texto)).toEqual(["O corte feminino custa R$ 50. Quer agendar?"]);
+        expect([...db.estado.convs.values()][0].estado).toBe("ia");
+    });
+    it("áudio que não deu para transcrever: volta ao aviso e chama a recepção", async () => {
+        const t = montar("x", { transcrever: async () => null });
+        await t.emitir(t.msg(null, { audio: true }));
+        await esperar(8000);
+        expect(t.llm.responder).not.toHaveBeenCalled();
+        expect(t.enviados.some((e) => e.texto === MSG_AUDIO)).toBe(true);
+    });
+    it("áudio seguido de texto vira uma única conversa", async () => {
+        const t = montar("ok?", { transcrever: async () => "quero fazer unha" });
+        await t.emitir(t.msg(null, { audio: true }));
+        await esperar(2000);
+        await t.emitir(t.msg("sexta de tarde"));
+        await esperar(8000);
+        expect(t.llm.responder).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify((t.llm.responder as ReturnType<typeof vi.fn>).mock.calls[0][0].mensagens)).toContain("sexta de tarde");
+    });
+    it("aviso à equipe só por e-mail (sem grupo): chama, pausa a IA e manda o e-mail", async () => {
+        mailer.sendMail.mockClear();
+        db.estado.config!.grupoRecepcaoJid = null;
+        db.estado.config!.emailAviso = "equipe@saiae.com.br";
+        const respostas = [
+            { chamadas: [{ id: "1", nome: "chamar_recepcao", argumentos: { motivo: "desconto", resumo: "pediu desconto no Pro" } }] },
+            { texto: "Vou chamar a equipe pra te ajudar 💛", chamadas: [] },
+        ];
+        let i = 0;
+        const t = montar("", { llm: { responder: vi.fn(async () => respostas[Math.min(i++, 1)]) } });
+        await t.emitir(t.msg("faz 30% de desconto?"));
+        await esperar(8000);
+        expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+        const mail = mailer.sendMail.mock.calls[0][0];
+        expect(mail.to).toBe("equipe@saiae.com.br");
+        expect(mail.text).toContain("Motivo: desconto/condição especial");
+        expect(t.enviados.map((e) => e.texto)).toEqual(["Vou chamar a equipe pra te ajudar 💛"]);
+        expect([...db.estado.convs.values()][0].estado).toBe("humano");
+    });
+    it("sem nenhum canal de aviso (nem grupo nem e-mail): não diz que chamou", async () => {
+        db.estado.config!.grupoRecepcaoJid = null;
+        db.estado.config!.emailAviso = null;
+        const respostas = [
+            { chamadas: [{ id: "1", nome: "chamar_recepcao", argumentos: { motivo: "duvida" } }] },
+            { texto: "A equipe responde assim que possível.", chamadas: [] },
+        ];
+        let i = 0;
+        const t = montar("", { llm: { responder: vi.fn(async () => respostas[Math.min(i++, 1)]) } });
+        await t.emitir(t.msg("tem estacionamento?"));
+        await esperar(8000);
+        expect([...db.estado.convs.values()][0].estado).toBe("ia"); // não pausou: ninguém foi avisado
     });
     it("conversa já aberta e IA calada: mensagens novas só atualizam a data, sem resposta", async () => {
         const t = montar();

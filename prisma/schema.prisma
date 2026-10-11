@@ -599,6 +599,8 @@ model AgenteConfig {
   promocoes        String?  @db.Text
   linkAgendamento  String?
   grupoRecepcaoJid String? // grupo de WhatsApp da recepção (recebe "Cliente aguardando resposta - bot")
+  emailAviso       String? // e-mail que também recebe o aviso (alternativa ao grupo)
+  followUpTexto    String? @db.Text // texto do lembrete; {nome} vira o primeiro nome (vazio = texto padrão do salão)
   numerosIgnorados Json? // telefones (só dígitos) que a IA nunca atende: equipe, dono
   followUpHoras    Int      @default(12)
   pausaHoras       Int      @default(12) // quanto a IA fica calada depois que uma pessoa assume ou a recepção é chamada

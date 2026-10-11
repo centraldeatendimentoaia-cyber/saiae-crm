@@ -17,6 +17,8 @@ const corpo = z.object({
     ativo: z.boolean().optional(),
     nome: z.string().trim().min(1).max(40).optional(),
     nomeNegocio: z.string().trim().max(60).nullable().optional(),
+    emailAviso: z.string().trim().max(120).nullable().optional().refine((v) => !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), "E-mail inválido"),
+    followUpTexto: z.string().trim().max(500).nullable().optional(),
     etiquetasInteresse: z.array(z.string().trim().min(1).max(80)).max(12).optional(),
     etiquetaAguardando: z.string().trim().max(80).nullable().optional(),
     etiquetaFollowUp: z.string().trim().max(80).nullable().optional(),
@@ -45,6 +47,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             ativo: c?.ativo ?? false,
             nome: c?.nome ?? "Lavínia",
             nomeNegocio: c?.nomeNegocio ?? "",
+            emailAviso: c?.emailAviso ?? "",
+            followUpTexto: c?.followUpTexto ?? "",
             etiquetasInteresse: Array.isArray(c?.etiquetasInteresse) ? c!.etiquetasInteresse : [...ETIQUETAS_INTERESSE_PADRAO],
             etiquetaAguardando: c ? c.etiquetaAguardando ?? "" : "Aguardando resposta",
             etiquetaFollowUp: c ? c.etiquetaFollowUp ?? "" : "Sumiu - follow up",
@@ -79,6 +83,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         ...(d.ativo !== undefined ? { ativo: d.ativo } : {}),
         ...(d.nome !== undefined ? { nome: d.nome } : {}),
         ...(d.nomeNegocio !== undefined ? { nomeNegocio: d.nomeNegocio?.trim() || null } : {}),
+        ...(d.emailAviso !== undefined ? { emailAviso: d.emailAviso?.trim() || null } : {}),
+        ...(d.followUpTexto !== undefined ? { followUpTexto: d.followUpTexto?.trim() || null } : {}),
         ...(d.etiquetasInteresse !== undefined ? { etiquetasInteresse: d.etiquetasInteresse } : {}),
         ...(d.etiquetaAguardando !== undefined ? { etiquetaAguardando: d.etiquetaAguardando?.trim() || null } : {}),
         ...(d.etiquetaFollowUp !== undefined ? { etiquetaFollowUp: d.etiquetaFollowUp?.trim() || null } : {}),
@@ -98,8 +104,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (dados.ativo === true) {
         const atual = await prisma.agenteConfig.findUnique({ where: { sessionId } });
         const grupo = dados.grupoRecepcaoJid !== undefined ? dados.grupoRecepcaoJid : atual?.grupoRecepcaoJid;
+        const email = dados.emailAviso !== undefined ? dados.emailAviso : atual?.emailAviso;
         const link = dados.linkAgendamento !== undefined ? dados.linkAgendamento : atual?.linkAgendamento;
-        if (!grupo || !link) return NextResponse.json({ status: false, message: "Para ligar, escolha o grupo da recepção e informe o link de agendamento." }, { status: 400 });
+        if ((!grupo && !email) || !link) return NextResponse.json({ status: false, message: "Para ligar, informe o grupo da recepção ou um e-mail de aviso, e o link (de agendamento ou de cadastro)." }, { status: 400 });
     }
     await prisma.agenteConfig.upsert({ where: { sessionId }, create: { sessionId, ...dados }, update: dados });
     limparCacheConfigAgente(sessionId);

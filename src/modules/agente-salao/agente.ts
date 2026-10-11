@@ -1,5 +1,7 @@
 import type { WASocket, WAMessage } from "@whiskeysockets/baileys";
-import { normalizeMessageContent } from "@whiskeysockets/baileys";
+import { downloadMediaMessage, normalizeMessageContent } from "@whiskeysockets/baileys";
+import { sendMail } from "@/lib/mailer";
+import { MAX_SEGUNDOS_AUDIO, transcreverComGemini } from "./transcricao";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { canonicalPhone, formatPhoneBr } from "@/lib/phone";
@@ -38,6 +40,8 @@ export interface ConfigAgente {
     promocoes: string | null;
     linkAgendamento: string | null;
     grupoRecepcaoJid: string | null;
+    emailAviso: string | null;
+    followUpTexto: string | null;
     numerosIgnorados: string[];
     followUpHoras: number;
     pausaHoras: number;
@@ -71,6 +75,8 @@ export async function carregarConfigAgente(sessionId: string): Promise<ConfigAge
               promocoes: r.promocoes,
               linkAgendamento: r.linkAgendamento,
               grupoRecepcaoJid: r.grupoRecepcaoJid,
+              emailAviso: r.emailAviso?.trim() || null,
+              followUpTexto: r.followUpTexto?.trim() || null,
               numerosIgnorados: Array.isArray(r.numerosIgnorados) ? (r.numerosIgnorados as unknown[]).map(String) : [],
               followUpHoras: r.followUpHoras,
               pausaHoras: r.pausaHoras,
@@ -196,7 +202,39 @@ function obterLlm(): Llm | null {
 
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const MAX_AUDIOS_DIA = Number.parseInt(process.env.AGENTE_MAX_AUDIOS_DIA ?? "", 10) || 200;
+const MAX_RESPOSTAS_DIA = Number.parseInt(process.env.AGENTE_MAX_RESPOSTAS_DIA ?? "", 10) || 400;
+
+/** Contador simples por dia (memória do servidor): trava de custo, sem tabela. */
+function contadorDiario() {
+    let dia = "";
+    let n = 0;
+    return (limite: number): boolean => {
+        const hoje = new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+        if (hoje !== dia) { dia = hoje; n = 0; }
+        if (n >= limite) return false;
+        n++;
+        return true;
+    };
+}
+
+/** Baixa o áudio do WhatsApp e transcreve com o Gemini. null = não deu (o agente avisa que não ouve e chama a recepção). */
+async function transcreverAudio(sock: WASocket, msg: WAMessage): Promise<string | null> {
+    if (process.env.AGENTE_AUDIO?.trim().toLowerCase() === "off" || !process.env.GEMINI_API_KEY?.trim()) return null;
+    const a: any = normalizeMessageContent(msg.message)?.audioMessage;
+    if (!a || (typeof a.seconds === "number" && a.seconds > MAX_SEGUNDOS_AUDIO)) return null;
+    try {
+        const buf = (await downloadMediaMessage(msg, "buffer", {}, { logger: undefined as never, reuploadRequest: sock.updateMediaMessage })) as Buffer;
+        return await transcreverComGemini(buf, a.mimetype);
+    } catch (e) {
+        logger.warn(TAG, `não consegui baixar o áudio: ${(e as { name?: string })?.name ?? "erro"}`);
+        return null;
+    }
+}
+
 export interface OpcoesAgente {
+    /** Só para testes: transcrição falsa. */
+    transcrever?: (msg: WAMessage) => Promise<string | null>;
     /** Só para testes: modelo falso. */
     llm?: Llm;
     debounceMs?: number;
@@ -209,6 +247,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
     if (estaLigado.has(sock)) return;
     estaLigado.add(sock);
 
+    const podeTranscrever = contadorDiario();
+    const podeResponder = contadorDiario();
     const pendentes = new Map<string, Pendente>();
     const respostasHora = new Map<string, number[]>();
     let dbSessionId: string | null = null;
@@ -251,20 +291,32 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
         let conv = await garantirConversa(sessionId, jid, { telefone, nomePerfil });
         if (iaPausada(conv, agora)) return; // uma pessoa assumiu ou a recepção foi chamada
         if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: { estado: "ia", pausadaAte: null, motivoPausa: null } });
+        if (!podeResponder(MAX_RESPOSTAS_DIA)) {
+            logger.warn(TAG, "teto diário de respostas do agente atingido: não responde mais hoje");
+            return;
+        }
         if (passouLimiteHora(jid)) {
             logger.warn(TAG, "limite de respostas por hora neste contato: ignorando");
             return;
         }
 
         const chamarRecepcao = async (pedido: PedidoRecepcao): Promise<boolean> => {
-            if (!cfg.grupoRecepcaoJid) {
-                logger.warn(TAG, "grupo da recepção não configurado: não foi possível avisar");
-                return false;
+            const aviso = montarAvisoRecepcao({ ...pedido, telefone, nomePerfil });
+            let avisou = false;
+            if (cfg.grupoRecepcaoJid) {
+                try {
+                    await sock.sendMessage(cfg.grupoRecepcaoJid, { text: aviso });
+                    avisou = true;
+                } catch (e) {
+                    logger.warn(TAG, `aviso ao grupo falhou: ${(e as { name?: string })?.name ?? "erro"}`);
+                }
             }
-            try {
-                await sock.sendMessage(cfg.grupoRecepcaoJid, { text: montarAvisoRecepcao({ ...pedido, telefone, nomePerfil }) });
-            } catch (e) {
-                logger.warn(TAG, `aviso à recepção falhou: ${(e as { name?: string })?.name ?? "erro"}`);
+            if (cfg.emailAviso) {
+                const html = `<pre style="font-family:inherit;white-space:pre-wrap">${aviso.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+                if (await sendMail({ to: cfg.emailAviso, subject: "Cliente aguardando resposta - bot", text: aviso, html }).catch(() => false)) avisou = true;
+            }
+            if (!avisou) {
+                logger.warn(TAG, "nenhum canal de aviso funcionou (grupo/e-mail): não foi possível avisar a recepção");
                 return false;
             }
             await prisma.agenteConversa.update({
@@ -403,7 +455,11 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
 
                 const p = pendentes.get(jid) ?? { textos: [], audio: false, naoTexto: false, msg, timer: null, processando: false };
                 if (c.texto) p.textos.push(c.texto);
-                if (c.audio) p.audio = true;
+                if (c.audio) {
+                    const t = podeTranscrever(MAX_AUDIOS_DIA) ? await (over.transcrever ?? ((m: WAMessage) => transcreverAudio(sock, m)))(msg) : null;
+                    if (t) p.textos.push(`[áudio transcrito] ${t}`);
+                    else p.audio = true; // não deu para ouvir: avisa e chama a recepção
+                }
                 if (c.naoTexto) p.naoTexto = true;
                 p.msg = msg;
                 pendentes.set(jid, p);

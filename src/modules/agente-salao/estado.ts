@@ -82,7 +82,16 @@ export function primeiroNome(perfil: string | null | undefined): string | null {
     return p.charAt(0).toLocaleUpperCase("pt-BR") + p.slice(1).toLocaleLowerCase("pt-BR");
 }
 
-export const textoFollowUp = (nome: string | null, servico: string | null): string => {
+/** Lembrete: o texto do dono (com {nome}) ou, se não houver, o padrão do salão. */
+export const textoFollowUp = (nome: string | null, servico: string | null, modelo?: string | null): string => {
+    if (modelo?.trim()) {
+        return modelo
+            .replace(/\{nome\}/gi, nome ?? "")
+            .replace(/,\s*([!.?])/g, "$1")
+            .replace(/\s{2,}/g, " ")
+            .replace(/\s+([!.?,])/g, "$1")
+            .trim();
+    }
     const quem = nome ? `Oi, ${nome}!` : "Oi!";
     const sobre = servico ? ` sobre ${servico}` : "";
     return `${quem} Passando pra ver se você conseguiu decidir${sobre}. Se quiser, eu passo pra recepção ver um horário pra você 💛`;

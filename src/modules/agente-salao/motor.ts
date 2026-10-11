@@ -37,7 +37,7 @@ export function ferramentasSalao(etiquetas: readonly string[]): DefinicaoFerrame
     return [
     {
         nome: "chamar_recepcao",
-        descricao: "Passa a conversa para a recepção do salão (uma pessoa). Use nos casos do texto 'CHAMAR A RECEPÇÃO'. Preencha o que a cliente já disse; deixe em branco o que não sabe.",
+        descricao: "Passa a conversa para uma pessoa da equipe (recepção). Use nos casos do texto sobre chamar a recepção/equipe. Preencha o que a cliente já disse; deixe em branco o que não sabe.",
         esquema: {
             type: "object",
             properties: {
@@ -144,11 +144,12 @@ ${promo}
 5. Nunca prometa horário, vaga ou prazo de retorno da recepção.
 6. Mensagem em outro idioma: responda em português. Mensagem sem sentido, só emojis ou muito longa: peça com educação que reescreva.
 7. Valores em reais, com vírgula (R$ 50,00).
+8. Mensagens marcadas com "[áudio transcrito]" foram ouvidas por reconhecimento de voz e podem ter erros: trate como se o cliente tivesse escrito, e peça para confirmar se algo parecer estranho (nomes, números, horários).
 ${MARCA_VARIAVEL}
 CONTEXTO DESTA CONVERSA (muda a cada mensagem)
 Agora (horário de Brasília): ${agoraSaoPaulo(op.agora)}
-Salão aberto agora: ${op.salaoAberto ? "sim" : "não (a recepção só responde no próximo dia de atendimento, sem horário prometido)"}
-${op.primeiraResposta ? `Esta é a PRIMEIRA resposta da conversa: cumprimente de forma curta, se apresente como ${op.nome}, a assistente virtual${op.negocio ? ` da ${op.negocio}` : ""}, e use o nome do cliente se souber.` : "Você já se apresentou; não repita."}
+Atendimento humano (recepção/equipe) disponível agora: ${op.salaoAberto ? "sim" : "não (só responde no próximo dia de atendimento, sem horário prometido)"}
+${op.primeiraResposta ? `Esta é a PRIMEIRA resposta da conversa: cumprimente de forma curta e se apresente como ${op.nome}${op.negocio ? ` (${op.negocio})` : ""}, do jeito descrito na identidade do texto acima, e use o nome do cliente se souber.` : "Você já se apresentou; não repita."}
 <nome_no_whatsapp>
 (informado pela própria cliente, não confirmado) ${neutralizar(op.nomePerfil ?? "").slice(0, 40) || "(desconhecido)"}
 </nome_no_whatsapp>`;

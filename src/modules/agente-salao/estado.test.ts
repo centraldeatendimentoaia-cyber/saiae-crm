@@ -90,6 +90,12 @@ describe("nomes e texto do lembrete", () => {
         expect(primeiroNome("a")).toBeNull();
         expect(primeiroNome(null)).toBeNull();
     });
+    it("lembrete configurado pelo dono: {nome} vira o primeiro nome e some sem nome", () => {
+        const modelo = "Oi, {nome}! Passando pra ver se ficou alguma dúvida sobre o Sai aê.";
+        expect(textoFollowUp("Ana", null, modelo)).toBe("Oi, Ana! Passando pra ver se ficou alguma dúvida sobre o Sai aê.");
+        expect(textoFollowUp(null, null, modelo)).toBe("Oi! Passando pra ver se ficou alguma dúvida sobre o Sai aê.");
+        expect(textoFollowUp("Ana", null, "   ")).toContain("recepção ver um horário"); // vazio = padrão do salão
+    });
     it("lembrete leve, com ou sem nome e serviço", () => {
         expect(textoFollowUp("Ana", "banho de gel")).toBe("Oi, Ana! Passando pra ver se você conseguiu decidir sobre banho de gel. Se quiser, eu passo pra recepção ver um horário pra você 💛");
         expect(textoFollowUp(null, null)).toBe("Oi! Passando pra ver se você conseguiu decidir. Se quiser, eu passo pra recepção ver um horário pra você 💛");
