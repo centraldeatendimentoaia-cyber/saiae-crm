@@ -9,7 +9,7 @@
     "id": { "type": "string", "format": "uuid" },
     "type": {
       "enum": [
-        "order.created", "order.paid", "order.status_changed", "order.ready",
+        "order.created", "order.paid", "order.status_changed", "order.ready", "order.out_for_delivery",
         "order.cancelled", "customer.created", "customer.updated", "coupon.redeemed"
       ]
     },
@@ -43,7 +43,7 @@
       "properties": {
         "pedido_id": { "type": "string", "format": "uuid" },
         "senha": { "type": ["integer", "null"] },
-        "status": { "enum": ["a_fazer", "pronto", "entregue", "cancelado"] },
+        "status": { "enum": ["a_fazer", "pronto", "saiu_entrega", "entregue", "cancelado"] },
         "tipo_atendimento": { "enum": ["mesa", "balcao", "retirada", "entrega"] },
         "itens": {
           "type": "array",

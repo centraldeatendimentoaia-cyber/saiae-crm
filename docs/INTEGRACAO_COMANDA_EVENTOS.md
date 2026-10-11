@@ -101,11 +101,12 @@ Status reais de pedido na Comanda: `a_fazer`, `pronto`, `entregue`, `cancelado` 
 |---|---|
 | `order.created` | `pedido_recebido` |
 | `order.ready` (todos os tipos, inclusive entrega) | `pedido_pronto` |
+| `order.out_for_delivery` (só Entrega, com a coluna "Saiu para entrega" ligada na loja) | `pedido_saiu_entrega_v2` (no máximo 1 por pedido) |
 | `order.status_changed`, `order.paid`, `order.cancelled`, `customer.*`, `coupon.*` | **nenhum aviso** |
 
 **Sem gatilho de propósito (decisão da Comanda, 08/10/2026):**
 - `pedido_em_preparo`: a Comanda não tem evento confiável para isso. Mapear `status_changed → a_fazer` dispararia também no botão "Voltar".
-- `pedido_saiu_entrega`: `ready` em entrega significa pronto para o entregador retirar, não "saiu".
+- `pedido_saiu_entrega` (v1): `ready` em entrega significa pronto para o entregador retirar, não "saiu". O aviso de saída usa o evento próprio `order.out_for_delivery` e o modelo `pedido_saiu_entrega_v2` (a Comanda só emite quando a coluna "Saiu para entrega" está ligada).
 - `order.cancelled`: ainda não há template aprovado.
 Os dois templates continuam previstos no código (`TemplateName`) para quando houver um gatilho confiável.
 
