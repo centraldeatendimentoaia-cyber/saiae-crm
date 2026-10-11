@@ -19,10 +19,11 @@ import { BoundedTtlMap } from "./state";
  *   order.created → pedido_recebido
  *   order.ready   → pedido_pronto (todos os tipos, inclusive entrega: "pronto" na entrega = pronto para o
  *                   entregador retirar, não "saiu")
- * SEM gatilho por enquanto (decisão da Comanda, 08/10/2026): pedido_em_preparo e pedido_saiu_entrega (a Comanda
- * não tem evento confiável para eles; "a_fazer" dispararia também no "Voltar"), order.cancelled (sem template
- * aprovado), order.paid, status_changed, customer e coupon. Os dois templates seguem no tipo TemplateName
- * para quando houver gatilho.
+ *   order.out_for_delivery → pedido_saiu_entrega_v2 (Comanda 'Saiu para entrega', só pedido de Entrega; no máximo
+ *                   um aviso por pedido: a chave de dedupe é pedido + template, então voltar e sair de novo não reenvia)
+ * SEM gatilho por enquanto (decisão da Comanda, 08/10/2026): pedido_em_preparo (a Comanda não tem evento confiável;
+ * "a_fazer" dispararia também no "Voltar"), order.cancelled (sem template aprovado), order.paid, status_changed,
+ * customer e coupon. O pedido_saiu_entrega (v1) segue no tipo TemplateName só por compatibilidade.
  *
  * Regras: telefone ausente = não envia; cliente descadastrado = não envia; falha de envio nunca vira
  * erro para a Comanda nem bloqueia o evento (o consumidor roda isolado, depois do 200); o mesmo
@@ -30,7 +31,7 @@ import { BoundedTtlMap } from "./state";
  * senha ou itens.
  */
 
-export type TemplateName = "pedido_recebido" | "pedido_em_preparo" | "pedido_pronto" | "pedido_saiu_entrega";
+export type TemplateName = "pedido_recebido" | "pedido_em_preparo" | "pedido_pronto" | "pedido_saiu_entrega" | "pedido_saiu_entrega_v2";
 
 export const TEMPLATE_LANGUAGE = "pt_BR";
 
@@ -41,6 +42,8 @@ export function templateFor(event: ComandaEvent): TemplateName | null {
             return "pedido_recebido";
         case "order.ready":
             return "pedido_pronto";
+        case "order.out_for_delivery":
+            return "pedido_saiu_entrega_v2";
         default:
             return null;
     }

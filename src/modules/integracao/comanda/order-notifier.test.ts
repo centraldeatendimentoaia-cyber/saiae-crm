@@ -40,6 +40,7 @@ describe("templateFor", () => {
         ["order.ready", { tipo_atendimento: "retirada" }, "pedido_pronto"],
         ["order.ready", { tipo_atendimento: "mesa" }, "pedido_pronto"],
         ["order.ready", { tipo_atendimento: "entrega" }, "pedido_pronto"], // pronto na entrega = pronto para o entregador retirar
+        ["order.out_for_delivery", { tipo_atendimento: "entrega", status: "saiu_entrega" }, "pedido_saiu_entrega_v2"],
         ["order.paid", {}, null],
         ["order.cancelled", {}, null],
         ["customer.created", {}, null],
@@ -150,6 +151,12 @@ describe("repetição e falhas", () => {
         await run(ev("order.ready"));
         await run(ev("order.ready"));
         expect(sendTemplate.mock.calls.map((c) => c[1].name)).toEqual(["pedido_recebido", "pedido_pronto"]);
+    });
+    it("Saiu para entrega: voltar e sair de novo NÃO reenvia o aviso (1 por pedido)", async () => {
+        const { run, sendTemplate } = setup();
+        await run(ev("order.out_for_delivery", { tipo_atendimento: "entrega", status: "saiu_entrega" }));
+        await run(ev("order.out_for_delivery", { tipo_atendimento: "entrega", status: "saiu_entrega" }, { sequence: 5 }));
+        expect(sendTemplate.mock.calls.map((c) => c[1].name)).toEqual(["pedido_saiu_entrega_v2"]);
     });
     it("pedidos e barracas diferentes são independentes", async () => {
         const { run, sendTemplate } = setup();

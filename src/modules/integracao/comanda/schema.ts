@@ -16,6 +16,7 @@ export type ComandaEventType =
     | "order.paid"
     | "order.status_changed"
     | "order.ready"
+    | "order.out_for_delivery"
     | "order.cancelled"
     | "customer.created"
     | "customer.updated"
