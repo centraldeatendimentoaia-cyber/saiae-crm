@@ -23,7 +23,7 @@ Este é o resumo, em português simples, do que a atendente de vendas do Saiaê 
 | IA no WhatsApp | Só nas lojas que ligarem, ainda em teste fechado; **não promete data**. |
 | LGPD | O cliente final pode apagar os dados; cadastro de entrega pede consentimento. |
 | Planos | Essencial R$ 57,90/mês (anual R$ 49,22/mês); Pro R$ 87,90/mês (anual R$ 70,32/mês), com o que cada um inclui. |
-| Teste grátis | 7 dias com o Pro liberado, um por e-mail, pelo link de cadastro. |
+| Teste grátis | **30 dias grátis do plano Essencial** para quem se cadastra pelo link, um por e-mail. O Pro **não** está incluído: é pago, como upgrade, pelo preço de lista. O texto dela não afirma nada sobre pedir cartão no cadastro nem sobre quando a cobrança começa. |
 
 ## O que ela diz que AINDA NÃO existe (não promete)
 Estoque completo (compras, ficha técnica), caixa avançado, app do iPhone na loja de aplicativos. Para iPhone e qualquer coisa fora do texto, ela chama uma pessoa.
@@ -39,7 +39,7 @@ Fechar venda, cobrar, pedir dados de pagamento, prometer desconto ou prazo, mand
 5. **Cadastro do cliente por telefone com código no WhatsApp**: já funciona → incluído.
 
 ## Correções do João (2026-10-09), aplicadas
-- **Oferta do panfleto**: quem chega pelo panfleto ("Quero ser testador do sai aê") ganha **30 dias grátis do plano Essencial**; dando feedback do produto ganha **mais 30 dias grátis do plano Essencial**. O bot não libera nem cobra: diz que a equipe confirma e libera, e chama a equipe (motivo `feedback_bonus`). Quem não veio do panfleto segue o teste padrão de **7 dias** e não recebe a oferta.
+- **Oferta do panfleto**: quem chega pelo panfleto ("Quero ser testador do sai aê") ganha **30 dias grátis do plano Essencial**; dando feedback do produto ganha **mais 30 dias grátis do plano Essencial**. O bot não libera nem cobra: diz que a equipe confirma e libera, e chama a equipe (motivo `feedback_bonus`). Os **30 dias do Essencial valem para todos** que se cadastram (desde a migration `20261022130000` da Comanda; o teste de 7 dias com Pro acabou). O que depende do feedback é o bônus de mais 30 dias, confirmado pela equipe.
 - **Identidade**: o bot é o **"atendente IA do Sai aê"** ("Oi! Sou o atendente IA do Sai aê"). Nunca se chama de assistente automático/virtual, robô ou bot. Se perguntarem, diz que é uma IA. Só vale para vendas; as lojas não mudaram.
 - **Confirmado pelo João**: os 30 dias grátis iniciais do panfleto são do plano **Essencial** (e o bônus de feedback são +30 dias do Essencial). O **Pro continua pago** (upgrade, R$ 87,90/mês pelo preço de lista); o bot não promete preço nem condição diferente para o Pro.
 - **Desconto/negociação**: o bot não responde sozinho; pedido de desconto, promoção, cupom para si, "mais barato" ou condição especial vai direto para a equipe, com uma resposta fixa que não concede nada.
