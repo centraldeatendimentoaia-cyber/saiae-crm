@@ -29,7 +29,7 @@ function formatPhone(phone: string): string {
 }
 
 /**
- * GET /api/recipients/:sessionId?type=contacts|labels|groups
+ * GET /api/recipients/:sessionId?type=inbox|contacts|labels|groups
  * Devolve listas prontas para o seletor de destinatários do Disparo: cada item traz os telefones
  * (JIDs "@lid" são convertidos para número usando a agenda sincronizada; sem número, ficam de fora).
  */
@@ -67,7 +67,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
 
     let items: Item[] = [];
 
-    if (type === "contacts") {
+    if (type === "inbox") {
+        // Conversas já existentes (as da aba Conversas): só individuais, da mais recente para a mais antiga.
+        const rows = await prisma.$queryRaw<Array<{ remoteJid: string; lastTs: Date; inbound: bigint | number }>>`
+            SELECT remoteJid, MAX(timestamp) AS lastTs, SUM(CASE WHEN fromMe = 0 THEN 1 ELSE 0 END) AS inbound
+            FROM \`Message\`
+            WHERE sessionId = ${session.id} AND (remoteJid LIKE '%@s.whatsapp.net' OR remoteJid LIKE '%@lid')
+            GROUP BY remoteJid
+            ORDER BY lastTs DESC
+            LIMIT 5000
+        `;
+        const seen = new Set<string>();
+        for (const row of rows) {
+            const phone = resolve(row.remoteJid);
+            if (!phone || seen.has(phone)) continue;
+            seen.add(phone);
+            const named = nameOfPhone.get(phone);
+            const quando = new Date(row.lastTs).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "America/Sao_Paulo" });
+            const respondeu = Number(row.inbound) > 0 ? "já respondeu" : "nunca respondeu";
+            items.push({ id: phone, name: named || formatPhone(phone), sub: `${named ? formatPhone(phone) + " · " : ""}última mensagem em ${quando} · ${respondeu}`, phones: [phone] });
+        }
+    } else if (type === "contacts") {
         const seen = new Set<string>();
         for (const c of contacts) {
             const phone = toPhone(c.jid) || toPhone(c.remoteJidAlt);

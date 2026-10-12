@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { canonicalPhone } from "@/lib/phone";
 
-type Tab = "contacts" | "labels" | "groups" | "file";
+type Tab = "inbox" | "contacts" | "labels" | "groups" | "file";
 
 interface Member {
     phone: string;
@@ -26,6 +26,7 @@ interface Item {
 }
 
 const TABS: { id: Tab; label: string }[] = [
+    { id: "inbox", label: "Inbox" },
     { id: "contacts", label: "Contatos" },
     { id: "labels", label: "Etiquetas" },
     { id: "groups", label: "Grupos" },
@@ -59,7 +60,7 @@ interface Props {
 
 /** Escolhe destinatários por contatos, etiquetas, grupos ou planilha; os números vão para a lista abaixo. */
 export function RecipientPicker({ sessionId, value, onChange, disabled }: Props) {
-    const [tab, setTab] = useState<Tab>("contacts");
+    const [tab, setTab] = useState<Tab>("inbox");
     const [cache, setCache] = useState<Partial<Record<Tab, Item[]>>>({});
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
@@ -176,6 +177,11 @@ export function RecipientPicker({ sessionId, value, onChange, disabled }: Props)
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Pesquisar..." className="pl-9" disabled={disabled} />
                     </div>
+                    {tab === "inbox" && (
+                        <p className="text-xs text-muted-foreground">
+                            Pessoas com quem você já conversou neste número (as conversas da aba Conversas), da mais recente para a mais antiga. Use “Selecionar todos” para marcar todas.
+                        </p>
+                    )}
                     <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <label className="flex cursor-pointer items-center gap-2">
                             <Checkbox checked={allFilteredPicked} onCheckedChange={toggleAll} disabled={disabled || filtered.length === 0} />
