@@ -539,8 +539,10 @@ model ScheduledPost {
   caption     String?   @db.Text
   mediaIds    Json      // string[] de MediaFile.id
   publishAt   DateTime? // nulo só em rascunho
-  groupId     String?   // postagens criadas juntas (várias contas/datas)
-  status      String    @default("PENDING") // DRAFT | PENDING | PUBLISHING | PUBLISHED | FAILED
+  groupId     String?   // postagens criadas juntas (várias contas/datas); numa série = id da série
+  seriesId    String?   // PostSeries que gerou esta postagem
+  seriesIndex Int?      // posição da ocorrência na série (define qual variação usa)
+  status      String    @default("PENDING") // DRAFT | PENDING | PAUSED | PUBLISHING | PUBLISHED | FAILED
   releaseId   String?
   releaseUrl  String?   @db.Text
   error       String?   @db.Text
@@ -551,6 +553,29 @@ model ScheduledPost {
   @@index([status, publishAt])
   @@index([userId, publishAt])
   @@index([groupId])
+  @@index([seriesId])
+}
+
+// Série recorrente ("toda terça às 10h"): gera as próximas semanas como ScheduledPost reais
+model PostSeries {
+  id               String    @id @default(cuid())
+  userId           String
+  name             String
+  accountIds       Json      // string[] de SocialAccount.id
+  type             String    // FEED | STORY
+  weekdays         Json      // number[] 0=domingo ... 6=sábado
+  time             String    // "HH:MM" (Brasília)
+  startDate        String    // "YYYY-MM-DD"
+  endDate          String?   // "YYYY-MM-DD" — inclusive
+  maxCount         Int?      // total de ocorrências
+  variants         Json      // [{ caption, mediaIds[] }] — alternam em ordem
+  status           String    @default("ACTIVE") // ACTIVE | PAUSED | ENDED
+  generatedCount   Int       @default(0) // ocorrências já geradas (próximo seriesIndex)
+  generatedThrough DateTime  // só gera ocorrências depois disso (pular uma não faz ela voltar)
+  createdAt        DateTime  @default(now())
+
+  @@index([userId])
+  @@index([status])
 }
 
 // Textos salvos para colar na legenda (endereço, horário, chamada para ação)

@@ -371,7 +371,7 @@ export function PostEditor() {
                                     {loaded.groupEditable > 1 && (
                                         <label className="flex items-center gap-2 text-sm">
                                             <input type="checkbox" checked={applyToGroup} onChange={(e) => setApplyToGroup(e.target.checked)} />
-                                            Aplicar imagens e legenda às outras {loaded.groupEditable - 1} do grupo
+                                            {loaded.seriesId ? `Aplicar imagens e legenda às outras ${loaded.groupEditable - 1} postagens futuras da série` : `Aplicar imagens e legenda às outras ${loaded.groupEditable - 1} do grupo`}
                                         </label>
                                     )}
                                     <Button className="w-full" disabled={!canSubmit} onClick={() => save(false)}>
@@ -383,7 +383,7 @@ export function PostEditor() {
                                     </div>
                                     <div className="grid gap-2 sm:grid-cols-2">
                                         <Button variant="ghost" className="text-destructive" onClick={() => remove(false)}><Trash2 className="h-4 w-4 mr-2" />Excluir</Button>
-                                        {loaded.groupEditable > 1 && <Button variant="ghost" className="text-destructive" onClick={() => remove(true)}>Excluir as {loaded.groupEditable} do grupo</Button>}
+                                        {loaded.groupEditable > 1 && <Button variant="ghost" className="text-destructive" onClick={() => remove(true)}>{loaded.seriesId ? `Excluir as ${loaded.groupEditable} futuras da série` : `Excluir as ${loaded.groupEditable} do grupo`}</Button>}
                                     </div>
                                 </>
                             )}

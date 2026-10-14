@@ -5,7 +5,7 @@ import { getAuthenticatedUser } from "@/lib/api-auth";
 import { parseNewPost } from "@/modules/social/validate";
 import { asProvider, ensurePublicTokens } from "@/modules/social/posts";
 
-const STATUSES = ["DRAFT", "PENDING", "PUBLISHING", "PUBLISHED", "FAILED"];
+const STATUSES = ["DRAFT", "PENDING", "PAUSED", "PUBLISHING", "PUBLISHED", "FAILED"];
 
 /**
  * GET /api/social/posts
