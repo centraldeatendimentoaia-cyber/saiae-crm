@@ -503,10 +503,11 @@ model MediaFile {
   mime      String
   size      Int
   data      Bytes
-  publicToken String? @unique // só existe quando a mídia vai para uma postagem (a Meta baixa por /api/public-media/:token)
+  publicToken String? // só existe quando a mídia vai para uma postagem (a Meta baixa por /api/public-media/:token)
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([publicToken])
 }
 
 // Contas do Instagram/Facebook para postagens agendadas (token da Página, criptografado)
