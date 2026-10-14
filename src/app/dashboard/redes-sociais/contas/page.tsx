@@ -153,10 +153,11 @@ function Connect() {
                 <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Como gerar o token</summary>
                     <ol className="mt-2 list-decimal space-y-1 pl-5">
-                        <li>No Graph API Explorer, escolha o seu app e adicione: pages_show_list, pages_read_engagement, pages_manage_posts, instagram_basic, instagram_content_publish.</li>
+                        <li>No Graph API Explorer, escolha o seu app e adicione: pages_show_list, pages_read_engagement, pages_manage_posts, instagram_basic, instagram_content_publish e business_management.</li>
                         <li>Em <b>Gerar token</b>, marque as Páginas <b>e também as contas do Instagram</b> na janela da Meta.</li>
                         <li>No Access Token Debugger, clique em <b>Extend Access Token</b> e cole aqui o token estendido.</li>
                         <li>O Instagram precisa ser <b>Business ou Creator</b> e estar ligado à Página.</li>
+                        <li>Se a Página e o Instagram ficam num <b>Portfólio Empresarial</b>, o app deve estar nesse mesmo portfólio e a sua conta precisa ter acesso a esses ativos (Configurações do Negócio).</li>
                     </ol>
                 </details>
                 <Button onClick={connect} disabled={busy || token.trim().length < 20}><Link2 className="mr-2 h-4 w-4" />{busy ? "Conectando…" : "Conectar"}</Button>

@@ -166,3 +166,43 @@ describe("graph: Instagram que não vem no campo da Página", () => {
         expect(pagesWithoutInstagram(a)).toEqual(["Salão"]);
     });
 });
+
+describe("graph: Páginas de Portfólio Empresarial", () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const stub = (handler: (url: string) => unknown) =>
+        vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+            const json: any = handler(url);
+            return { ok: !json?.error, status: 200, json: async () => json };
+        }));
+
+    it("acha Página + Instagram que só existem no portfólio", async () => {
+        stub((url) => {
+            if (url.includes("/me/accounts")) return { data: [] };
+            if (url.includes("/me/businesses")) return { data: [{ id: "B1", name: "João Marcos" }] };
+            if (url.includes("/B1/owned_pages")) return { data: [{ id: "P2", name: "Salão", instagram_business_account: { id: "I2", username: "salao" } }] };
+            if (url.includes("/B1/client_pages")) return { data: [] };
+            if (url.includes("/P2?")) return { access_token: "PT2" };
+            return { data: [] };
+        });
+        const a = await discoverAccounts("UT");
+        expect(a.map((x) => [x.provider, x.externalId, x.accessToken])).toEqual([["facebook", "P2", "PT2"], ["instagram", "I2", "PT2"]]);
+    });
+
+    it("não repete Página que já veio em /me/accounts", async () => {
+        stub((url) => {
+            if (url.includes("/me/accounts")) return { data: [{ id: "P1", name: "Salão", access_token: "PT1", instagram_business_account: { id: "I1" } }] };
+            if (url.includes("/me/businesses")) return { data: [{ id: "B1" }] };
+            if (url.includes("owned_pages")) return { data: [{ id: "P1", name: "Salão" }] };
+            return { data: [] };
+        });
+        expect((await discoverAccounts("UT")).filter((x) => x.provider === "facebook")).toHaveLength(1);
+    });
+
+    it("sem business_management o resto continua funcionando", async () => {
+        stub((url) => {
+            if (url.includes("/me/accounts")) return { data: [{ id: "P1", name: "Salão", access_token: "PT1", instagram_business_account: { id: "I1" } }] };
+            return { error: { message: "permissão", code: 200 } };
+        });
+        expect((await discoverAccounts("UT")).map((x) => x.provider)).toEqual(["facebook", "instagram"]);
+    });
+});

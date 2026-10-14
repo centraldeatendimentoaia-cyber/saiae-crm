@@ -70,29 +70,68 @@ async function instagramViaPage(pageId: string, pageToken: string): Promise<any 
 export const pagesWithoutInstagram = (found: DiscoveredAccount[]) =>
     found.filter((a) => a.provider === "facebook" && !found.some((b) => b.provider === "instagram" && b.pageId === a.pageId)).map((a) => a.name);
 
+/** Registra a Página (e o Instagram ligado a ela) em `out`, sem repetir Páginas já vistas. */
+async function addPage(out: DiscoveredAccount[], seen: Set<string>, p: any, pageToken: string) {
+    if (!p?.id || !pageToken || seen.has(p.id)) return;
+    seen.add(p.id);
+    out.push({ provider: "facebook", externalId: p.id, pageId: p.id, name: p.name, picture: p.picture?.data?.url, accessToken: pageToken });
+    let ig = p.instagram_business_account || p.connected_instagram_account;
+    if (!ig?.id) ig = await instagramViaPage(p.id, pageToken); // vínculo feito pelo Gerenciador de Negócios
+    if (ig?.id) {
+        out.push({ provider: "instagram", externalId: ig.id, pageId: p.id, name: ig.name || p.name, username: ig.username, picture: ig.profile_picture_url, accessToken: pageToken });
+    }
+}
+
+const PAGE_FIELDS = `id,name,picture.type(large){url},instagram_business_account{${IG_FIELDS}},connected_instagram_account{${IG_FIELDS}}`;
+
+/**
+ * Páginas que pertencem a um Portfólio Empresarial (Business Manager) e não aparecem em /me/accounts.
+ * Precisa da permissão business_management; sem ela, ou sem portfólios, simplesmente não acrescenta nada.
+ */
+async function addBusinessPages(out: DiscoveredAccount[], seen: Set<string>, userToken: string) {
+    let businesses: any[] = [];
+    try {
+        businesses = ((await call("GET", "/me/businesses", userToken, { fields: "id,name", limit: 100 })) as any).data || [];
+    } catch {
+        return;
+    }
+    for (const b of businesses) {
+        for (const edge of ["owned_pages", "client_pages"]) {
+            let pages: any[] = [];
+            try {
+                pages = ((await call("GET", `/${b.id}/${edge}`, userToken, { fields: PAGE_FIELDS, limit: 100 })) as any).data || [];
+            } catch {
+                continue;
+            }
+            for (const p of pages) {
+                if (seen.has(p.id)) continue;
+                try {
+                    // o token da Página sai do próprio usuário (precisa de função/tarefa na Página dentro do portfólio)
+                    const t: any = await call("GET", `/${p.id}`, userToken, { fields: "access_token" });
+                    await addPage(out, seen, p, t.access_token);
+                } catch {
+                    /* sem acesso a esta Página */
+                }
+            }
+        }
+    }
+}
+
 /** Com um token de usuário, lista as Páginas (e o Instagram Business ligado a cada uma). */
 export async function discoverAccounts(userToken: string): Promise<DiscoveredAccount[]> {
     const out: DiscoveredAccount[] = [];
+    const seen = new Set<string>();
     let path: string | undefined = "/me/accounts";
-    let params: Params = {
-        fields: `id,name,access_token,picture.type(large){url},instagram_business_account{${IG_FIELDS}},connected_instagram_account{${IG_FIELDS}}`,
-        limit: 100,
-    };
+    let params: Params = { fields: `${PAGE_FIELDS},access_token`, limit: 100 };
     // paginação simples por cursor
     for (let i = 0; i < 10 && path; i++) {
         const page: any = await call("GET", path, userToken, params);
-        for (const p of page.data || []) {
-            out.push({ provider: "facebook", externalId: p.id, pageId: p.id, name: p.name, picture: p.picture?.data?.url, accessToken: p.access_token });
-            let ig = p.instagram_business_account || p.connected_instagram_account;
-            if (!ig?.id) ig = await instagramViaPage(p.id, p.access_token); // vínculo feito pelo Gerenciador de Negócios
-            if (ig?.id) {
-                out.push({ provider: "instagram", externalId: ig.id, pageId: p.id, name: ig.name || p.name, username: ig.username, picture: ig.profile_picture_url, accessToken: p.access_token });
-            }
-        }
+        for (const p of page.data || []) await addPage(out, seen, p, p.access_token);
         const after = page.paging?.cursors?.after;
         if (page.paging?.next && after) params = { ...params, after };
         else path = undefined;
     }
+    await addBusinessPages(out, seen, userToken);
     return out;
 }
 
