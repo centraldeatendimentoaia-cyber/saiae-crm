@@ -4,7 +4,7 @@ export const TZ = "America/Sao_Paulo";
 
 export type Provider = "instagram" | "facebook";
 export type PostType = "FEED" | "STORY";
-export type PostStatus = "DRAFT" | "PENDING" | "PUBLISHING" | "PUBLISHED" | "FAILED";
+export type PostStatus = "DRAFT" | "PENDING" | "PAUSED" | "PUBLISHING" | "PUBLISHED" | "FAILED";
 
 export interface Account {
     id: string;
@@ -35,11 +35,35 @@ export interface Post {
     mediaIds: string[];
     publishAt: string | null;
     groupId: string | null;
+    seriesId: string | null;
     status: PostStatus;
     releaseUrl: string | null;
     error: string | null;
     publishedAt: string | null;
     account: PostAccount | null;
+}
+
+export interface SeriesVariant {
+    caption: string;
+    mediaIds: string[];
+}
+
+export interface Series {
+    id: string;
+    name: string;
+    accountIds: string[];
+    type: PostType;
+    weekdays: number[];
+    time: string;
+    startDate: string;
+    endDate: string | null;
+    maxCount: number | null;
+    variants: SeriesVariant[];
+    status: "ACTIVE" | "PAUSED" | "ENDED";
+    generatedCount: number;
+    rule: string;
+    stats: { scheduled: number; published: number; failed: number };
+    nextAt: string | null;
 }
 
 export interface Signature {
@@ -51,6 +75,7 @@ export interface Signature {
 export const STATUS_INFO: Record<PostStatus, { label: string; dot: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
     DRAFT: { label: "Rascunho", dot: "bg-slate-400", variant: "outline" },
     PENDING: { label: "Agendada", dot: "bg-blue-500", variant: "secondary" },
+    PAUSED: { label: "Série pausada", dot: "bg-slate-400", variant: "outline" },
     PUBLISHING: { label: "Publicando…", dot: "bg-amber-500", variant: "outline" },
     PUBLISHED: { label: "Publicada", dot: "bg-green-500", variant: "default" },
     FAILED: { label: "Falhou", dot: "bg-red-500", variant: "destructive" },

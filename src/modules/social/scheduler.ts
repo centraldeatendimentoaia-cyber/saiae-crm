@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { decryptToken } from "./crypto";
 import { GraphError, publishFacebook, publishInstagram, type PublishResult } from "./graph";
+import { extendAllSeries } from "./series";
 
 export const publicMediaUrl = (token: string) => `${(process.env.BASE_URL || "").replace(/\/$/, "")}/api/public-media/${token}.jpg`;
 
@@ -89,5 +90,9 @@ export function startSocialScheduler() {
         .catch(() => {});
 
     cron.schedule("* * * * *", () => void publishDue());
+
+    // séries recorrentes: mantém as próximas 8 semanas geradas (na subida e a cada hora)
+    void extendAllSeries();
+    cron.schedule("7 * * * *", () => void extendAllSeries());
     logger.info("Social", "Social scheduler initialized");
 }

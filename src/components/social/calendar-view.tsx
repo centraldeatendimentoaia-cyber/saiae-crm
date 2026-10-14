@@ -58,7 +58,7 @@ function Chip({ post, compact, onSelect, onDragStart }: { post: Post; compact?: 
             <span className="font-medium tabular-nums">{when(post).format("HH:mm")}</span>
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${info.dot}`} />
             <span className="truncate text-muted-foreground">{post.type === "STORY" ? "Story" : post.account ? accountName(post.account) : ""}</span>
-            {post.groupId && !compact && <Repeat2 className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/60" />}
+            {post.seriesId && !compact && <Repeat2 className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/60" />}
         </button>
     );
 }

@@ -11,6 +11,7 @@ import { accountLabel } from "@/components/social/types";
 
 const TABS = [
     { href: "/dashboard/redes-sociais/calendario", label: "Calendário" },
+    { href: "/dashboard/redes-sociais/series", label: "Séries" },
     { href: "/dashboard/redes-sociais/rascunhos", label: "Rascunhos" },
     { href: "/dashboard/redes-sociais/historico", label: "Histórico" },
     { href: "/dashboard/redes-sociais/contas", label: "Contas" },
