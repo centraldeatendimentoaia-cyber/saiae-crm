@@ -2,16 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { encryptToken } from "@/modules/social/crypto";
-import { discoverAccounts } from "@/modules/social/graph";
+import { discoverAccounts, pagesWithoutInstagram } from "@/modules/social/graph";
+import { accountPublicSelect, parseTimes } from "@/modules/social/posts";
 
-const publicFields = { id: true, provider: true, externalId: true, pageId: true, name: true, username: true, picture: true, createdAt: true } as const;
+async function listAccounts(userId: string) {
+    const rows = await prisma.socialAccount.findMany({ where: { userId }, select: accountPublicSelect, orderBy: { createdAt: "asc" } });
+    return rows.map(({ postingTimes, ...a }) => ({ ...a, postingTimes: parseTimes(postingTimes) }));
+}
 
 /** GET /api/social/accounts — contas conectadas (sem o token). */
 export async function GET(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
-    const data = await prisma.socialAccount.findMany({ where: { userId: user.id }, select: publicFields, orderBy: { createdAt: "asc" } });
-    return NextResponse.json({ status: true, data });
+    return NextResponse.json({ status: true, data: await listAccounts(user.id) });
 }
 
 /**
@@ -39,9 +42,12 @@ export async function POST(request: NextRequest) {
                 update: data,
             });
         }
-        const data = await prisma.socialAccount.findMany({ where: { userId: user.id }, select: publicFields, orderBy: { createdAt: "asc" } });
-        return NextResponse.json({ status: true, message: `${found.length} conta(s) conectada(s).`, data });
-    } catch (e: any) {
-        return NextResponse.json({ status: false, message: e?.message || "Falha ao falar com a Meta." }, { status: 400 });
+        const semIg = pagesWithoutInstagram(found);
+        const aviso = semIg.length
+            ? ` Sem Instagram ligado: ${semIg.join(", ")}. Confira se o Instagram é Business/Creator, está ligado a essa Página e foi marcado ao gerar o token.`
+            : "";
+        return NextResponse.json({ status: true, message: `${found.length} conta(s) conectada(s).${aviso}`, warning: semIg, data: await listAccounts(user.id) });
+    } catch (e) {
+        return NextResponse.json({ status: false, message: e instanceof Error ? e.message : "Falha ao falar com a Meta." }, { status: 400 });
     }
 }

@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { encryptToken, decryptToken } from "./crypto";
-import { parsePostInput } from "./validate";
-import { publishInstagram, publishFacebook, discoverAccounts, GraphError } from "./graph";
+import { parseNewPost, parsePostingTimes, isHexColor } from "./validate";
+import { publishInstagram, publishFacebook, discoverAccounts, pagesWithoutInstagram, GraphError } from "./graph";
 
 process.env.SOCIAL_TOKEN_KEY = "chave-de-teste";
 const now = new Date("2026-10-14T12:00:00Z");
-const ok = (type: string, extra: object = {}) => ({ type, mediaIds: ["a"], publishAt: "2026-10-14T15:00:00Z", accountId: "x", ...extra });
 
 describe("crypto", () => {
     it("ida e volta, e cifra diferente a cada vez", () => {
@@ -20,23 +19,62 @@ describe("crypto", () => {
     });
 });
 
-describe("parsePostInput", () => {
-    it("aceita feed e story válidos", () => {
-        expect("value" in parsePostInput(ok("FEED", { caption: " oi " }), "instagram", now)).toBe(true);
-        const s = parsePostInput(ok("STORY", { caption: "ignorada" }), "instagram", now);
+describe("parseNewPost", () => {
+    const base = { accountIds: ["x"], type: "FEED", mediaIds: ["a"], caption: "oi", dates: ["2026-10-14T15:00:00Z"] };
+    const run = (extra: object = {}, prov: ("instagram" | "facebook")[] = ["instagram"]) => parseNewPost({ ...base, ...extra }, prov, now);
+
+    it("aceita feed e story válidos (story ignora legenda)", () => {
+        expect(run()).toHaveProperty("value");
+        const s = run({ type: "STORY", caption: "ignorada" });
         expect("value" in s && s.value.caption).toBe("");
     });
-    it("rejeita casos inválidos", () => {
-        expect(parsePostInput(ok("REEL"), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("FEED", { mediaIds: [] }), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("STORY", { mediaIds: ["a", "b"] }), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("FEED", { mediaIds: ["a", "a"] }), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("FEED", { caption: "x".repeat(2201) }), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("FEED", { publishAt: "2026-10-14T11:00:00Z" }), "instagram", now)).toHaveProperty("error");
-        expect(parsePostInput(ok("FEED", { publishAt: "lixo" }), "instagram", now)).toHaveProperty("error");
+    it("aceita o formato antigo (accountId + publishAt)", () => {
+        const r = parseNewPost({ accountId: "x", type: "FEED", mediaIds: ["a"], publishAt: "2026-10-14T15:00:00Z" }, ["instagram"], now);
+        expect("value" in r && r.value.accountIds).toEqual(["x"]);
     });
-    it("permite 'agora' (até 5 min atrás)", () => {
-        expect("value" in parsePostInput(ok("FEED", { publishAt: "2026-10-14T11:57:00Z" }), "instagram", now)).toBe(true);
+    it("várias datas e várias contas", () => {
+        const r = run({ accountIds: ["x", "y"], dates: ["2026-10-14T15:00:00Z", "2026-10-21T15:00:00Z"] }, ["instagram", "facebook"]);
+        expect("value" in r && r.value.dates.length).toBe(2);
+    });
+    it("rascunho não exige data", () => {
+        const r = run({ draft: true, dates: [] });
+        expect("value" in r && r.value.draft && r.value.dates).toEqual([]);
+    });
+    it("rejeita casos inválidos", () => {
+        expect(run({ type: "REEL" })).toHaveProperty("error");
+        expect(run({ mediaIds: [] })).toHaveProperty("error");
+        expect(run({ type: "STORY", mediaIds: ["a", "b"] })).toHaveProperty("error");
+        expect(run({ mediaIds: ["a", "a"] })).toHaveProperty("error");
+        expect(run({ caption: "x".repeat(2201) })).toHaveProperty("error");
+        expect(run({ accountIds: [] })).toHaveProperty("error");
+        expect(run({ accountIds: ["x", "x"] })).toHaveProperty("error");
+        expect(run({ dates: [] })).toHaveProperty("error");
+        expect(run({ dates: ["2026-10-14T11:00:00Z"] })).toHaveProperty("error");
+        expect(run({ dates: ["lixo"] })).toHaveProperty("error");
+        expect(run({ dates: ["2026-10-14T15:00:00Z", "2026-10-14T15:00:00Z"] })).toHaveProperty("error");
+        expect(run({ dates: Array.from({ length: 61 }, (_, i) => new Date(now.getTime() + (i + 1) * 3600_000).toISOString()) })).toHaveProperty("error");
+    });
+    it("legenda longa vale para o Facebook mas não para quem inclui Instagram", () => {
+        expect(run({ caption: "x".repeat(3000) }, ["facebook"])).toHaveProperty("value");
+        expect(run({ caption: "x".repeat(3000), accountIds: ["x", "y"] }, ["facebook", "instagram"])).toHaveProperty("error");
+    });
+    it("permite postar agora (até 5 min atrás)", () => {
+        expect(run({ dates: ["2026-10-14T11:57:00Z"] })).toHaveProperty("value");
+    });
+});
+
+describe("horários sugeridos e cor", () => {
+    it("ordena, tira repetidos e valida HH:MM", () => {
+        expect(parsePostingTimes(["19:00", "09:00", "09:00"])).toEqual({ value: ["09:00", "19:00"] });
+        expect(parsePostingTimes(["9:00"])).toHaveProperty("error");
+        expect(parsePostingTimes(["25:00"])).toHaveProperty("error");
+        expect(parsePostingTimes("x")).toHaveProperty("error");
+        expect(parsePostingTimes(Array.from({ length: 9 }, (_, i) => "0" + i + ":00"))).toHaveProperty("error");
+    });
+    it("cor hexadecimal", () => {
+        expect(isHexColor("#a1B2c3")).toBe(true);
+        expect(isHexColor("a1b2c3")).toBe(false);
+        expect(isHexColor("#fff")).toBe(false);
     });
 });
 
@@ -101,5 +139,30 @@ describe("graph", () => {
         mockFetch(() => ({ data: [{ id: "P1", name: "Salão", access_token: "PT", instagram_business_account: { id: "I1", username: "salao" } }] }));
         const a = await discoverAccounts("UT");
         expect(a.map((x) => [x.provider, x.externalId, x.pageId])).toEqual([["facebook", "P1", "P1"], ["instagram", "I1", "P1"]]);
+    });
+});
+
+describe("graph: Instagram que não vem no campo da Página", () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const stub = (handler: (url: string) => unknown) =>
+        vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+            const json: any = handler(url);
+            return { ok: !json?.error, status: 200, json: async () => json };
+        }));
+
+    it("usa connected_instagram_account", async () => {
+        stub(() => ({ data: [{ id: "P1", name: "Salão", access_token: "PT", connected_instagram_account: { id: "I9", username: "salao" } }] }));
+        const a = await discoverAccounts("UT");
+        expect(a.map((x) => x.provider)).toEqual(["facebook", "instagram"]);
+    });
+    it("cai no /instagram_accounts da Página", async () => {
+        stub((url) => (url.includes("/P1/instagram_accounts") ? { data: [{ id: "I7", username: "salao" }] } : { data: [{ id: "P1", name: "Salão", access_token: "PT" }] }));
+        const a = await discoverAccounts("UT");
+        expect(a.find((x) => x.provider === "instagram")?.externalId).toBe("I7");
+    });
+    it("lista as Páginas que ficaram sem Instagram", async () => {
+        stub((url) => (url.includes("instagram_accounts") ? { data: [] } : { data: [{ id: "P1", name: "Salão", access_token: "PT" }] }));
+        const a = await discoverAccounts("UT");
+        expect(pagesWithoutInstagram(a)).toEqual(["Salão"]);
     });
 });
