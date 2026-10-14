@@ -25,6 +25,11 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    // Imagem de postagem agendada: a Meta baixa daqui; a rota só serve token aleatório de 48 hex
+    if (pathname.startsWith("/api/public-media/")) {
+        return NextResponse.next();
+    }
+
     // Webhook da WhatsApp Cloud API (Meta): público; a rota valida token (GET) e assinatura HMAC (POST)
     if (pathname === "/api/whatsapp/webhook") {
         return NextResponse.next();

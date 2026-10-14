@@ -10,6 +10,7 @@ import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/li
 import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
+import { startSocialScheduler } from "@/modules/social/scheduler";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -156,5 +157,6 @@ export function initScheduler() {
     
     startRetention();
     startFollowUps();
+    startSocialScheduler();
     logger.info("Cron", "Scheduler initialized");
 }
