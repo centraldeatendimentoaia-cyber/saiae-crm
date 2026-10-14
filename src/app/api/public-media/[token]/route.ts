@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     const token = raw.replace(/\.jpe?g$/i, "");
     if (!/^[a-f0-9]{48}$/.test(token)) return new Response("Not found", { status: 404 });
 
-    const row = await prisma.mediaFile.findUnique({ where: { publicToken: token }, select: { data: true, mime: true } });
+    const row = await prisma.mediaFile.findFirst({ where: { publicToken: token }, select: { data: true, mime: true } });
     if (!row) return new Response("Not found", { status: 404 });
 
     const input = Buffer.from(row.data);
