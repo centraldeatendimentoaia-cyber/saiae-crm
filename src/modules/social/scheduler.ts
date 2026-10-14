@@ -53,7 +53,7 @@ export async function publishOne(postId: string): Promise<void> {
                     title: reconnect ? "Reconecte sua conta social" : "Falha ao publicar postagem",
                     message: reconnect ? `A Meta recusou o token: ${message}` : message,
                     type: "WARNING",
-                    href: "/dashboard/social",
+                    href: "/dashboard/redes-sociais/historico",
                 },
             })
             .catch(() => {});

@@ -521,6 +521,9 @@ model SocialAccount {
   username    String?
   picture     String?  @db.Text
   accessToken String   @db.Text // AES-256-GCM, ver src/modules/social/crypto.ts
+  nickname    String?  // apelido mostrado no app
+  color       String?  // cor no calendário (#RRGGBB)
+  postingTimes String? @db.Text // JSON string[] com horários sugeridos, ex.: ["09:00","12:00"]
   createdAt   DateTime @default(now())
 
   @@unique([userId, provider, externalId])
@@ -535,8 +538,9 @@ model ScheduledPost {
   type        String    // FEED | STORY
   caption     String?   @db.Text
   mediaIds    Json      // string[] de MediaFile.id
-  publishAt   DateTime
-  status      String    @default("PENDING") // PENDING | PUBLISHING | PUBLISHED | FAILED
+  publishAt   DateTime? // nulo só em rascunho
+  groupId     String?   // postagens criadas juntas (várias contas/datas)
+  status      String    @default("PENDING") // DRAFT | PENDING | PUBLISHING | PUBLISHED | FAILED
   releaseId   String?
   releaseUrl  String?   @db.Text
   error       String?   @db.Text
@@ -545,6 +549,19 @@ model ScheduledPost {
 
   @@index([userId])
   @@index([status, publishAt])
+  @@index([userId, publishAt])
+  @@index([groupId])
+}
+
+// Textos salvos para colar na legenda (endereço, horário, chamada para ação)
+model SocialSignature {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // Quem respondeu SAIR: não recebe mais disparos desse número (phoneKey = últimos 8 dígitos, ignora o 9º dígito)

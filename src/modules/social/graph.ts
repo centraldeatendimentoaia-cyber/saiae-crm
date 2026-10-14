@@ -33,6 +33,17 @@ async function call<T = any>(method: "GET" | "POST", path: string, token: string
     return json as T;
 }
 
+/** Pergunta à Meta se o token ainda vale. needsReconnect = token expirado/revogado ou sem permissão. */
+export async function checkToken(externalId: string, token: string): Promise<{ ok: boolean; needsReconnect: boolean; message?: string }> {
+    try {
+        await call("GET", `/${externalId}`, token, { fields: "id" });
+        return { ok: true, needsReconnect: false };
+    } catch (e) {
+        if (e instanceof GraphError) return { ok: false, needsReconnect: e.needsReconnect, message: e.message };
+        throw e;
+    }
+}
+
 export interface DiscoveredAccount {
     provider: "instagram" | "facebook";
     externalId: string;
@@ -43,12 +54,28 @@ export interface DiscoveredAccount {
     accessToken: string; // token da Página
 }
 
+const IG_FIELDS = "id,username,name,profile_picture_url";
+
+/** Plano B: quando o campo da Página vem vazio, pergunta direto pelas contas do Instagram ligadas a ela. */
+async function instagramViaPage(pageId: string, pageToken: string): Promise<any | undefined> {
+    try {
+        const r: any = await call("GET", `/${pageId}/instagram_accounts`, pageToken, { fields: IG_FIELDS, limit: 1 });
+        return r?.data?.[0];
+    } catch {
+        return undefined;
+    }
+}
+
+/** Páginas encontradas que vieram sem Instagram ligado (para avisar o usuário). */
+export const pagesWithoutInstagram = (found: DiscoveredAccount[]) =>
+    found.filter((a) => a.provider === "facebook" && !found.some((b) => b.provider === "instagram" && b.pageId === a.pageId)).map((a) => a.name);
+
 /** Com um token de usuário, lista as Páginas (e o Instagram Business ligado a cada uma). */
 export async function discoverAccounts(userToken: string): Promise<DiscoveredAccount[]> {
     const out: DiscoveredAccount[] = [];
     let path: string | undefined = "/me/accounts";
     let params: Params = {
-        fields: "id,name,access_token,picture.type(large){url},instagram_business_account{id,username,name,profile_picture_url}",
+        fields: `id,name,access_token,picture.type(large){url},instagram_business_account{${IG_FIELDS}},connected_instagram_account{${IG_FIELDS}}`,
         limit: 100,
     };
     // paginação simples por cursor
@@ -56,7 +83,8 @@ export async function discoverAccounts(userToken: string): Promise<DiscoveredAcc
         const page: any = await call("GET", path, userToken, params);
         for (const p of page.data || []) {
             out.push({ provider: "facebook", externalId: p.id, pageId: p.id, name: p.name, picture: p.picture?.data?.url, accessToken: p.access_token });
-            const ig = p.instagram_business_account;
+            let ig = p.instagram_business_account || p.connected_instagram_account;
+            if (!ig?.id) ig = await instagramViaPage(p.id, p.access_token); // vínculo feito pelo Gerenciador de Negócios
             if (ig?.id) {
                 out.push({ provider: "instagram", externalId: ig.id, pageId: p.id, name: ig.name || p.name, username: ig.username, picture: ig.profile_picture_url, accessToken: p.access_token });
             }
