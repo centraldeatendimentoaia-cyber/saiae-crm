@@ -36,16 +36,16 @@ enum MessageStatus {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  name      String?
-  email     String   @unique
-  password  String
-  role      Role     @default(OWNER)
-  apiKey    String?  @unique // API Key for authentication
+  id       String  @id @default(cuid())
+  name     String?
+  email    String  @unique
+  password String
+  role     Role    @default(OWNER)
+  apiKey   String? @unique // API Key for authentication
 
   // Assinatura (contas existentes ficam ILIMITADO)
   plan                 String    @default("ILIMITADO") // TRIAL | ESSENCIAL | PRO | ESCALA | ILIMITADO
-  planStatus           String    @default("ACTIVE")    // ACTIVE | SUSPENDED
+  planStatus           String    @default("ACTIVE") // ACTIVE | SUSPENDED
   trialEndsAt          DateTime?
   extraSessions        Int       @default(0)
   stripeCustomerId     String?
@@ -53,81 +53,81 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  sessions  Session[]
-  webhooks  Webhook[]
-  notifications Notification[]
-  sessionAccesses SessionAccess[]
-  usageCounters UsageCounter[]
-  passwordResets PasswordReset[]
+
+  sessions            Session[]
+  webhooks            Webhook[]
+  notifications       Notification[]
+  sessionAccesses     SessionAccess[]
+  usageCounters       UsageCounter[]
+  passwordResets      PasswordReset[]
   stripeSubscriptions StripeSubscription[]
 
   @@index([stripeCustomerId])
 }
 
 model Session {
-  id          String    @id @default(cuid())
-  userId      String
-  name        String    // e.g. "Marketing WA"
-  sessionId   String    @unique // The unique ID used for Baileys auth
-  status      String    @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ZOMBIE
-  qr          String?   @db.Text
-  config      Json?     // Store instance specific config (e.g. "read_receipts": true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  userId    String
+  name      String // e.g. "Marketing WA"
+  sessionId String   @unique // The unique ID used for Baileys auth
+  status    String   @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ZOMBIE
+  qr        String?  @db.Text
+  config    Json? // Store instance specific config (e.g. "read_receipts": true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contacts    Contact[]
-  messages    Message[]
-  groups      Group[]
-  autoReplies AutoReply[]
-  stories     Story[]
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contacts          Contact[]
+  messages          Message[]
+  groups            Group[]
+  autoReplies       AutoReply[]
+  stories           Story[]
   scheduledMessages ScheduledMessage[]
-  webhooks    Webhook[]
-  botConfig   BotConfig?
-  sessionAccesses SessionAccess[]
+  webhooks          Webhook[]
+  botConfig         BotConfig?
+  sessionAccesses   SessionAccess[]
 }
 
 model Contact {
-  id          String   @id @default(cuid())
-  sessionId   String
-  jid         String   // remoteJid (123456@s.whatsapp.net)
-  lid         String?  // LID JID
-  name        String?
-  notify      String?  // Pushname
-  verifiedName String? // Business Name
-  remoteJidAlt String? // Alternate JID (e.g. Phone if JID is LID)
+  id            String    @id @default(cuid())
+  sessionId     String
+  jid           String // remoteJid (123456@s.whatsapp.net)
+  lid           String? // LID JID
+  name          String?
+  notify        String? // Pushname
+  verifiedName  String? // Business Name
+  remoteJidAlt  String? // Alternate JID (e.g. Phone if JID is LID)
   lastInboundAt DateTime? // última vez que essa pessoa mandou mensagem para o número (filtro "só quem já interagiu")
-  profilePic  String?  @db.Text
-  data        Json?    // Detailed contact data
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  profilePic    String?   @db.Text
+  data          Json? // Detailed contact data
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  messages    Message[]
+  session  Session   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@unique([sessionId, jid])
 }
 
 model Message {
-  id          String        @id @default(cuid())
-  sessionId   String
-  remoteJid   String        // Receiver or Group Jid
-  senderJid   String?       // If group, who sent it. If private, same as remoteJid (incoming) or me (outgoing)
-  fromMe      Boolean
-  keyId       String        // WhatsApp Message Key ID
-  pushName    String?
-  type        MessageType   @default(TEXT)
-  content     String?       @db.Text // Text content or Caption
-  mediaUrl    String?       @db.Text // Path to file if media
-  status      MessageStatus @default(PENDING)
-  timestamp   DateTime      @default(now())
-  
-  quoteId     String?       // For replies
-  
-  contactId   String?
-  contract    Contact?      @relation(fields: [contactId], references: [id])
-  session     Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id        String        @id @default(cuid())
+  sessionId String
+  remoteJid String // Receiver or Group Jid
+  senderJid String? // If group, who sent it. If private, same as remoteJid (incoming) or me (outgoing)
+  fromMe    Boolean
+  keyId     String // WhatsApp Message Key ID
+  pushName  String?
+  type      MessageType   @default(TEXT)
+  content   String?       @db.Text // Text content or Caption
+  mediaUrl  String?       @db.Text // Path to file if media
+  status    MessageStatus @default(PENDING)
+  timestamp DateTime      @default(now())
+
+  quoteId String? // For replies
+
+  contactId String?
+  contract  Contact? @relation(fields: [contactId], references: [id])
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, keyId])
   @@index([sessionId, remoteJid])
@@ -135,29 +135,29 @@ model Message {
 }
 
 model Group {
-  id          String   @id @default(cuid())
-  sessionId   String
-  jid         String
-  subject     String?
-  description String?  @db.Text
-  ownerJid    String?
-  participants Json?   // Stored as JSON for now: [{id: '123@s.whatsapp.net', admin: 'admin' | null}]
-  creation    DateTime?
-  restrict    Boolean? // Only admins can edit group info
-  announce    Boolean? // Only admins can send messages
-  
-  metadata    Json?    // Raw full metadata dump
-  
-  inviteCode  String?
-  
-  // Community Features
-  isCommunity Boolean  @default(false)
-  linkedParentJid String? // JID of the community parent group if it belongs to one
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String    @id @default(cuid())
+  sessionId    String
+  jid          String
+  subject      String?
+  description  String?   @db.Text
+  ownerJid     String?
+  participants Json? // Stored as JSON for now: [{id: '123@s.whatsapp.net', admin: 'admin' | null}]
+  creation     DateTime?
+  restrict     Boolean? // Only admins can edit group info
+  announce     Boolean? // Only admins can send messages
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  metadata Json? // Raw full metadata dump
+
+  inviteCode String?
+
+  // Community Features
+  isCommunity     Boolean @default(false)
+  linkedParentJid String? // JID of the community parent group if it belongs to one
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, jid])
 }
@@ -166,7 +166,7 @@ model AutoReply {
   id          String   @id @default(cuid())
   sessionId   String
   keyword     String
-  matchType   String   // EXACT, CONTAINS, REGEX
+  matchType   String // EXACT, CONTAINS, REGEX
   response    String?  @db.Text
   isMedia     Boolean  @default(false)
   mediaUrl    String?
@@ -174,72 +174,72 @@ model AutoReply {
   triggerType String   @default("ALL") // ALL, GROUP, PRIVATE
   createdAt   DateTime @default(now())
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model Story {
-  id          String   @id @default(cuid())
-  sessionId   String
-  jid         String   // User who posted the story or Broadcast JID
-  content     String?  @db.Text
-  mediaUrl    String?  @db.Text
-  type        String   // IMAGE, VIDEO, TEXT
-  timestamp   DateTime @default(now())
-  viewed      Boolean  @default(false)
+  id        String   @id @default(cuid())
+  sessionId String
+  jid       String // User who posted the story or Broadcast JID
+  content   String?  @db.Text
+  mediaUrl  String?  @db.Text
+  type      String // IMAGE, VIDEO, TEXT
+  timestamp DateTime @default(now())
+  viewed    Boolean  @default(false)
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model ScheduledMessage {
-  id          String   @id @default(cuid())
-  sessionId   String
-  jid         String
-  content     String?  @db.Text
-  mediaUrl    String?
-  mediaType   String?  // image, video, document, etc.
-  sendAt      DateTime
+  id             String   @id @default(cuid())
+  sessionId      String
+  jid            String
+  content        String?  @db.Text
+  mediaUrl       String?
+  mediaType      String? // image, video, document, etc.
+  sendAt         DateTime
   cronExpression String? // e.g., '*/5 * * * *'
-  recurrenceRule String? @db.Text // UI JSON state
-  status      String   @default("PENDING") // PENDING, SENT, FAILED
-  createdAt   DateTime @default(now())
+  recurrenceRule String?  @db.Text // UI JSON state
+  status         String   @default("PENDING") // PENDING, SENT, FAILED
+  createdAt      DateTime @default(now())
 
-  session     Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 // Store for Baileys MultiFileAuthState (in DB)
 model AuthState {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   sessionId String
-  key       String   // Filename/Key (creds.json, etc)
+  key       String // Filename/Key (creds.json, etc)
   value     Json
-  
+
   @@unique([sessionId, key])
 }
 
 // Webhook configuration for external event notifications
 model Webhook {
-  id          String   @id @default(cuid())
-  userId      String
-  sessionId   String?  // Optional: specific session, null = all sessions
-  name        String   // e.g. "My Server Webhook"
-  url         String   // The webhook endpoint URL
-  secret      String?  // Optional secret for HMAC signing
-  events      Json     // Array of event types: ["message.received", "message.sent", "connection.update", etc.]
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  session     Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  logs        WebhookLog[]
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String? // Optional: specific session, null = all sessions
+  name      String // e.g. "My Server Webhook"
+  url       String // The webhook endpoint URL
+  secret    String? // Optional secret for HMAC signing
+  events    Json // Array of event types: ["message.received", "message.sent", "connection.update", etc.]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session?     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  logs    WebhookLog[]
 }
 
 // Webhook delivery logs — tracks every webhook request attempt
 model WebhookLog {
   id                 String   @id @default(cuid())
   webhookId          String
-  event              String   // The event that triggered this webhook
-  status             String   // SUCCESS, FAILED
+  event              String // The event that triggered this webhook
+  status             String // SUCCESS, FAILED
   requestUrl         String   @db.Text
   requestHeaders     Json?
   requestBody        Json?
@@ -249,7 +249,7 @@ model WebhookLog {
   errorMessage       String?  @db.Text
   createdAt          DateTime @default(now())
 
-  webhook            Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@index([webhookId])
   @@index([webhookId, createdAt])
@@ -263,81 +263,81 @@ enum AccessMode {
 }
 
 model BotConfig {
-  id            String   @id @default(cuid())
-  sessionId     String   @unique
-  enabled       Boolean  @default(true)
-  
+  id        String  @id @default(cuid())
+  sessionId String  @unique
+  enabled   Boolean @default(true)
+
   // Bot Command Access
-  botName       String   @default("Saiaê Bot")
-  botMode       AccessMode @default(OWNER)
-  botAllowedJids Json?     // Array of JIDs ["628123@s.whatsapp.net"]
-  botBlockedJids Json?     // Array of JIDs ["628123@s.whatsapp.net"] for BLACKLIST mode
+  botName        String     @default("Saiaê Bot")
+  botMode        AccessMode @default(OWNER)
+  botAllowedJids Json? // Array of JIDs ["628123@s.whatsapp.net"]
+  botBlockedJids Json? // Array of JIDs ["628123@s.whatsapp.net"] for BLACKLIST mode
 
   // Auto Reply Access
-  autoReplyMode AccessMode @default(ALL)
+  autoReplyMode        AccessMode @default(ALL)
   autoReplyAllowedJids Json?
   autoReplyBlockedJids Json? // Array of JIDs for BLACKLIST mode
 
-  enableSticker Boolean  @default(true)
+  enableSticker      Boolean @default(true)
   enableVideoSticker Boolean @default(true)
-  maxStickerDuration Int @default(10) // in seconds
-  enablePing    Boolean  @default(true)
-  enableUptime  Boolean  @default(true)
-  removeBgApiKey String?
-  prefix        String   @default("#")
-  
+  maxStickerDuration Int     @default(10) // in seconds
+  enablePing         Boolean @default(true)
+  enableUptime       Boolean @default(true)
+  removeBgApiKey     String?
+  prefix             String  @default("#")
+
   // Anti-Spam / Rate Limit
   antiSpamEnabled Boolean @default(true) // liga também o Modo Seguro dos disparos (src/lib/safe-mode.ts)
-  spamLimit       Int     @default(5)    // Messages allowed in window
-  spamInterval    Int     @default(10)   // Seconds window
+  spamLimit       Int     @default(5) // Messages allowed in window
+  spamInterval    Int     @default(10) // Seconds window
   spamDelayMin    Int     @default(1000) // MS min delay
   spamDelayMax    Int     @default(3000) // MS max delay
 
   // Modo Seguro dos disparos (valem quando antiSpamEnabled = true)
-  safeDelayMin    Int     @default(10)   // segundos entre mensagens (mín.)
-  safeDelayMax    Int     @default(40)   // segundos entre mensagens (máx.)
-  safeBatchSize   Int     @default(25)   // pausa a cada N envios (0 = sem pausa)
-  safeBatchPause  Int     @default(3)    // minutos de pausa entre lotes
-  safeStartHour   Int     @default(9)    // janela de envio (seg a sáb)
-  safeEndHour     Int     @default(19)
+  safeDelayMin   Int @default(10) // segundos entre mensagens (mín.)
+  safeDelayMax   Int @default(40) // segundos entre mensagens (máx.)
+  safeBatchSize  Int @default(25) // pausa a cada N envios (0 = sem pausa)
+  safeBatchPause Int @default(3) // minutos de pausa entre lotes
+  safeStartHour  Int @default(9) // janela de envio (seg a sáb)
+  safeEndHour    Int @default(19)
 
   // Disparos e agendamentos só para quem já mandou mensagem para este número
-  onlyInteracted  Boolean @default(false)
+  onlyInteracted Boolean @default(false)
 
   // Automation & Presence
-  welcomeMessage  String? @db.Text
-  autoRead        Boolean @default(false)
-  alwaysOnline    Boolean @default(false)
+  welcomeMessage String? @db.Text
+  autoRead       Boolean @default(false)
+  alwaysOnline   Boolean @default(false)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model SystemConfig {
-  id                 String   @id @default("default") // Singleton ID
-  appName            String   @default("Saiaê")
+  id                 String  @id @default("default") // Singleton ID
+  appName            String  @default("Saiaê")
   logoUrl            String?
   faviconUrl         String?
-  timezone           String   @default("Asia/Jakarta")
-  enableRegistration Boolean  @default(true)
-  
-  updatedAt          DateTime @updatedAt
+  timezone           String  @default("Asia/Jakarta")
+  enableRegistration Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
 }
 
 // Labels/Tags for organizing chats
 model Label {
-  id          String      @id @default(cuid())
-  sessionId   String
-  name        String
-  color       Int         @default(0) // 0-19 for WhatsApp color codes
-  colorHex    String      @default("#FF0000") // Hex representation
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  
-  chatLabels  ChatLabel[]
-  
+  id        String   @id @default(cuid())
+  sessionId String
+  name      String
+  color     Int      @default(0) // 0-19 for WhatsApp color codes
+  colorHex  String   @default("#FF0000") // Hex representation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chatLabels ChatLabel[]
+
   @@unique([sessionId, name]) // Unique label name per session
   @@index([sessionId])
 }
@@ -346,28 +346,28 @@ model Label {
 model ChatLabel {
   id        String   @id @default(cuid())
   labelId   String
-  chatJid   String   // The JID of the chat
+  chatJid   String // The JID of the chat
   createdAt DateTime @default(now())
-  
-  label     Label    @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  
+
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
   @@unique([labelId, chatJid]) // Prevent duplicate label assignments
   @@index([chatJid])
   @@index([labelId])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
-  userId    String
-  title     String
-  message   String   @db.Text
-  type      String   @default("INFO") // INFO, WARNING, SUCCESS, SYSTEM
-  read      Boolean  @default(false)
-  href      String?
-  
+  id      String  @id @default(cuid())
+  userId  String
+  title   String
+  message String  @db.Text
+  type    String  @default("INFO") // INFO, WARNING, SUCCESS, SYSTEM
+  read    Boolean @default(false)
+  href    String?
+
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // Shared session access — allows session owners to grant access to other users
@@ -377,8 +377,8 @@ model SessionAccess {
   userId    String
   createdAt DateTime @default(now())
 
-  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sessionId, userId])
   @@index([userId])
@@ -387,32 +387,32 @@ model SessionAccess {
 
 // Broadcast/Blast history & logs
 model BroadcastLog {
-  id          String              @id @default(cuid())
-  sessionId   String              // WA session ID string
-  message     String              @db.Text
+  id          String    @id @default(cuid())
+  sessionId   String // WA session ID string
+  message     String    @db.Text
   total       Int
-  sent        Int                 @default(0)
-  failed      Int                 @default(0)
-  status      String              @default("running") // running, completed, cancelled
-  delay       Int                 @default(2000)
-  startedAt   DateTime            @default(now())
+  sent        Int       @default(0)
+  failed      Int       @default(0)
+  status      String    @default("running") // running, completed, cancelled
+  delay       Int       @default(2000)
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
 
-  recipients  BroadcastRecipient[]
+  recipients BroadcastRecipient[]
 
   @@index([sessionId])
   @@index([sessionId, startedAt])
 }
 
 model BroadcastRecipient {
-  id              String       @id @default(cuid())
-  broadcastLogId  String
-  jid             String
-  status          String       @default("pending") // pending, sent, failed
-  error           String?      @db.Text
-  sentAt          DateTime?
+  id             String    @id @default(cuid())
+  broadcastLogId String
+  jid            String
+  status         String    @default("pending") // pending, sent, failed
+  error          String?   @db.Text
+  sentAt         DateTime?
 
-  broadcastLog    BroadcastLog @relation(fields: [broadcastLogId], references: [id], onDelete: Cascade)
+  broadcastLog BroadcastLog @relation(fields: [broadcastLogId], references: [id], onDelete: Cascade)
 
   @@index([broadcastLogId])
 }
@@ -420,7 +420,7 @@ model BroadcastRecipient {
 // Controle de conversas lidas no painel (para o contador de não lidas)
 model ChatRead {
   id         String   @id @default(cuid())
-  sessionId  String   // Session.id (cuid)
+  sessionId  String // Session.id (cuid)
   jid        String
   lastReadAt DateTime @default(now())
 
@@ -430,13 +430,13 @@ model ChatRead {
 
 // Consumo mensal por conta (disparos e textos de IA)
 model UsageCounter {
-  id            String   @id @default(cuid())
+  id            String @id @default(cuid())
   userId        String
-  period        String   // AAAA-MM
-  messages      Int      @default(0)
-  aiGenerations Int      @default(0)
+  period        String // AAAA-MM
+  messages      Int    @default(0)
+  aiGenerations Int    @default(0)
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, period])
   @@index([userId])
@@ -444,8 +444,8 @@ model UsageCounter {
 
 // Mensagens enviadas por número em cada dia (limite diário do Modo Seguro)
 model SendDaily {
-  sessionId String   // WA session ID string
-  day       String   // AAAA-MM-DD (America/Sao_Paulo)
+  sessionId String // WA session ID string
+  day       String // AAAA-MM-DD (America/Sao_Paulo)
   count     Int      @default(0)
   updatedAt DateTime @updatedAt
 
@@ -461,7 +461,7 @@ model PasswordReset {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -472,12 +472,12 @@ model StripeSubscription {
   userId        String
   customerId    String
   status        String   @default("incomplete") // active, trialing, past_due, canceled, unpaid...
-  planKey       String?  // ESSENCIAL | PRO | ESCALA
+  planKey       String? // ESSENCIAL | PRO | ESCALA
   extraQuantity Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([customerId])
@@ -503,15 +503,53 @@ model MediaFile {
   mime      String
   size      Int
   data      Bytes
+  publicToken String? @unique // só existe quando a mídia vai para uma postagem (a Meta baixa por /api/public-media/:token)
   createdAt DateTime @default(now())
 
   @@index([userId])
 }
 
+// Contas do Instagram/Facebook para postagens agendadas (token da Página, criptografado)
+model SocialAccount {
+  id          String   @id @default(cuid())
+  userId      String
+  provider    String   // instagram | facebook
+  externalId  String   // id do perfil IG (instagram) ou da Página (facebook)
+  pageId      String   // Página do Facebook (para o Instagram, a Página ligada)
+  name        String
+  username    String?
+  picture     String?  @db.Text
+  accessToken String   @db.Text // AES-256-GCM, ver src/modules/social/crypto.ts
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, provider, externalId])
+  @@index([userId])
+}
+
+// Postagem/Story agendado
+model ScheduledPost {
+  id          String    @id @default(cuid())
+  userId      String
+  accountId   String
+  type        String    // FEED | STORY
+  caption     String?   @db.Text
+  mediaIds    Json      // string[] de MediaFile.id
+  publishAt   DateTime
+  status      String    @default("PENDING") // PENDING | PUBLISHING | PUBLISHED | FAILED
+  releaseId   String?
+  releaseUrl  String?   @db.Text
+  error       String?   @db.Text
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([status, publishAt])
+}
+
 // Quem respondeu SAIR: não recebe mais disparos desse número (phoneKey = últimos 8 dígitos, ignora o 9º dígito)
 model OptOut {
   id        String   @id @default(cuid())
-  sessionId String   // WA session ID string
+  sessionId String // WA session ID string
   phoneKey  String
   jid       String
   createdAt DateTime @default(now())
@@ -527,15 +565,15 @@ model OptOut {
 
 /// Uma conversa por (loja, cliente). `contactKey` = telefone com DDI, ou BSUID se o telefone estiver oculto.
 model IaConversa {
-  id              String       @id @default(cuid())
-  lojaCodigo      String // codigo de 6 caracteres do link da loja (ia_codigo da Comanda)
-  contactKey      String
-  estado          String       @default("ia") // ia | humano
-  pausadaAte      DateTime? // humano: volta sozinha a ia depois disso
-  ultimaMensagemEm DateTime    @default(now())
-  criadoEm        DateTime     @default(now())
+  id               String    @id @default(cuid())
+  lojaCodigo       String // codigo de 6 caracteres do link da loja (ia_codigo da Comanda)
+  contactKey       String
+  estado           String    @default("ia") // ia | humano
+  pausadaAte       DateTime? // humano: volta sozinha a ia depois disso
+  ultimaMensagemEm DateTime  @default(now())
+  criadoEm         DateTime  @default(now())
 
-  mensagens       IaMensagem[]
+  mensagens IaMensagem[]
 
   @@unique([lojaCodigo, contactKey])
   @@index([contactKey, ultimaMensagemEm])
@@ -544,14 +582,14 @@ model IaConversa {
 /// Mensagens da conversa. Retencao maxima de 30 dias (limpeza diaria). `providerMessageId` (wamid) garante
 /// idempotencia: a Meta reenvia o mesmo webhook.
 model IaMensagem {
-  id                String     @id @default(cuid())
+  id                String   @id @default(cuid())
   conversaId        String
-  providerMessageId String     @unique
+  providerMessageId String   @unique
   direcao           String // in | out
-  texto             String     @db.Text
-  criadoEm          DateTime   @default(now())
+  texto             String   @db.Text
+  criadoEm          DateTime @default(now())
 
-  conversa          IaConversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+  conversa IaConversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
 
   @@index([conversaId, criadoEm])
   @@index([criadoEm])
@@ -587,27 +625,27 @@ model IaLead {
 
 /// Configuração do agente de um número (sessão). `conhecimento` é o texto que o dono edita; vazio = texto padrão da Lavínia.
 model AgenteConfig {
-  sessionId        String   @id // ID da sessão (string do Baileys)
-  ativo            Boolean  @default(false)
-  nome             String   @default("Lavínia")
-  nomeNegocio      String? // como a atendente se apresenta: "assistente virtual da <negócio>"
+  sessionId          String   @id // ID da sessão (string do Baileys)
+  ativo              Boolean  @default(false)
+  nome               String   @default("Lavínia")
+  nomeNegocio        String? // como a atendente se apresenta: "assistente virtual da <negócio>"
   etiquetasInteresse Json? // nomes exatos das etiquetas de interesse (vazio = as do salão)
-  etiquetaAguardando String? @default("Aguardando resposta") // ao chamar a recepção (em branco = não etiqueta)
-  etiquetaFollowUp   String? @default("Sumiu - follow up") // ao mandar o lembrete (em branco = não etiqueta)
-  etiquetaAnuncio    String? @default("Vindo de anúncio do Meta") // conversa vinda de anúncio (em branco = não etiqueta)
-  conhecimento     String?  @db.MediumText
-  promocoes        String?  @db.Text
-  linkAgendamento  String?
-  grupoRecepcaoJid String? // grupo de WhatsApp da recepção (recebe "Cliente aguardando resposta - bot")
-  emailAviso       String? // e-mail que também recebe o aviso (alternativa ao grupo)
-  followUpTexto    String? @db.Text // texto do lembrete; {nome} vira o primeiro nome (vazio = texto padrão do salão)
-  numerosIgnorados Json? // telefones (só dígitos) que a IA nunca atende: equipe, dono
-  followUpHoras    Int      @default(12)
-  pausaHoras       Int      @default(12) // quanto a IA fica calada depois que uma pessoa assume ou a recepção é chamada
-  diasAbertos      String   @default("2,3,4,5,6") // 0=domingo ... 6=sábado (terça a sábado)
-  horaAbre         Int      @default(9)
-  horaFecha        Int      @default(18)
-  atualizadoEm     DateTime @updatedAt
+  etiquetaAguardando String?  @default("Aguardando resposta") // ao chamar a recepção (em branco = não etiqueta)
+  etiquetaFollowUp   String?  @default("Sumiu - follow up") // ao mandar o lembrete (em branco = não etiqueta)
+  etiquetaAnuncio    String?  @default("Vindo de anúncio do Meta") // conversa vinda de anúncio (em branco = não etiqueta)
+  conhecimento       String?  @db.MediumText
+  promocoes          String?  @db.Text
+  linkAgendamento    String?
+  grupoRecepcaoJid   String? // grupo de WhatsApp da recepção (recebe "Cliente aguardando resposta - bot")
+  emailAviso         String? // e-mail que também recebe o aviso (alternativa ao grupo)
+  followUpTexto      String?  @db.Text // texto do lembrete; {nome} vira o primeiro nome (vazio = texto padrão do salão)
+  numerosIgnorados   Json? // telefones (só dígitos) que a IA nunca atende: equipe, dono
+  followUpHoras      Int      @default(12)
+  pausaHoras         Int      @default(12) // quanto a IA fica calada depois que uma pessoa assume ou a recepção é chamada
+  diasAbertos        String   @default("2,3,4,5,6") // 0=domingo ... 6=sábado (terça a sábado)
+  horaAbre           Int      @default(9)
+  horaFecha          Int      @default(18)
+  atualizadoEm       DateTime @updatedAt
 }
 
 /// Estado de cada conversa atendida pelo agente (uma por contato e sessão).

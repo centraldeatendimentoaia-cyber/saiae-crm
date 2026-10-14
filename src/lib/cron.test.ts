@@ -43,6 +43,7 @@ vi.mock("@/lib/interaction", () => ({
 }));
 vi.mock("@/lib/retention", () => ({ startRetention: vi.fn() }));
 vi.mock("@/modules/agente-salao/followup", () => ({ startFollowUps: vi.fn() }));
+vi.mock("@/modules/social/scheduler", () => ({ startSocialScheduler: vi.fn() }));
 vi.mock("@/lib/media", () => ({ resolveMedia: h.resolveMedia }));
 vi.mock("@/lib/personalize", () => ({ personalizeFor: vi.fn(async (_s: string, _to: string, text: string) => text) }));
 vi.mock("@/lib/wa-jid", () => ({ resolveSendJid: vi.fn(async (_sock: unknown, jid: string) => jid) }));
