@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 interface ChatContact {
     jid: string;
+    phoneJid?: string;
     name: string | null;
     notify: string | null;
     profilePic: string | null;
@@ -43,7 +44,7 @@ interface ChatListProps {
 const PAGE_SIZE = parseInt(process.env.NEXT_PUBLIC_CHAT_PAGE_SIZE || "50", 10);
 
 function getDisplayName(chat: ChatContact): string {
-    return chat.name || chat.notify || chat.jid.split('@')[0];
+    return chat.name || chat.notify || (chat.phoneJid || chat.jid).split('@')[0];
 }
 
 function getMessagePreview(chat: ChatContact): string {
@@ -399,7 +400,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         return chats.filter(chat => {
             const name = (chat.name || chat.notify || "").toLowerCase();
             const jid = chat.jid.toLowerCase();
-            return name.includes(q) || jid.includes(q);
+            return name.includes(q) || jid.includes(q) || (chat.phoneJid || "").toLowerCase().includes(q);
         });
     }, [chats, searchQuery]);
 

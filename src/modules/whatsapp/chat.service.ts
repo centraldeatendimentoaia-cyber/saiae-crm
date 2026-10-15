@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeJid } from "@/lib/jid-utils";
+import { normalizeJid, batchResolveToPhoneJid } from "@/lib/jid-utils";
 import { waManager } from "@/modules/whatsapp/manager";
 import { onMessageSent } from "@/lib/webhook";
 import Sticker from "wa-sticker-formatter";
@@ -48,9 +48,12 @@ export class ChatService {
 
         // 2. Batch fetch contacts & groups ONLY for JIDs that have messages
         const jids = rawLastMessages.map(m => m.remoteJid);
+        // Chats "@lid" não têm o telefone no JID: resolve pela agenda (sem match, mantém o ID original).
+        const phoneMap = await batchResolveToPhoneJid(jids, dbSessionId);
+        const lookupJids = [...new Set([...jids, ...phoneMap.values()])];
         const [contacts, groups] = await Promise.all([
             prisma.contact.findMany({
-                where: { sessionId: dbSessionId, jid: { in: jids } },
+                where: { sessionId: dbSessionId, jid: { in: lookupJids } },
                 select: { jid: true, name: true, notify: true, profilePic: true }
             }),
             prisma.group.findMany({
@@ -90,9 +93,11 @@ export class ChatService {
             if (seenJids.has(msg.remoteJid)) continue;
             seenJids.add(msg.remoteJid);
 
-            const info = infoMap.get(msg.remoteJid);
+            const phoneJid = phoneMap.get(msg.remoteJid) || msg.remoteJid;
+            const info = infoMap.get(msg.remoteJid) || infoMap.get(phoneJid);
             result.push({
                 jid: msg.remoteJid,
+                phoneJid,
                 name: info?.name || null,
                 notify: info?.notify || null,
                 profilePic: info?.profilePic || null,
@@ -113,7 +118,8 @@ export class ChatService {
             return result.filter(c =>
                 (c.name || '').toLowerCase().includes(q) ||
                 (c.notify || '').toLowerCase().includes(q) ||
-                c.jid.toLowerCase().includes(q)
+                c.jid.toLowerCase().includes(q) ||
+                c.phoneJid.toLowerCase().includes(q)
             );
         }
 
