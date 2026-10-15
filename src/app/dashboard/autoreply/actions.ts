@@ -5,16 +5,25 @@ import { canAccessSession } from "@/lib/api-auth";
 import { getAuthenticatedUserForAction } from "@/lib/server-action-auth";
 import { Prisma } from "@prisma/client";
 
+const MATCH_TYPES = ["EXACT", "CONTAINS", "REGEX"];
+const TRIGGER_TYPES = ["ALL", "GROUP", "PRIVATE"];
+
+/** Mesmos valores aceitos pela API (/api/autoreplies): evita gravar tipos que o motor de respostas não reconhece. */
+function validarTipos(data: { matchType?: string; triggerType?: string }) {
+    if (data.matchType && !MATCH_TYPES.includes(data.matchType)) throw new Error("matchType inválido (use EXACT, CONTAINS ou REGEX)");
+    if (data.triggerType && !TRIGGER_TYPES.includes(data.triggerType)) throw new Error("triggerType inválido (use ALL, GROUP ou PRIVATE)");
+}
+
 // Fetch rules directly from DB without API call
 export async function getAutoReplies(sessionId: string) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
-        throw new Error("Unauthorized");
+        throw new Error("Não autorizado");
     }
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, sessionId);
     if (!canAccess) {
-        throw new Error("Forbidden");
+        throw new Error("Acesso negado");
     }
 
     const session = await prisma.session.findUnique({
@@ -23,7 +32,7 @@ export async function getAutoReplies(sessionId: string) {
     });
 
     if (!session) {
-        throw new Error("Session not found");
+        throw new Error("Sessão não encontrada");
     }
 
     const rules = await prisma.autoReply.findMany({
@@ -38,16 +47,17 @@ export async function getAutoReplies(sessionId: string) {
 export async function createAutoReply(sessionId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string }) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
-        throw new Error("Unauthorized");
+        throw new Error("Não autorizado");
     }
 
     if (!data.keyword || (!data.response && !data.mediaUrl)) {
-        throw new Error("Keyword and either response or media are required");
+        throw new Error("Palavra-chave e resposta (ou mídia) são obrigatórias");
     }
+    validarTipos(data);
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, sessionId);
     if (!canAccess) {
-        throw new Error("Forbidden");
+        throw new Error("Acesso negado");
     }
 
     const session = await prisma.session.findUnique({
@@ -56,7 +66,7 @@ export async function createAutoReply(sessionId: string, data: { keyword: string
     });
 
     if (!session) {
-        throw new Error("Session not found");
+        throw new Error("Sessão não encontrada");
     }
 
     const createData: Prisma.AutoReplyUncheckedCreateInput = {
@@ -67,7 +77,6 @@ export async function createAutoReply(sessionId: string, data: { keyword: string
         isMedia: !!data.mediaUrl,
         mediaUrl: data.mediaUrl || null,
         mediaType: data.mediaType || null,
-        // @ts-ignore
         triggerType: data.triggerType || "ALL"
     };
 
@@ -81,7 +90,7 @@ export async function createAutoReply(sessionId: string, data: { keyword: string
 export async function deleteAutoReply(sessionId: string, ruleId: string) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
-        throw new Error("Unauthorized");
+        throw new Error("Não autorizado");
     }
 
     const rule = await prisma.autoReply.findUnique({
@@ -90,12 +99,12 @@ export async function deleteAutoReply(sessionId: string, ruleId: string) {
     });
 
     if (!rule) {
-        throw new Error("Rule not found");
+        throw new Error("Regra não encontrada");
     }
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, rule.session.sessionId);
     if (!canAccess || rule.session.sessionId !== sessionId) {
-        throw new Error("Forbidden");
+        throw new Error("Acesso negado");
     }
 
     await prisma.autoReply.delete({ where: { id: ruleId } });
@@ -105,12 +114,13 @@ export async function deleteAutoReply(sessionId: string, ruleId: string) {
 export async function updateAutoReply(sessionId: string, ruleId: string, data: { keyword: string; response?: string; matchType: string; isMedia: boolean; mediaUrl?: string | null; mediaType?: string | null; triggerType: string }) {
     const nextAuthSession = await getAuthenticatedUserForAction();
     if (!nextAuthSession) {
-        throw new Error("Unauthorized");
+        throw new Error("Não autorizado");
     }
 
     if (!data.keyword || (!data.response && !data.mediaUrl)) {
-        throw new Error("Keyword and either response or media are required");
+        throw new Error("Palavra-chave e resposta (ou mídia) são obrigatórias");
     }
+    validarTipos(data);
 
     const rule = await prisma.autoReply.findUnique({
         where: { id: ruleId },
@@ -118,12 +128,12 @@ export async function updateAutoReply(sessionId: string, ruleId: string, data: {
     });
 
     if (!rule) {
-        throw new Error("Rule not found");
+        throw new Error("Regra não encontrada");
     }
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, rule.session.sessionId);
     if (!canAccess || rule.session.sessionId !== sessionId) {
-        throw new Error("Forbidden");
+        throw new Error("Acesso negado");
     }
 
     const updateData: Prisma.AutoReplyUncheckedUpdateInput = {
@@ -133,7 +143,6 @@ export async function updateAutoReply(sessionId: string, ruleId: string, data: {
         isMedia: !!data.mediaUrl,
         mediaUrl: data.mediaUrl || null,
         mediaType: data.mediaType || null,
-        // @ts-ignore
         triggerType: data.triggerType || "ALL"
     };
 

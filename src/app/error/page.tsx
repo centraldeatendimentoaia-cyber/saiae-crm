@@ -67,7 +67,7 @@ function ErrorContent() {
     icon: <HelpCircle className="size-12 animate-pulse" />,
     title: code,
     subtitle: 'Ocorreu um erro',
-    description: customMessage || 'Terjadi kesalahan atau kendala tak terduga pada aplikasi.',
+    description: customMessage || 'Ocorreu um erro inesperado no aplicativo.',
     colorTheme: 'primary',
   };
 

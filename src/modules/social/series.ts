@@ -1,9 +1,10 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import moment from "moment-timezone";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { PostType, Provider, parseClock } from "./validate";
+import { PostType, Provider, asRecord, parseClock } from "./validate";
 
-export const TZ = "America/Sao_Paulo";
+export const TZ = TZ_SAO_PAULO;
 /** Quanto à frente o sistema mantém postagens geradas. */
 export const HORIZON_DAYS = 56;
 export const MAX_ACCOUNTS = 5;
@@ -41,13 +42,14 @@ export function parseVariants(raw: unknown, type: PostType, providers: Provider[
     const limit = Math.min(...providers.map((p) => MAX_CAPTION[p]));
     const out: Variant[] = [];
     for (const [i, v] of raw.entries()) {
-        const mediaIds: string[] = Array.isArray(v?.mediaIds) ? v.mediaIds.filter((x: unknown) => typeof x === "string") : [];
+        const vr = asRecord(v);
+        const mediaIds: string[] = Array.isArray(vr.mediaIds) ? vr.mediaIds.filter((x): x is string => typeof x === "string") : [];
         const n = `Variação ${i + 1}`;
         if (mediaIds.length < 1) return { error: `${n}: escolha pelo menos uma imagem.` };
         if (new Set(mediaIds).size !== mediaIds.length) return { error: `${n}: imagem repetida.` };
         if (type === "STORY" && mediaIds.length !== 1) return { error: `${n}: Story aceita exatamente 1 imagem.` };
         if (mediaIds.length > 10) return { error: `${n}: no máximo 10 imagens.` };
-        const caption = type === "STORY" ? "" : typeof v?.caption === "string" ? v.caption.trim() : "";
+        const caption = type === "STORY" ? "" : typeof vr.caption === "string" ? vr.caption.trim() : "";
         if (caption.length > limit) return { error: `${n}: legenda grande demais (máx. ${limit} caracteres).` };
         out.push({ caption, mediaIds });
     }
@@ -55,38 +57,43 @@ export function parseVariants(raw: unknown, type: PostType, providers: Provider[
 }
 
 /** Corpo de POST /api/social/series. `today` (YYYY-MM-DD) existe para os testes. */
-export function parseSeries(body: any, providers: Provider[], today = moment.tz(TZ).format("YYYY-MM-DD")): { error: string } | { value: SeriesInput } {
-    const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
+export function parseSeries(body: unknown, providers: Provider[], today = moment.tz(TZ).format("YYYY-MM-DD")): { error: string } | { value: SeriesInput } {
+    const b = asRecord(body);
+    const name = typeof b.name === "string" ? b.name.trim().slice(0, 80) : "";
     if (!name) return { error: "Dê um nome para a série." };
 
-    const accountIds: string[] = Array.isArray(body?.accountIds) ? [...new Set<string>(body.accountIds.filter((x: unknown) => typeof x === "string"))] : [];
+    const accountIds: string[] = Array.isArray(b.accountIds) ? [...new Set<string>(b.accountIds.filter((x): x is string => typeof x === "string"))] : [];
     if (accountIds.length < 1) return { error: "Escolha pelo menos uma conta." };
     if (accountIds.length > MAX_ACCOUNTS) return { error: `No máximo ${MAX_ACCOUNTS} contas por série.` };
 
-    const type = body?.type;
+    const type = b.type;
     if (type !== "FEED" && type !== "STORY") return { error: "Tipo inválido (use FEED ou STORY)." };
 
-    const weekdays: number[] = Array.isArray(body?.weekdays) ? [...new Set<number>(body.weekdays.filter((d: unknown) => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6))].sort() : [];
+    const weekdays: number[] = Array.isArray(b.weekdays) ? [...new Set<number>(b.weekdays.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : [];
     if (weekdays.length < 1) return { error: "Escolha pelo menos um dia da semana." };
 
-    if (parseClock(body?.time) === null) return { error: "Horário inválido (use HH:MM)." };
+    const time = b.time;
+    if (typeof time !== "string" || parseClock(time) === null) return { error: "Horário inválido (use HH:MM)." };
 
-    if (!validDay(body?.startDate)) return { error: "Data de início inválida." };
-    if (body.startDate < today) return { error: "A data de início já passou." };
+    const startDate = b.startDate;
+    if (!validDay(startDate)) return { error: "Data de início inválida." };
+    if (startDate < today) return { error: "A data de início já passou." };
 
-    const endDate = body?.endDate ?? null;
-    if (endDate !== null && !validDay(endDate)) return { error: "Data final inválida." };
-    if (endDate !== null && endDate < body.startDate) return { error: "A data final é antes do início." };
-    if (endDate !== null && moment(endDate).diff(moment(body.startDate), "day") > 366) return { error: "A série pode durar no máximo 1 ano." };
+    const endRaw = b.endDate ?? null;
+    if (endRaw !== null && !validDay(endRaw)) return { error: "Data final inválida." };
+    const endDate = endRaw as string | null;
+    if (endDate !== null && endDate < startDate) return { error: "A data final é antes do início." };
+    if (endDate !== null && moment(endDate).diff(moment(startDate), "day") > 366) return { error: "A série pode durar no máximo 1 ano." };
 
-    const maxCount = body?.maxCount ?? null;
-    if (maxCount !== null && (!Number.isInteger(maxCount) || maxCount < 1 || maxCount > MAX_OCCURRENCES)) return { error: `Número de postagens deve ficar entre 1 e ${MAX_OCCURRENCES}.` };
+    const maxRaw = b.maxCount ?? null;
+    if (maxRaw !== null && (typeof maxRaw !== "number" || !Number.isInteger(maxRaw) || maxRaw < 1 || maxRaw > MAX_OCCURRENCES)) return { error: `Número de postagens deve ficar entre 1 e ${MAX_OCCURRENCES}.` };
+    const maxCount = maxRaw as number | null;
     if (endDate === null && maxCount === null) return { error: "Defina quando a série termina: uma data final ou um número de postagens." };
 
-    const variants = parseVariants(body?.variants, type, providers);
+    const variants = parseVariants(b.variants, type, providers);
     if ("error" in variants) return variants;
 
-    return { value: { name, accountIds, type, weekdays, time: body.time, startDate: body.startDate, endDate, maxCount, variants: variants.value } };
+    return { value: { name, accountIds, type, weekdays, time, startDate, endDate, maxCount, variants: variants.value } };
 }
 
 /** Texto curto da regra: "toda terça e quinta às 10:00". */

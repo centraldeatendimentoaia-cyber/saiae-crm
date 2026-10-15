@@ -1,6 +1,14 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+// duration em segundos: vazio ou 0 = desmutar, -1 = para sempre
+const schema = z.object({
+    mute: z.boolean({ error: "informe mute (true ou false)" }),
+    duration: opt(z.number()),
+});
 
 // PUT: Mute or unmute a chat
 export async function PUT(
@@ -14,13 +22,9 @@ export async function PUT(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { mute, duration } = body;
-
-        if (mute === undefined) {
-            return NextResponse.json({ status: false, message: "mute (boolean) is required", error: "mute (boolean) is required" }, { status: 400 });
-        }
-        
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { mute, duration } = lido.data;
         const decodedJid = decodeURIComponent(jid);
 
         // Check if user can access this session

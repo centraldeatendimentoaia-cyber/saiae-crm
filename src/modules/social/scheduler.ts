@@ -1,3 +1,4 @@
+import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -42,8 +43,8 @@ export async function publishOne(postId: string): Promise<void> {
             data: { status: "PUBLISHED", releaseId: result.id, releaseUrl: result.url ?? null, publishedAt: new Date(), error: null },
         });
         logger.info("Social", `Post ${post.id} publicado (${account.provider}/${type})`);
-    } catch (err: any) {
-        const message = String(err?.message || err).slice(0, 1000);
+    } catch (err) {
+        const message = String((err as Error)?.message || err).slice(0, 1000);
         logger.error("Social", `Post ${postId} falhou: ${message}`);
         await prisma.scheduledPost.update({ where: { id: postId }, data: { status: "FAILED", error: message } });
         const reconnect = err instanceof GraphError && err.needsReconnect;
@@ -82,17 +83,22 @@ export async function publishDue(): Promise<void> {
 export function startSocialScheduler() {
     // Se o servidor caiu no meio de uma publicação não dá para saber se a Meta aceitou:
     // marca como falha com aviso (re-publicar automaticamente poderia duplicar o post).
-    prisma.scheduledPost
-        .updateMany({
-            where: { status: "PUBLISHING" },
-            data: { status: "FAILED", error: "Interrompido por reinício do servidor. Confira o perfil antes de publicar de novo (pode já ter saído)." },
+    // Com outra instância viva (deploy sobreposto) só mexe nas que travaram há mais de 15 min.
+    outrasInstanciasVivas()
+        .then((outras) => {
+            registrarInstancia();
+            const antigas = outras === 0 ? {} : { publishAt: { lt: new Date(Date.now() - 15 * 60_000) } };
+            return prisma.scheduledPost.updateMany({
+                where: { status: "PUBLISHING", ...antigas },
+                data: { status: "FAILED", error: "Interrompido por reinício do servidor. Confira o perfil antes de publicar de novo (pode já ter saído)." },
+            });
         })
         .catch(() => {});
 
-    cron.schedule("* * * * *", () => void publishDue());
+    cron.schedule("* * * * *", () => void withJobLock("cron:social-publicar", 10 * 60_000, publishDue));
 
     // séries recorrentes: mantém as próximas 8 semanas geradas (na subida e a cada hora)
-    void extendAllSeries();
-    cron.schedule("7 * * * *", () => void extendAllSeries());
+    void withJobLock("cron:social-series", 10 * 60_000, extendAllSeries);
+    cron.schedule("7 * * * *", () => void withJobLock("cron:social-series", 10 * 60_000, extendAllSeries));
     logger.info("Social", "Social scheduler initialized");
 }

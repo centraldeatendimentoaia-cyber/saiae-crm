@@ -4,6 +4,23 @@ import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import moment from "moment-timezone";
 import { withFooter } from "@/lib/optout";
 import { canonicalPhone } from "@/lib/phone";
+import cronParser from "cron-parser";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    jid: opt(z.string()),
+    jids: opt(z.array(z.unknown())),
+    spacingMs: opt(z.union([z.number(), z.string()])),
+    optOutFooter: opt(z.boolean()),
+    variants: opt(z.array(z.unknown())),
+    content: opt(z.string()),
+    sendAt: z.union([z.string().min(1), z.number()], { error: "informe a data e hora do envio (sendAt)" }),
+    mediaUrl: opt(z.string()),
+    mediaType: opt(z.string()),
+    cronExpression: opt(z.string().refine((c) => { try { cronParser.parse(c); return true; } catch { return false; } }, "expressão cron inválida")),
+    recurrenceRule: opt(z.string()),
+});
 
 // GET: List Scheduled Messages
 export async function GET(
@@ -71,12 +88,15 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const body = lido.data;
         const { jid, jids, spacingMs, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule, optOutFooter } = body;
+
         // Versões extras do texto: cada destinatário recebe uma delas, em rodízio
-        const variants: string[] = Array.isArray(body.variants) ? body.variants.filter((v: unknown) => typeof v === "string" && v.trim()).slice(0, 5) : [];
+        const variants: string[] = Array.isArray(body.variants) ? body.variants.filter((v): v is string => typeof v === "string" && !!v.trim()).slice(0, 5) : [];
         const copies: string[] = ([content || "", ...variants] as string[]).map(c => (optOutFooter ? withFooter(c) : c));
-        const rawTargets: string[] = Array.isArray(jids) ? jids.filter((j: unknown) => typeof j === "string" && j) : (jid ? [jid] : []);
+        const rawTargets: string[] = Array.isArray(jids) ? jids.filter((j): j is string => typeof j === "string" && !!j) : (jid ? [jid] : []);
         // a mesma pessoa (com/sem o 9º dígito) só entra uma vez
         const seenKeys = new Set<string>();
         const targets = rawTargets.filter(t => {
@@ -87,7 +107,7 @@ export async function POST(
         });
 
         if (targets.length === 0 || targets.length > 500 || (!content && !mediaUrl) || !sendAt) {
-            return NextResponse.json({ status: false, message: "Missing required fields (recipients up to 500, Content/Media, SendAt)", error: "Missing required fields" }, { status: 400 });
+            return NextResponse.json({ status: false, message: "Informe de 1 a 500 destinatários, o texto ou uma mídia e a data de envio.", error: "Informe de 1 a 500 destinatários, o texto ou uma mídia e a data de envio." }, { status: 400 });
         }
 
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

@@ -5,6 +5,7 @@ import type { TemplateInput } from "@/modules/whatsapp/provider/types";
 import { buscarContexto, type IaContexto, type IaContextoAtivo } from "./comanda-contexto";
 import type { MotivoDono } from "./ferramentas";
 import { VENDAS, type ConversaRef, type IaStore } from "./store";
+import { iaPausada } from "@/modules/atendimento-comum/pausa";
 import { diaSaoPaulo } from "./tempo";
 
 export { diaSaoPaulo };
@@ -38,7 +39,7 @@ const MOTIVOS: Record<MotivoAviso, string> = {
 /** Parâmetro de template: uma linha, sem espaços repetidos, nunca vazio. */
 const param = (v: string, max = 60) => (v.replace(/\s+/g, " ").trim() || "-").slice(0, max);
 
-export const pausadaAgora = (c: Pick<ConversaRef, "estado" | "pausadaAte">, agora: Date) => c.estado === "humano" && c.pausadaAte !== null && c.pausadaAte > agora;
+export const pausadaAgora = iaPausada;
 
 /**
  * A dúvida do cliente como parâmetro de template: uma linha, sem links (um link na mão do responsável é risco de golpe),

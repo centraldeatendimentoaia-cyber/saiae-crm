@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { useCallback, useEffect, useState } from "react";
 import { UserX, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -54,8 +55,8 @@ export default function DescadastrosPage() {
             toast.success(`${data.data.added} ${data.data.added === 1 ? "número adicionado" : "números adicionados"} à lista.`);
             setPhones("");
             load();
-        } catch (e: any) {
-            toast.error(e.message || "Falha ao adicionar");
+        } catch (e) {
+            toast.error(errorMessage(e, "Falha ao adicionar"));
         } finally {
             setSaving(false);
         }

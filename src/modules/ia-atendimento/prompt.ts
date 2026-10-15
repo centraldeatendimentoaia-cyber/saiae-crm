@@ -1,3 +1,6 @@
+import { agoraSaoPaulo } from "@/modules/atendimento-comum/tempo";
+
+export { agoraSaoPaulo };
 import type { IaContextoAtivo } from "./comanda-contexto";
 
 /**
@@ -15,13 +18,6 @@ export function neutralizar(texto: string | null | undefined): string {
 const reais = (centavos: number) => `R$ ${(centavos / 100).toFixed(2).replace(".", ",")}`;
 
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
-
-/** "segunda-feira, 14:35" no fuso de São Paulo (a IA não tem relógio: sem isso ela chuta o dia e a hora). */
-export function agoraSaoPaulo(d: Date): string {
-    const dia = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long" }).format(d);
-    const hora = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
-    return `${dia}, ${hora}`;
-}
 
 const MSG_ABERTA = (a: boolean | null) => (a === null ? "Aberta agora: não informado (a loja não cadastrou horário)" : `Aberta agora: ${a ? "sim" : "não"}`);
 

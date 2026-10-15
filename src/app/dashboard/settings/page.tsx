@@ -1,5 +1,7 @@
 "use client";
 
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -11,16 +13,17 @@ import { toast } from "sonner";
 
 export default function SettingsPage() {
     const { data: authSession } = useSession();
-    const isSuperAdmin = (authSession?.user as any)?.role === "SUPERADMIN";
+    const isSuperAdmin = authSession?.user?.role === "SUPERADMIN";
 
     const [systemConfig, setSystemConfig] = useState({
         appName: "Saiaê",
         logoUrl: "",
-        timezone: "America/Sao_Paulo",
+        faviconUrl: "/favicon.ico",
+        timezone: TZ_SAO_PAULO,
         enableRegistration: true
     });
     const [systemLoading, setSystemLoading] = useState(false);
-    const [timezones, setTimezones] = useState<string[]>(["UTC", "America/Sao_Paulo", "Asia/Makassar", "Asia/Jayapura"]);
+    const [timezones, setTimezones] = useState<string[]>(["UTC", TZ_SAO_PAULO, "Asia/Makassar", "Asia/Jayapura"]);
 
     useEffect(() => {
         try {
@@ -33,7 +36,7 @@ export default function SettingsPage() {
                 setTimezones(list);
             }
         } catch (e) {
-            console.error("Failed to load timezones dynamically", e);
+            logger.error("Settings", "Failed to load timezones dynamically", e);
         }
     }, []);
 
@@ -46,9 +49,8 @@ export default function SettingsPage() {
                     setSystemConfig({
                         appName: data.appName || "Saiaê",
                         logoUrl: data.logoUrl || "",
-                        // @ts-ignore
                         faviconUrl: data.faviconUrl || "/favicon.ico",
-                        timezone: data.timezone || "America/Sao_Paulo",
+                        timezone: data.timezone || TZ_SAO_PAULO,
                         enableRegistration: data.enableRegistration !== undefined ? data.enableRegistration : true
                     });
                 }
@@ -71,7 +73,7 @@ export default function SettingsPage() {
                 toast.error("Falha ao atualizar as configurações do sistema");
             }
         } catch (e) {
-            console.error(e);
+            logger.error("Settings", "Erro", e);
             toast.error("Erro ao salvar as configurações do sistema");
         } finally {
             setSystemLoading(false);
@@ -159,7 +161,7 @@ export default function SettingsPage() {
                             <input
                                 className={inputClass}
                                 placeholder="/favicon.ico"
-                                value={(systemConfig as any).faviconUrl || ""}
+                                value={systemConfig.faviconUrl || ""}
                                 onChange={(e) => setSystemConfig(prev => ({ ...prev, faviconUrl: e.target.value }))}
                                 disabled={!isSuperAdmin}
                             />

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/prisma";
 
@@ -15,11 +16,10 @@ export const contentType = "image/png";
 export default async function Icon() {
     // Default config
     let letter = "s";
-    let color = "#FFC21A";
+    const color = "#FFC21A";
 
     try {
         // Fetch system config
-        // @ts-ignore
         const config = await prisma.systemConfig.findUnique({
             where: { id: "default" }
         });
@@ -28,7 +28,7 @@ export default async function Icon() {
             letter = "s";
         }
     } catch (e) {
-        console.error("Failed to fetch favicon config", e);
+        logger.error("Icon", "Failed to fetch favicon config", e);
     }
 
     return new ImageResponse(

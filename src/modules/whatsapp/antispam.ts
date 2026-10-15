@@ -1,3 +1,4 @@
+import type { AnyMessageContent } from "@whiskeysockets/baileys";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -16,7 +17,7 @@ interface QueueItem {
     messageType: string;
     queuedAt: number;
     resolve: () => void;
-    reject: (err: any) => void;
+    reject: (err: unknown) => void;
 }
 
 class AntiSpamManager {
@@ -40,7 +41,7 @@ class AntiSpamManager {
      * Enqueue a message and wait for it to be processed.
      * Returns only when it's this message's turn to send.
      */
-    async enqueue(sessionId: string, jid: string, content: any): Promise<void> {
+    async enqueue(sessionId: string, jid: string, content: AnyMessageContent): Promise<void> {
         const config = await this.getAntiSpamConfig(sessionId);
 
         if (!config || !config.antiSpamEnabled) {
@@ -164,8 +165,9 @@ class AntiSpamManager {
         );
     }
 
-    private detectMessageType(content: any): string {
-        if (!content) return "unknown";
+    private detectMessageType(msg: AnyMessageContent | undefined): string {
+        if (!msg) return "unknown";
+        const content = msg as Record<string, unknown>;
         if (content.text) return "text";
         if (content.image) return "image";
         if (content.video) return "video";

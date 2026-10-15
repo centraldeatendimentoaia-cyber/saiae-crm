@@ -47,7 +47,7 @@ app.prepare().then(() => {
 
   setupSocket(io);
   // Optional: Global instance for Baileys to emit events
-  (global as any).io = io;
+  global.io = io;
 
   // Initialize WhatsApp Manager
   waManager.setup(io);

@@ -1,6 +1,7 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import moment from "moment-timezone";
 
-export const TZ = "America/Sao_Paulo";
+export const TZ = TZ_SAO_PAULO;
 
 export type Provider = "instagram" | "facebook";
 export type PostType = "FEED" | "STORY";

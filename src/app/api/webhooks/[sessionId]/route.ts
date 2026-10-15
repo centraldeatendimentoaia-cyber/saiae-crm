@@ -1,6 +1,15 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    name: z.string().min(1, "informe o nome"),
+    url: z.url({ protocol: /^https?$/, error: "informe uma URL http ou https válida" }),
+    secret: opt(z.string()),
+    events: z.array(z.string().min(1)).min(1, "informe ao menos um evento"),
+});
 
 export async function GET(
     request: NextRequest,
@@ -68,12 +77,9 @@ export async function POST(
     }
 
     try {
-        const body = await request.json();
-        const { name, url, secret, events } = body;
-
-        if (!name || !url || !events || events.length === 0) {
-            return NextResponse.json({ status: false, message: "Name, URL, and at least one event are required", error: "Name, URL, and at least one event are required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name, url, secret, events } = lido.data;
 
         const session = await prisma.session.findUnique({
             where: { sessionId: sessionId },

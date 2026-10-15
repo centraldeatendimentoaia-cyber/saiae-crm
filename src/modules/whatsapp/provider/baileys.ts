@@ -1,11 +1,16 @@
-import { resolveSendJid } from "@/lib/wa-jid";
+import { resolveSendJid, type JidLookup } from "@/lib/wa-jid";
 import type { ProviderCapabilities, SendMediaInput, SendResult, WhatsAppProvider } from "./types";
 
 /** O mínimo que o provedor precisa da instância do Baileys (facilita o teste). */
 export interface BaileysInstanceLike {
     sessionId: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    socket: any | null;
+    // Parcial: os testes passam sockets de mentira com só o que usam
+    socket: Partial<BaileysSocketLike> | null;
+}
+
+/** O que o provedor usa do socket do Baileys. */
+export interface BaileysSocketLike extends JidLookup {
+    sendMessage(jid: string, content: Record<string, unknown>): Promise<{ key?: { id?: string | null } } | undefined>;
 }
 
 const CAPABILITIES: ProviderCapabilities = {
@@ -46,7 +51,7 @@ export class BaileysProvider implements WhatsAppProvider {
 
     private get socket() {
         if (!this.instance.socket) throw new Error("Sessão do WhatsApp não está conectada");
-        return this.instance.socket;
+        return this.instance.socket as BaileysSocketLike;
     }
 
     async resolveRecipient(to: string): Promise<string> {

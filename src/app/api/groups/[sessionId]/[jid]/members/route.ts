@@ -2,6 +2,13 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    action: z.enum(["add", "remove", "promote", "demote"], { error: "use add, remove, promote ou demote" }),
+    participants: z.array(z.string().min(1)).min(1, "informe ao menos um participante"),
+});
 
 // PUT: Update group members (add, remove, promote, demote)
 export async function PUT(
@@ -16,23 +23,9 @@ export async function PUT(
         
         const { sessionId, jid } = await params;
         const decodedJid = decodeURIComponent(jid);
-        const body = await request.json();
-        const { action, participants } = body;
-
-        if (!action || !participants || !Array.isArray(participants)) {
-            return NextResponse.json({ status: false, message: "action and participants (array) are required", error: "action and participants (array) are required" }, { status: 400 });
-        }
-
-        const validActions = ['add', 'remove', 'promote', 'demote'];
-        if (!validActions.includes(action)) {
-            return NextResponse.json({ 
-                error: `Invalid action. Must be one of: ${validActions.join(', ')}` 
-            }, { status: 400 });
-        }
-
-        if (participants.length === 0) {
-            return NextResponse.json({ status: false, message: "Participants array cannot be empty", error: "Participants array cannot be empty" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { action, participants } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

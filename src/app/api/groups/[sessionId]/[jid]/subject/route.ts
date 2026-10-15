@@ -2,6 +2,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ subject: z.string().min(1, "informe o assunto").max(100, "o assunto pode ter no máximo 100 caracteres") });
 
 // PUT: Update group subject/name
 export async function PUT(
@@ -16,16 +20,9 @@ export async function PUT(
 
         const { sessionId, jid } = await params;
         const decodedJid = decodeURIComponent(jid);
-        const body = await request.json();
-        const { subject } = body;
-
-        if (!subject) {
-            return NextResponse.json({ status: false, message: "subject is required", error: "subject is required" }, { status: 400 });
-        }
-
-        if (subject.length > 100) {
-            return NextResponse.json({ status: false, message: "Subject must be 100 characters or less", error: "Subject must be 100 characters or less" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { subject } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

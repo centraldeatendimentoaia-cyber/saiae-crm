@@ -22,7 +22,7 @@ export const usePrismaAuthState = async (sessionId: string): Promise<{ state: Au
     };
 
     // Helper to write data
-    const writeData = async (type: string, id: string, data: any) => {
+    const writeData = async (type: string, id: string, data: unknown) => {
         try {
             const key = `${type}-${id}`;
             const value = JSON.parse(JSON.stringify(data, BufferJSON.replacer));

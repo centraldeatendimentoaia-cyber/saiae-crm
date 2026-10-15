@@ -1,0 +1,34 @@
+/** Datas no fuso de São Paulo. Sem dependências: pode ser importado por qualquer módulo (inclusive o avaliador) sem subir banco nem agendador. */
+
+export const TZ_SAO_PAULO = "America/Sao_Paulo";
+
+/** "AAAA-MM-DD" no fuso de São Paulo. */
+export function diaSaoPaulo(d: Date): string {
+    const p = new Intl.DateTimeFormat("en-US", { timeZone: TZ_SAO_PAULO, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+    const v = (t: string) => p.find((x) => x.type === t)?.value;
+    return `${v("year")}-${v("month")}-${v("day")}`;
+}
+
+/** Dia da semana (0 = domingo) e hora (0-23) em Brasília. */
+export function diaEHora(d: Date): { dia: number; hora: number } {
+    const f = new Intl.DateTimeFormat("en-US", { timeZone: TZ_SAO_PAULO, weekday: "short", hour: "numeric", hourCycle: "h23" });
+    const o: Record<string, string> = {};
+    for (const p of f.formatToParts(d)) o[p.type] = p.value;
+    const dias = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return { dia: dias.indexOf(o.weekday), hora: Number(o.hour) };
+}
+
+/** "AAAA-MM" no fuso de São Paulo. */
+export function mesSaoPaulo(d: Date): string {
+    const partes = new Intl.DateTimeFormat("en-US", { timeZone: TZ_SAO_PAULO, year: "numeric", month: "2-digit" }).formatToParts(d);
+    const ano = partes.find((p) => p.type === "year")?.value;
+    const mes = partes.find((p) => p.type === "month")?.value;
+    return `${ano}-${mes}`;
+}
+
+/** "segunda-feira, 14:35" no fuso de São Paulo (a IA não tem relógio: sem isso ela chuta o dia e a hora). */
+export function agoraSaoPaulo(d: Date): string {
+    const dia = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ_SAO_PAULO, weekday: "long" }).format(d);
+    const hora = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ_SAO_PAULO, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    return `${dia}, ${hora}`;
+}

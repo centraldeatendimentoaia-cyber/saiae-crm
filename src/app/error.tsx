@@ -1,5 +1,6 @@
 'use client';
 
+import { logger } from "@/lib/logger";
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, RotateCcw, Home, ChevronRight, ChevronDown } from 'lucide-react';
@@ -17,7 +18,7 @@ export default function ErrorPage({
 
   useEffect(() => {
     setMounted(true);
-    console.error('Application runtime error boundary caught:', error);
+    logger.error("Error", 'Application runtime error boundary caught:', error);
   }, [error]);
 
   if (!mounted) {

@@ -2,6 +2,13 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    setting: z.enum(["announcement", "not_announcement", "locked", "unlocked"], { error: "use announcement, not_announcement, locked ou unlocked" }),
+    value: opt(z.any()),
+});
 
 // PUT: Update group settings
 export async function PUT(
@@ -16,20 +23,9 @@ export async function PUT(
 
         const { sessionId, jid } = await params;
         const decodedJid = decodeURIComponent(jid);
-        const body = await request.json();
-        const { setting, value } = body;
-
-        if (!setting) {
-            return NextResponse.json({ status: false, message: "setting is required", error: "setting is required" }, { status: 400 });
-        }
-
-        // Valid settings: 'announcement' (only admins can send messages), 'locked' (only admins can edit group info), 'not_announcement', 'unlocked'
-        const validSettings = ['announcement', 'not_announcement', 'locked', 'unlocked'];
-        if (!validSettings.includes(setting)) {
-            return NextResponse.json({ 
-                error: `Invalid setting. Must be one of: ${validSettings.join(', ')}` 
-            }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { setting, value } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

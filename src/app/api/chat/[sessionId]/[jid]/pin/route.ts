@@ -1,6 +1,10 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ pin: z.boolean({ error: "informe pin (true ou false)" }) });
 
 // PUT: Pin or unpin a chat
 export async function PUT(
@@ -14,13 +18,9 @@ export async function PUT(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { pin } = body;
-
-        if (pin === undefined) {
-            return NextResponse.json({ status: false, message: "pin (boolean) is required", error: "pin (boolean) is required" }, { status: 400 });
-        }
-        
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { pin } = lido.data;
         const decodedJid = decodeURIComponent(jid);
 
         // Check if user can access this session

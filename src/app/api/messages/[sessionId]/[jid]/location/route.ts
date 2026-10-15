@@ -3,6 +3,15 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { fireSentWebhook } from "@/lib/webhook";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    latitude: z.coerce.number({ error: "informe a latitude" }).min(-90, "a latitude deve estar entre -90 e 90").max(90, "a latitude deve estar entre -90 e 90"),
+    longitude: z.coerce.number({ error: "informe a longitude" }).min(-180, "a longitude deve estar entre -180 e 180").max(180, "a longitude deve estar entre -180 e 180"),
+    name: opt(z.string()),
+    address: opt(z.string()),
+});
 
 // POST: Send location message
 export async function POST(
@@ -18,21 +27,9 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { latitude, longitude, name, address } = body;
-
-        if (latitude === undefined || longitude === undefined) {
-            return NextResponse.json({ status: false, message: "latitude and longitude are required", error: "latitude and longitude are required" }, { status: 400 });
-        }
-
-        // Validate latitude and longitude ranges
-        if (latitude < -90 || latitude > 90) {
-            return NextResponse.json({ status: false, message: "Latitude must be between -90 and 90", error: "Latitude must be between -90 and 90" }, { status: 400 });
-        }
-
-        if (longitude < -180 || longitude > 180) {
-            return NextResponse.json({ status: false, message: "Longitude must be between -180 and 180", error: "Longitude must be between -180 and 180" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { latitude, longitude, name, address } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

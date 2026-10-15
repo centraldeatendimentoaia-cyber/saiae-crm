@@ -1,10 +1,12 @@
+import { errorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
-import type { WASocket } from "@whiskeysockets/baileys";
+import type { AnyMessageContent, WASocket } from "@whiskeysockets/baileys";
+import type { BotConfig } from "@prisma/client";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { logger } from "@/lib/logger";
 
 // Helper for permission check (Deduplicate from command-handler if possible, but keep simple here)
-function canAutoReply(config: any, fromMe: boolean, senderJid: string): boolean {
+function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, senderJid: string): boolean {
     if (!config || !config.enabled) return false;
 
     // Auto Reply Specific Mode
@@ -34,14 +36,14 @@ function canAutoReply(config: any, fromMe: boolean, senderJid: string): boolean 
         if (mode === 'SPECIFIC') {
             const allowedJids = config.autoReplyAllowedJids || [];
             if (Array.isArray(allowedJids)) {
-                return allowedJids.some((jid: string) => senderJid.includes(jid));
+                return allowedJids.some((jid) => typeof jid === "string" && senderJid.includes(jid));
             }
         }
 
         if (mode === 'BLACKLIST') {
             const blockedJids = config.autoReplyBlockedJids || [];
             if (Array.isArray(blockedJids)) {
-                const isBlocked = blockedJids.some((jid: string) => senderJid.includes(jid));
+                const isBlocked = blockedJids.some((jid) => typeof jid === "string" && senderJid.includes(jid));
                 return !isBlocked; // Return true if NOT blocked
             }
             return true; // If blacklist empty, allow all
@@ -58,14 +60,12 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
         // Fetch session ID and Bot Config once per batch (optimization)
         const session = await prisma.session.findUnique({
             where: { sessionId },
-            // @ts-ignore
             include: { botConfig: true }
         });
 
         if (!session) return;
 
-        // @ts-ignore
-        let config = (session as any).botConfig;
+        let config = session.botConfig;
 
         if (!config) {
             logger.warn("AutoReply", "No config found, creating default...");
@@ -141,7 +141,7 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
                     if (match) {
                         // Check trigger context (GROUP, PRIVATE, or ALL)
                         const isGroup = remoteJid.endsWith('@g.us');
-                        const triggerType = (rule as any).triggerType || 'ALL'; // Default to ALL if undefined
+                        const triggerType = rule.triggerType || 'ALL'; // Default to ALL if undefined
 
                         if (triggerType === 'GROUP' && !isGroup) continue;
                         if (triggerType === 'PRIVATE' && isGroup) continue;
@@ -150,29 +150,24 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
 
                         if (rule.isMedia && rule.mediaUrl) {
                             const url = rule.mediaUrl;
-                            const type = (rule as any).mediaType || "document";
+                            const type = rule.mediaType || "document";
                             
-                            let payload: any = {};
-                            if (rule.response) {
-                                payload.caption = rule.response;
-                            }
-
+                            const caption = rule.response || undefined;
+                            let payload: AnyMessageContent;
                             if (type === "image") {
-                                payload.image = { url };
+                                payload = { image: { url }, caption };
                             } else if (type === "video") {
-                                payload.video = { url };
+                                payload = { video: { url }, caption };
                             } else if (type === "audio") {
                                 payload = { audio: { url } };
                             } else {
-                                payload.document = { url };
-                                payload.mimetype = 'application/octet-stream';
-                                payload.fileName = url.split('/').pop() || 'document';
+                                payload = { document: { url }, caption, mimetype: 'application/octet-stream', fileName: url.split('/').pop() || 'document' };
                             }
                             
                             try {
                                 await sock.sendMessage(remoteJid, payload, { quoted: msg });
-                            } catch (err: any) {
-                                logger.error("AutoReply", `Failed to send media auto-reply from URL: ${err.message}. Falling back to text if response exists.`);
+                            } catch (err) {
+                                logger.error("AutoReply", `Failed to send media auto-reply from URL: ${errorMessage(err)}. Falling back to text if response exists.`);
                                 if (rule.response) {
                                     await sock.sendMessage(remoteJid, { text: rule.response }, { quoted: msg });
                                 }

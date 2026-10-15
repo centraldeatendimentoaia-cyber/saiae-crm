@@ -3,6 +3,17 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { fireSentWebhook } from "@/lib/webhook";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    question: z.string().min(1, "informe a pergunta"),
+    options: z.array(z.string()).min(2, "a enquete precisa de 2 a 12 opções").max(12, "a enquete precisa de 2 a 12 opções"),
+    selectableCount: opt(z.coerce.number().int()),
+}).refine((b) => (b.selectableCount || 1) >= 1 && (b.selectableCount || 1) <= b.options.length, {
+    path: ["selectableCount"],
+    message: "deve estar entre 1 e o número de opções",
+});
 
 // POST: Send poll message
 export async function POST(
@@ -18,21 +29,10 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { question, options, selectableCount } = body;
-
-        if (!question || !options || !Array.isArray(options)) {
-            return NextResponse.json({ status: false, message: "question and options (array) are required", error: "question and options (array) are required" }, { status: 400 });
-        }
-
-        if (options.length < 2 || options.length > 12) {
-            return NextResponse.json({ status: false, message: "Poll must have between 2 and 12 options", error: "Poll must have between 2 and 12 options" }, { status: 400 });
-        }
-
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { question, options, selectableCount } = lido.data;
         const count = selectableCount || 1;
-        if (count < 1 || count > options.length) {
-            return NextResponse.json({ status: false, message: "selectableCount must be between 1 and number of options", error: "selectableCount must be between 1 and number of options" }, { status: 400 });
-        }
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

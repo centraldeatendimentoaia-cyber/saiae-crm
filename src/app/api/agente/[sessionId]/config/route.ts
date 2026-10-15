@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { exigirSuperadmin } from "@/lib/admin-auth";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "@/modules/agente-salao/conhecimento-lavinia";
 import { limparCacheConfigAgente } from "@/modules/agente-salao/agente";
 import { ETIQUETAS_INTERESSE_PADRAO } from "@/modules/agente-salao/motor";
 
+// Só SUPERADMIN, igual à página /dashboard/agente-ia.
 async function guard(request: NextRequest, sessionId: string) {
+    const negado = await exigirSuperadmin(request);
+    if (negado) return negado;
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
     if (!(await canAccessSession(user.id, user.role, sessionId))) return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });

@@ -2,6 +2,19 @@ import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import moment from "moment-timezone";
+import cronParser from "cron-parser";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    jid: z.string().min(1, "informe o destinatário (jid)"),
+    content: opt(z.string()),
+    sendAt: z.union([z.string().min(1), z.number()], { error: "informe a data e hora do envio (sendAt)" }),
+    mediaUrl: opt(z.string()),
+    mediaType: opt(z.string()),
+    cronExpression: opt(z.string().refine((c) => { try { cronParser.parse(c); return true; } catch { return false; } }, "expressão cron inválida")),
+    recurrenceRule: opt(z.string()),
+}).refine((b) => !!b.content || !!b.mediaUrl, { path: ["content"], message: "informe o texto ou uma mídia" });
 
 export async function PUT(
     request: NextRequest,
@@ -19,12 +32,9 @@ export async function PUT(
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
 
-        const body = await request.json();
-        const { jid, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule } = body;
-
-        if (!jid || (!content && !mediaUrl) || !sendAt) {
-            return NextResponse.json({ status: false, message: "Missing required fields (JID, Content/Media, SendAt)", error: "Missing required fields" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { jid, content, sendAt, mediaUrl, mediaType, cronExpression, recurrenceRule } = lido.data;
 
         // Fetch system timezone
         // @ts-ignore

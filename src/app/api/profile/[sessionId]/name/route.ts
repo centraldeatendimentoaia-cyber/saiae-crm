@@ -1,6 +1,10 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { waManager } from "@/modules/whatsapp/manager";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ name: z.string().min(1, "informe o nome") });
 
 export async function PUT(
     request: NextRequest,
@@ -18,12 +22,9 @@ export async function PUT(
             return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });
         }
 
-        const body = await request.json();
-        const { name } = body;
-
-        if (!name) {
-            return NextResponse.json({ status: false, message: "Name is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name } = lido.data;
 
         const instance = waManager.getInstance(sessionId);
         if (!instance || !instance.socket) {

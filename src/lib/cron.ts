@@ -1,3 +1,5 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
+import { errorMessage } from "@/lib/errors";
 import cron from "node-cron";
 import { personalizeFor } from "@/lib/personalize";
 import cronParser from "cron-parser";
@@ -11,16 +13,22 @@ import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
+import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let running = false; // evita duas rodadas ao mesmo tempo
 export function initScheduler() {
-    // disparos que estavam em andamento quando o servidor reiniciou não continuam: marca como interrompidos
-    prisma.broadcastLog.updateMany({ where: { status: "running" }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
+    // Disparos em andamento quando o servidor reiniciou não continuam: marca como interrompidos. Com outra instância viva
+    // (deploy sobreposto) só mexe nos antigos (12 h), para não marcar como parado o que a outra está enviando.
+    outrasInstanciasVivas().then((outras) => {
+        registrarInstancia();
+        const antigos = outras === 0 ? {} : { startedAt: { lt: new Date(Date.now() - 12 * 3_600_000) } };
+        return prisma.broadcastLog.updateMany({ where: { status: "running", ...antigos }, data: { status: "stopped", completedAt: new Date() } });
+    }).catch(() => {});
 
     // Run every minute
-    cron.schedule("* * * * *", async () => {
+    const tick = async () => {
         if (running) return;
         running = true;
         try {
@@ -68,12 +76,12 @@ export function initScheduler() {
                     // Plano: conta suspensa ou sem cota não envia
                     try {
                         await assertCanSend(msg.session.userId, 1);
-                    } catch (planErr: any) {
-                        logger.warn("Cron", `Plano bloqueou o envio ${msg.id}: ${planErr.message}`);
+                    } catch (planErr) {
+                        logger.warn("Cron", `Plano bloqueou o envio ${msg.id}: ${errorMessage(planErr)}`);
                         if (!msg.cronExpression) {
                             await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "FAILED" } });
                         } else {
-                            const itv = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
+                            const itv = cronParser.parse(msg.cronExpression, { tz: TZ_SAO_PAULO });
                             await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { sendAt: itv.next().toDate() } });
                         }
                         continue;
@@ -111,7 +119,7 @@ export function initScheduler() {
 
                     // Update status or compute next sendAt if recurring
                     if (msg.cronExpression) {
-                        const interval = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
+                        const interval = cronParser.parse(msg.cronExpression, { tz: TZ_SAO_PAULO });
                         const nextDate = interval.next().toDate();
                         await prisma.scheduledMessage.update({
                             where: { id: msg.id },
@@ -139,7 +147,7 @@ export function initScheduler() {
                             data: { status: "FAILED" } // Failed to send
                         });
                     } else {
-                        const interval = cronParser.parse(msg.cronExpression, { tz: "America/Sao_Paulo" });
+                        const interval = cronParser.parse(msg.cronExpression, { tz: TZ_SAO_PAULO });
                         await prisma.scheduledMessage.update({
                             where: { id: msg.id },
                             data: { sendAt: interval.next().toDate() }
@@ -153,7 +161,9 @@ export function initScheduler() {
         } finally {
             running = false;
         }
-    });
+    };
+    // Com mais de uma instância (deploy sobreposto, escala), só uma executa a rodada.
+    cron.schedule("* * * * *", () => withJobLock("cron:mensagens-agendadas", 10 * 60_000, tick));
     
     startRetention();
     startFollowUps();

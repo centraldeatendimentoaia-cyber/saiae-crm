@@ -1,6 +1,10 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ numbers: z.array(z.string().min(1)).min(1, "informe ao menos um número").max(50, "verifique no máximo 50 números por vez") });
 
 // POST: Check if number is on WhatsApp
 export async function POST(
@@ -14,20 +18,9 @@ export async function POST(
         }
 
         const { sessionId } = await params;
-        const body = await request.json();
-        const { numbers } = body;
-
-        if (!numbers || !Array.isArray(numbers)) {
-            return NextResponse.json({ status: false, message: "numbers (array) is required", error: "numbers (array) is required" }, { status: 400 });
-        }
-
-        if (numbers.length === 0) {
-            return NextResponse.json({ status: false, message: "At least one number is required", error: "At least one number is required" }, { status: 400 });
-        }
-
-        if (numbers.length > 50) {
-            return NextResponse.json({ status: false, message: "Maximum 50 numbers per request", error: "Maximum 50 numbers per request" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { numbers } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

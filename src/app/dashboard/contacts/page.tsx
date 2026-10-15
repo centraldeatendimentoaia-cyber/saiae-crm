@@ -1,5 +1,6 @@
-
 "use client";
+
+import { logger } from "@/lib/logger";
 
 import { useState, useEffect } from "react";
 import { useSession } from "@/components/dashboard/session-provider";
@@ -90,7 +91,7 @@ export default function ContactListPage() {
                 setContacts([]);
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Contacts", "Erro", error);
         } finally {
             setLoading(false);
         }

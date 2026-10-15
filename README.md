@@ -17,7 +17,7 @@ Built with **Next.js 15**, **React**, and **Baileys** for high-performance messa
 > [!TIP]
 > **Looking for the latest features?** Check out the [beta branch](#) or our [pre-releases](#) for experimental sources.
 
-[Features](#-key-features) • [User Guide](docs/USER_GUIDE.md) • [API Documentation](docs/API_DOCUMENTATION.md) • [Database Setup](docs/DATABASE_SETUP.md) • [Installation](#-quick-installation)
+[Features](#-key-features) • [User Guide](docs/upstream/USER_GUIDE.md) • [API Documentation](docs/upstream/API_DOCUMENTATION.md) • [Database Setup](docs/DATABASE_SETUP.md) • [Installation](#-quick-installation)
 
 </div>
 
@@ -27,9 +27,9 @@ Built with **Next.js 15**, **React**, and **Baileys** for high-performance messa
 
 Saiaê comes with extensive documentation designed for both developers and users.
 
-- **[Master Project Documentation](docs/PROJECT_DOCUMENTATION.md)**: Architecture, database, and logic flow.
-- **[API Documentation](docs/API_DOCUMENTATION.md)**: Comprehensive OpenAPI / Swagger guide for all **109+ endpoints**.
-- **[API Quick Reference](docs/API-QUICK-REFERENCE.md)**: Instantly jumpstart your integration with ready-to-use cURL/JavaScript snippets.
+- **[Master Project Documentation](docs/upstream/PROJECT_DOCUMENTATION.md)**: Architecture, database, and logic flow.
+- **[API Documentation](docs/upstream/API_DOCUMENTATION.md)**: Comprehensive OpenAPI / Swagger guide for all **109+ endpoints**.
+- **[API Quick Reference](docs/upstream/API-QUICK-REFERENCE.md)**: Instantly jumpstart your integration with ready-to-use cURL/JavaScript snippets.
 - **[Environment Variables](docs/ENVIRONMENT_VARIABLES.md)**: Configuration and security guide.
 
 ---
@@ -189,7 +189,7 @@ Although **PM2 is highly recommended**, you can also deploy using Docker Compose
 
 ## 📚 API Reference Overview
 
-Saiaê provides a comprehensive REST API to integrate WhatsApp Messaging directly into your applications. Full details in [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md).
+Saiaê provides a comprehensive REST API to integrate WhatsApp Messaging directly into your applications. Full details in [API_DOCUMENTATION.md](docs/upstream/API_DOCUMENTATION.md).
 
 > [!TIP]
 > Use the built-in **Swagger UI** for interactive exploration at `/docs`.

@@ -1,6 +1,14 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { ChatService } from "@/modules/whatsapp/chat.service";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    message: z.string().min(1, "informe o texto da mensagem"),
+    mentions: opt(z.array(z.string())),
+    quotedMessageId: opt(z.string()),
+});
 
 export async function POST(
     request: NextRequest,
@@ -15,12 +23,9 @@ export async function POST(
         const { sessionId, jid: rawJid } = await params;
         const jid = decodeURIComponent(rawJid);
         
-        const body = await request.json();
-        const { message, mentions, quotedMessageId } = body;
-
-        if (!message) {
-            return NextResponse.json({ status: false, message: "message is required", error: "message is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { message, mentions, quotedMessageId } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

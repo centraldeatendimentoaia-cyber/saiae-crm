@@ -1,3 +1,6 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
+import { limparMidiasAntigas } from "@/lib/media-retention";
+import { withJobLock } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -81,6 +84,14 @@ export async function runRetention(): Promise<void> {
 
         
 
+        // Imagens enviadas pelo painel (ficam no banco): apaga as antigas que nada pendente usa. 0 desliga.
+        try {
+            const midias = await limparMidiasAntigas(days("MEDIA_RETENTION_DAYS", 180));
+            if (midias) logger.info("Retention", `${midias} imagens antigas sem uso apagadas`);
+        } catch (e) {
+            logger.warn("Retention", `limpeza das imagens falhou: ${e instanceof Error ? e.name : "erro"}`);
+        }
+
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);
         if (logDays > 0) {
             const r = await prisma.webhookLog.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - logDays * 86_400_000) } } });
@@ -94,5 +105,5 @@ export async function runRetention(): Promise<void> {
 }
 
 export function startRetention(): void {
-    cron.schedule("30 3 * * *", () => { runRetention(); }, { timezone: "America/Sao_Paulo" });
+    cron.schedule("30 3 * * *", () => { void withJobLock("cron:retencao", 60 * 60_000, runRetention); }, { timezone: TZ_SAO_PAULO });
 }

@@ -1,6 +1,9 @@
 'use client';
 
+import { errorMessage } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from 'react';
+import { rotuloStatusSessao } from "@/lib/status-sessao";
 import { io, Socket } from 'socket.io-client';
 import QRCode from 'qrcode';
 import { Button } from "@/components/ui/button";
@@ -32,7 +35,7 @@ type Session = {
     } | null;
 };
 
-export function SessionManager({ user }: { user: any }) {
+export function SessionManager({ user }: { user?: { id: string } }) {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [newSessionName, setNewSessionName] = useState("");
     const [newSessionId, setNewSessionId] = useState("");
@@ -50,7 +53,7 @@ export function SessionManager({ user }: { user: any }) {
         });
 
         socketInstance.on('connect', () => {
-            console.log('Socket connected');
+            logger.info("SessionManager", 'Socket connected');
         });
 
         socketInstance.on('connection.update', (data: { sessionId: string, status: string, qr: string }) => {
@@ -99,7 +102,7 @@ export function SessionManager({ user }: { user: any }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId: user.id,
+                    userId: user?.id,
                     name: newSessionName,
                     sessionId: newSessionId || undefined // Optional, backend will generate if empty
                 })
@@ -107,7 +110,7 @@ export function SessionManager({ user }: { user: any }) {
             const responseData = await res.json();
             const session = responseData?.data;
 
-            if (!res.ok || !session) throw new Error(responseData.error || responseData.message || "Failed to create");
+            if (!res.ok || !session) throw new Error(responseData.error || responseData.message || "Falha ao criar");
 
             setSessions([...sessions, session]);
             setNewSessionName("");
@@ -116,9 +119,9 @@ export function SessionManager({ user }: { user: any }) {
 
             // Optionally redirect immediately or let user choose
             // router.push(`/dashboard/sessions/${session.sessionId}`);
-        } catch (e: any) {
-            console.error(e);
-            toast.error(e.message || "Failed to create session");
+        } catch (e) {
+            logger.error("SessionManager", "Erro", e);
+            toast.error(errorMessage(e, "Falha ao criar a sessão"));
         } finally {
             setLoading(false);
         }
@@ -217,7 +220,7 @@ export function SessionManager({ user }: { user: any }) {
                                                     <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
                                                         session.status === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
                                                     }`} />
-                                                    {session.status}
+                                                    {rotuloStatusSessao(session.status)}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="py-3">

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { addOptOut, removeOptOut } from "@/lib/optout";
@@ -36,7 +37,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const denied = await guard(request, sessionId);
     if (denied) return denied;
 
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     const phones: string[] = Array.isArray(body.phones) ? body.phones : [];
     let added = 0;
     for (const raw of phones) {
@@ -54,7 +57,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const denied = await guard(request, sessionId);
     if (denied) return denied;
 
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     if (body.all === true) {
         const r = await prisma.optOut.deleteMany({ where: { sessionId } });
         return NextResponse.json({ status: true, data: { removed: r.count } });

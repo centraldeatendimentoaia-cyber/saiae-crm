@@ -7,9 +7,10 @@ import { logger } from "@/lib/logger";
 import { canonicalPhone, formatPhoneBr } from "@/lib/phone";
 import { isOptedOut, isOptInText, isOptOutText } from "@/lib/optout";
 import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
-import { MAX_TEXTO } from "@/modules/ia-atendimento/constantes";
+import { MAX_TEXTO } from "@/modules/atendimento-comum/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
+import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 
@@ -99,7 +100,7 @@ interface ConteudoMensagem {
 }
 
 export function lerConteudo(msg: WAMessage): ConteudoMensagem {
-    const c: any = normalizeMessageContent(msg.message);
+    const c = normalizeMessageContent(msg.message);
     if (!c) return { texto: "", audio: false, naoTexto: false, ignorar: true };
     if (c.protocolMessage || c.reactionMessage || c.pollUpdateMessage || c.senderKeyDistributionMessage || c.editedMessage) return { texto: "", audio: false, naoTexto: false, ignorar: true };
     const texto: string = c.conversation || c.extendedTextMessage?.text || c.imageMessage?.caption || c.videoMessage?.caption || c.documentMessage?.caption || "";
@@ -110,7 +111,7 @@ export function lerConteudo(msg: WAMessage): ConteudoMensagem {
 
 /** Mensagem que veio de um anúncio de "clique para WhatsApp" do Meta. */
 export function veioDeAnuncioMeta(msg: WAMessage): boolean {
-    const c: any = normalizeMessageContent(msg.message);
+    const c = normalizeMessageContent(msg.message);
     const ctx = c?.extendedTextMessage?.contextInfo ?? c?.imageMessage?.contextInfo ?? c?.videoMessage?.contextInfo;
     return !!(ctx?.externalAdReply || ctx?.conversionSource);
 }
@@ -221,7 +222,7 @@ function contadorDiario() {
 /** Baixa o áudio do WhatsApp e transcreve com o Gemini. null = não deu (o agente avisa que não ouve e chama a recepção). */
 async function transcreverAudio(sock: WASocket, msg: WAMessage): Promise<string | null> {
     if (process.env.AGENTE_AUDIO?.trim().toLowerCase() === "off" || !process.env.GEMINI_API_KEY?.trim()) return null;
-    const a: any = normalizeMessageContent(msg.message)?.audioMessage;
+    const a = normalizeMessageContent(msg.message)?.audioMessage;
     if (!a || (typeof a.seconds === "number" && a.seconds > MAX_SEGUNDOS_AUDIO)) return null;
     try {
         const buf = (await downloadMediaMessage(msg, "buffer", {}, { logger: undefined as never, reuploadRequest: sock.updateMediaMessage })) as Buffer;
@@ -285,12 +286,12 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
         if (!llm) return;
         const agora = new Date();
         const msg = p.msg;
-        const telefone = telefoneDe(jid, (msg.key as any).remoteJidAlt);
+        const telefone = telefoneDe(jid, (msg.key as { remoteJidAlt?: string }).remoteJidAlt);
         const nomePerfil = msg.pushName ?? null;
 
         let conv = await garantirConversa(sessionId, jid, { telefone, nomePerfil });
         if (iaPausada(conv, agora)) return; // uma pessoa assumiu ou a recepção foi chamada
-        if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: { estado: "ia", pausadaAte: null, motivoPausa: null } });
+        if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: dadosRetomar({ motivoPausa: null }) });
         if (!podeResponder(MAX_RESPOSTAS_DIA)) {
             logger.warn(TAG, "teto diário de respostas do agente atingido: não responde mais hoje");
             return;
@@ -321,7 +322,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             }
             await prisma.agenteConversa.update({
                 where: { id: conv.id },
-                data: { estado: "humano", pausadaAte: new Date(Date.now() + cfg.pausaHoras * 3_600_000), motivoPausa: pedido.motivo, ...(pedido.servico ? { servico: pedido.servico } : {}) },
+                data: { ...dadosPausar(new Date(Date.now() + cfg.pausaHoras * 3_600_000), { motivoPausa: pedido.motivo }), ...(pedido.servico ? { servico: pedido.servico } : {}) },
             });
             if (cfg.etiquetaAguardando) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAguardando);
             return true;
@@ -419,7 +420,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         await prisma.agenteConversa.upsert({
                             where: { sessionId_jid: { sessionId, jid } },
                             create: { sessionId, jid },
-                            update: { estado: "ia", pausadaAte: null, motivoPausa: null },
+                            update: dadosRetomar({ motivoPausa: null }),
                         });
                         continue;
                     }
@@ -427,8 +428,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         const ate = new Date(Date.now() + cfg.pausaHoras * 3_600_000);
                         await prisma.agenteConversa.upsert({
                             where: { sessionId_jid: { sessionId, jid } },
-                            create: { sessionId, jid, estado: "humano", pausadaAte: ate, motivoPausa: "pessoa_assumiu", ultimaHumanoAt: new Date() },
-                            update: { estado: "humano", pausadaAte: ate, motivoPausa: "pessoa_assumiu", ultimaHumanoAt: new Date() },
+                            create: { sessionId, jid, ...dadosPausar(ate, { motivoPausa: "pessoa_assumiu" }), ultimaHumanoAt: new Date() },
+                            update: { ...dadosPausar(ate, { motivoPausa: "pessoa_assumiu" }), ultimaHumanoAt: new Date() },
                         });
                         const p = pendentes.get(jid);
                         if (p?.timer) clearTimeout(p.timer);
@@ -443,7 +444,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 const cfg = await carregarConfigAgente(sessionId);
                 if (!cfg?.ativo) continue;
 
-                const telefone = telefoneDe(jid, (msg.key as any).remoteJidAlt);
+                const telefone = telefoneDe(jid, (msg.key as { remoteJidAlt?: string }).remoteJidAlt);
                 if (telefone && cfg.numerosIgnorados.some((n) => canonicalPhone(n) === canonicalPhone(telefone))) continue;
                 if (c.texto && (isOptOutText(c.texto) || isOptInText(c.texto))) continue; // o descadastro responde por conta própria
                 if (telefone && (await isOptedOut(sessionId, `${telefone}@s.whatsapp.net`))) continue;
