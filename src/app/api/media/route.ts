@@ -171,14 +171,13 @@ export async function DELETE(request: NextRequest) {
                 continue;
             }
 
+            // Nome fora do padrão {sessionId}-{id}.ext não identifica o dono: só SUPERADMIN apaga
             const parsed = parseFilename(filename);
-            if (parsed) {
-                const canAccess = await canAccessSession(user.id, user.role, parsed.sessionId);
-                if (!canAccess) {
-                    errors.push(`Forbidden: ${filename}`);
-                    failed++;
-                    continue;
-                }
+            const canAccess = parsed ? await canAccessSession(user.id, user.role, parsed.sessionId) : user.role === "SUPERADMIN";
+            if (!canAccess) {
+                errors.push(`Forbidden: ${filename}`);
+                failed++;
+                continue;
             }
 
             const filePath = path.join(MEDIA_DIR, filename);

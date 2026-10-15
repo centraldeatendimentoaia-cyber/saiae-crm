@@ -34,6 +34,15 @@ export async function PUT(
         if (!lido.ok) return lido.response;
         const { keyword, response, matchType, triggerType, isMedia, mediaUrl, mediaType } = lido.data;
 
+        // A regra precisa ser da sessão da URL (a checagem de acesso acima vale só para essa sessão)
+        const rule = await prisma.autoReply.findFirst({
+            where: { id: replyId, session: { OR: [{ sessionId }, { id: sessionId }] } },
+            select: { id: true }
+        });
+        if (!rule) {
+            return NextResponse.json({ status: false, message: "Rule not found in this session", error: "Rule not found in this session" }, { status: 404 });
+        }
+
         const updated = await prisma.autoReply.update({
             where: { id: replyId },
             data: {

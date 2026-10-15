@@ -31,7 +31,12 @@ export async function GET(
             return NextResponse.json({ status: false, message: "Message not found", error: "Message not found" }, { status: 404 });
         }
 
-        if (message.sessionId !== sessionId) {
+        // message.sessionId é o id interno (cuid); a URL pode trazer o id interno ou o nome da sessão
+        const dono = await prisma.session.findFirst({
+            where: { OR: [{ id: sessionId }, { sessionId }] },
+            select: { id: true }
+        });
+        if (!dono || message.sessionId !== dono.id) {
             return NextResponse.json({ status: false, message: "Message does not belong to this session", error: "Message does not belong to this session" }, { status: 403 });
         }
 

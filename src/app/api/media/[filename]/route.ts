@@ -41,11 +41,10 @@ export async function GET(
 
         // Session ownership check — extract sessionId from filename
         const sessionId = extractSessionId(filename);
-        if (sessionId) {
-            const canAccess = await canAccessSession(user.id, user.role, sessionId);
-            if (!canAccess) {
-                return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session's media", error: "Forbidden - Cannot access this session's media" }, { status: 403 });
-            }
+        // Nome fora do padrão {sessionId}-{id}.ext não identifica o dono: só SUPERADMIN abre
+        const canAccess = sessionId ? await canAccessSession(user.id, user.role, sessionId) : user.role === "SUPERADMIN";
+        if (!canAccess) {
+            return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session's media", error: "Forbidden - Cannot access this session's media" }, { status: 403 });
         }
 
         const filePath = path.join(MEDIA_DIR, filename);
