@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { EmojiTextarea } from "@/components/emoji-textarea";
 
@@ -88,9 +89,9 @@ export default function AutoReplyPage() {
             // Using direct Server Action instead of API route
             const data = await getAutoReplies(sessionId);
             setRules(data as unknown as AutoReply[]);
-        } catch (error: any) {
+        } catch (error) {
             logger.error("Autoreply", "Erro", error);
-            toast.error(error.message || "Error fetching auto-replies");
+            toast.error(errorMessage(error, "Erro ao carregar as respostas automáticas"));
         } finally {
             setLoading(false);
         }
@@ -120,9 +121,9 @@ export default function AutoReplyPage() {
             setIsCreateOpen(false);
             fetchRules();
             resetForm();
-        } catch (error: any) {
+        } catch (error) {
             logger.error("Autoreply", "Erro", error);
-            toast.error(error.message || "Error creating auto-reply");
+            toast.error(errorMessage(error, "Erro ao criar a resposta automática"));
         } finally {
             setSubmitting(false);
         }
@@ -135,9 +136,9 @@ export default function AutoReplyPage() {
             await deleteAutoReply(sessionId, ruleId);
             toast.success("Resposta automática excluída");
             fetchRules();
-        } catch (error: any) {
+        } catch (error) {
             logger.error("Autoreply", "Erro", error);
-            toast.error(error.message || "Error deleting auto-reply");
+            toast.error(errorMessage(error, "Erro ao excluir a resposta automática"));
         }
     };
 
@@ -183,9 +184,9 @@ export default function AutoReplyPage() {
             toast.success("Regra de resposta automática atualizada");
             setIsEditOpen(false);
             fetchRules();
-        } catch (error: any) {
+        } catch (error) {
             logger.error("Autoreply", "Erro", error);
-            toast.error(error.message || "Error updating auto-reply");
+            toast.error(errorMessage(error, "Erro ao atualizar a resposta automática"));
         } finally {
             setSubmitting(false);
         }

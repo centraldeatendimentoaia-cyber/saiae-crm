@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
@@ -30,8 +31,8 @@ export function MediaUpload({ value, onChange, disabled }: Props) {
             const data = await res.json();
             if (!res.ok || !data.status) throw new Error(data.message || "Falha ao enviar a imagem");
             onChange(data.data.url);
-        } catch (e: any) {
-            toast.error(e.message || "Falha ao enviar a imagem");
+        } catch (e) {
+            toast.error(errorMessage(e, "Falha ao enviar a imagem"));
         } finally {
             setBusy(false);
             if (input.current) input.current.value = "";

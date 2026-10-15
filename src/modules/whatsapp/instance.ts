@@ -1,3 +1,4 @@
+import { errorCode } from "@/lib/errors";
 import makeWASocket, {
     DisconnectReason,
     fetchLatestBaileysVersion,
@@ -288,8 +289,8 @@ export class WhatsAppInstance {
 
                 logger.success("Instance", `Session ${this.sessionId} connected and synced successfully`);
             }
-        } catch (error: any) {
-            if (error.code === 'P2025') {
+        } catch (error) {
+            if (errorCode(error) === 'P2025') {
                 logger.warn("Instance", `Session ${this.sessionId} record not found during update. Stopping.`);
                 this.socket?.end(undefined);
                 this.socket = null;

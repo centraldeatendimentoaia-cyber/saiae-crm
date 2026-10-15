@@ -1,3 +1,4 @@
+import { errorMessage as getErrorMessage } from "@/lib/errors";
 import { prisma } from "./prisma";
 import crypto from "crypto";
 import { normalizeMessageContent, downloadMediaMessage, WAMessage } from "@whiskeysockets/baileys";
@@ -171,8 +172,8 @@ async function sendWebhookRequest(url: string, payload: WebhookPayload, secret?:
         if (!response.ok) {
             errorMessage = `Webhook returned ${response.status}: ${response.statusText}`;
         }
-    } catch (err: any) {
-        errorMessage = err.message || "Webhook request failed";
+    } catch (err) {
+        errorMessage = getErrorMessage(err, "Webhook request failed");
         response = null as unknown as Response;
     }
 
@@ -341,9 +342,9 @@ export async function testWebhook(webhookId: string, url: string, secret?: strin
             responseBody,
             responseTimeMs
         };
-    } catch (err: any) {
+    } catch (err) {
         const responseTimeMs = Date.now() - startedAt;
-        const errorMsg = err.message || "Request failed";
+        const errorMsg = getErrorMessage(err, "Request failed");
 
         // Record failed test log
         await recordWebhookLog({

@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -157,8 +158,8 @@ export default function SessionDetailPage() {
             }
             fetchSession();
 
-        } catch (error: any) {
-            toast.error(error.message);
+        } catch (error) {
+            toast.error(errorMessage(error));
         } finally {
             toast.dismiss(loadingToast);
         }

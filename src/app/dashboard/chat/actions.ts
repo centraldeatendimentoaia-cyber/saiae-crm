@@ -1,5 +1,6 @@
 "use server";
 
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { ChatService } from "@/modules/whatsapp/chat.service";
@@ -75,8 +76,8 @@ export async function sendChatMessage(sessionId: string, jid: string, text: stri
     try {
         await ChatService.sendTextMessage(sessionId, jid, { text }, undefined, quotedMessageId);
         return { success: true };
-    } catch (error: any) {
-        throw new Error(`Failed to send message: ${error.message}`);
+    } catch (error) {
+        throw new Error(`Falha ao enviar a mensagem: ${errorMessage(error)}`);
     }
 }
 
@@ -112,9 +113,9 @@ export async function sendMediaMessage(formData: FormData) {
         );
 
         return { success: true };
-    } catch (error: any) {
+    } catch (error) {
         logger.error("Actions", "Media send error:", error);
-        throw new Error(`Failed to send media: ${error.message}`);
+        throw new Error(`Falha ao enviar a mídia: ${errorMessage(error)}`);
     }
 }
 

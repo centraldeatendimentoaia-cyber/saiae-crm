@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { normalizeJid, batchResolveToPhoneJid } from "@/lib/jid-utils";
@@ -287,8 +288,8 @@ export class ChatService {
                     quality: 50
                 });
                 msgPayload = { sticker: await sticker.toBuffer() };
-            } catch (e: any) {
-                throw new Error(`Failed to generate sticker from URL: ${e.message}`);
+            } catch (e) {
+                throw new Error(`Falha ao gerar a figurinha a partir da URL: ${errorMessage(e)}`);
             }
         }
 
@@ -298,8 +299,8 @@ export class ChatService {
                 if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
                 const buffer = await res.arrayBuffer();
                 msgPayload.image = Buffer.from(buffer);
-            } catch (e: any) {
-                throw new Error(`Failed to fetch image from URL: ${e.message}`);
+            } catch (e) {
+                throw new Error(`Falha ao baixar a imagem da URL: ${errorMessage(e)}`);
             }
         }
 
@@ -309,8 +310,8 @@ export class ChatService {
                 if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
                 const buffer = await res.arrayBuffer();
                 msgPayload.video = Buffer.from(buffer);
-            } catch (e: any) {
-                throw new Error(`Failed to fetch video from URL: ${e.message}`);
+            } catch (e) {
+                throw new Error(`Falha ao baixar o vídeo da URL: ${errorMessage(e)}`);
             }
         }
 
@@ -320,8 +321,8 @@ export class ChatService {
                 if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
                 const buffer = await res.arrayBuffer();
                 msgPayload.document = Buffer.from(buffer);
-            } catch (e: any) {
-                throw new Error(`Failed to fetch document from URL: ${e.message}`);
+            } catch (e) {
+                throw new Error(`Falha ao baixar o documento da URL: ${errorMessage(e)}`);
             }
         }
 
@@ -331,8 +332,8 @@ export class ChatService {
                 if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
                 const buffer = await res.arrayBuffer();
                 msgPayload.audio = Buffer.from(buffer);
-            } catch (e: any) {
-                throw new Error(`Failed to fetch audio from URL: ${e.message}`);
+            } catch (e) {
+                throw new Error(`Falha ao baixar o áudio da URL: ${errorMessage(e)}`);
             }
         }
 

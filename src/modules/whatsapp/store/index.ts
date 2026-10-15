@@ -572,7 +572,7 @@ async function processAndSaveMessage(
         }
 
         return newMessage;
-    } catch (e: any) {
+    } catch (e) {
         logger.error("Store", "Error saving message query", e);
         throw e;
     }

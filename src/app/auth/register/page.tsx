@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 'use client';
 
 import { useState } from 'react';
@@ -71,8 +72,8 @@ export default function RegisterPage() {
                 router.push('/auth/login');
             }, 2000);
 
-        } catch (err: any) {
-            setError(err.message || "An unexpected error occurred");
+        } catch (err) {
+            setError(errorMessage(err, "Ocorreu um erro inesperado"));
         } finally {
             setLoading(false);
         }

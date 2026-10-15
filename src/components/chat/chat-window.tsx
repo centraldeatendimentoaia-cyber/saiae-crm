@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -262,7 +263,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             setInput("");
             setReplyingTo(null);
             setTimeout(() => fetchMessages(), 800);
-        } catch (e: any) { toast.error(e.message || "Failed to send"); }
+        } catch (e) { toast.error(errorMessage(e, "Falha ao enviar")); }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -314,7 +315,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             await sendMediaMessage(formData);
             toast.success("Enviado!");
             setTimeout(() => fetchMessages(), 800);
-        } catch (error: any) { toast.error(error.message || "Failed to send media"); }
+        } catch (error) { toast.error(errorMessage(error, "Falha ao enviar a mídia")); }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

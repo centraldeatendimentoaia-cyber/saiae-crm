@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import cron from "node-cron";
 import { personalizeFor } from "@/lib/personalize";
 import cronParser from "cron-parser";
@@ -69,8 +70,8 @@ export function initScheduler() {
                     // Plano: conta suspensa ou sem cota não envia
                     try {
                         await assertCanSend(msg.session.userId, 1);
-                    } catch (planErr: any) {
-                        logger.warn("Cron", `Plano bloqueou o envio ${msg.id}: ${planErr.message}`);
+                    } catch (planErr) {
+                        logger.warn("Cron", `Plano bloqueou o envio ${msg.id}: ${errorMessage(planErr)}`);
                         if (!msg.cronExpression) {
                             await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "FAILED" } });
                         } else {

@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { useCallback, useEffect, useState } from "react";
 import { Bot, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -91,8 +92,8 @@ export default function AgenteIaPage() {
             if (!res.ok || !j.status) throw new Error(j.message || "Falha ao salvar");
             toast.success("Salvo.");
             carregar();
-        } catch (e: any) {
-            toast.error(e.message || "Falha ao salvar");
+        } catch (e) {
+            toast.error(errorMessage(e, "Falha ao salvar"));
             carregar();
         } finally {
             setSalvando(false);

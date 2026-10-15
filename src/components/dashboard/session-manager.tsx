@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 'use client';
 
@@ -117,9 +118,9 @@ export function SessionManager({ user }: { user: any }) {
 
             // Optionally redirect immediately or let user choose
             // router.push(`/dashboard/sessions/${session.sessionId}`);
-        } catch (e: any) {
+        } catch (e) {
             logger.error("SessionManager", "Erro", e);
-            toast.error(e.message || "Failed to create session");
+            toast.error(errorMessage(e, "Falha ao criar a sessão"));
         } finally {
             setLoading(false);
         }
