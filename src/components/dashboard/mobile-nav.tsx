@@ -6,103 +6,12 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescri
 import { Button } from "@/components/ui/button";
 import { Menu, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import {
-    LayoutDashboard,
-    MessageSquare,
-    Users,
-    UserX,
-    Settings,
-    LogOut,
-    QrCode,
-    ImageIcon,
-    Webhook,
-    CalendarClock,
-    Share2,
-    Bot,
-    Bell,
-    FileText,
-    Code,
-    UserCheck,
-    Megaphone,
-    HardDrive,
-    Activity,
-    UserCircle,
-    Tag,
-    MessageCircleReply,
-    UserPlus,
-    BookOpen,
-    CreditCard
-} from "lucide-react";
+import { LogOut } from "lucide-react";
+import { navGroups } from "./nav-items";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useBillingEnforced } from "@/lib/use-billing-enforced";
 import pkg from "../../../package.json";
-
-interface NavGroup {
-    label: string;
-    items: { href: string; label: string; icon: React.ElementType; external?: boolean; superadminOnly?: boolean }[];
-}
-
-// Keep in sync with sidebar-nav.tsx
-const navGroups: NavGroup[] = [
-    {
-        label: "Principal",
-        items: [
-            { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
-            { href: "/dashboard/sessions", label: "Sessões / QR", icon: QrCode },
-            { href: "/dashboard/guia", label: "Guia de uso", icon: BookOpen },
-            { href: "/dashboard/assinatura", label: "Plano e assinatura", icon: CreditCard },
-        ],
-    },
-    {
-        label: "Mensagens",
-        items: [
-            { href: "/dashboard/chat", label: "Conversas", icon: MessageSquare },
-            { href: "/dashboard/broadcast", label: "Disparo", icon: Megaphone },
-            { href: "/dashboard/descadastros", label: "Descadastrados", icon: UserX },
-            { href: "/dashboard/sticker", label: "Criador de figurinhas", icon: ImageIcon },
-        ],
-    },
-    {
-        label: "Contatos",
-        items: [
-            { href: "/dashboard/contacts", label: "Contatos", icon: UserCheck },
-            { href: "/dashboard/groups", label: "Grupos", icon: Users },
-            { href: "/dashboard/labels", label: "Etiquetas", icon: Tag },
-        ],
-    },
-    {
-        label: "Automação",
-        items: [
-            { href: "/dashboard/bot-settings", label: "Configurações do Bot", icon: Bot },
-            { href: "/dashboard/autoreply", label: "Resposta automática", icon: MessageCircleReply },
-            { href: "/dashboard/atendente-ia", label: "Atendente IA", icon: Bot, superadminOnly: true },
-            { href: "/dashboard/agente-ia", label: "Agente de atendimento", icon: Bot, superadminOnly: true },
-            { href: "/dashboard/profile", label: "Perfil do bot", icon: UserCircle },
-            { href: "/dashboard/scheduler", label: "Agendador", icon: CalendarClock },
-            { href: "/dashboard/redes-sociais", label: "Redes Sociais", icon: Share2 },
-            { href: "/dashboard/webhooks", label: "Webhooks e API", icon: Webhook },
-        ],
-    },
-    {
-        label: "Desenvolvedor",
-        items: [
-            { href: "/docs", label: "Documentação da API", icon: FileText },
-            { href: "/swagger", label: "Swagger UI", icon: Code, external: true },
-        ],
-    },
-    {
-        label: "Administração",
-        items: [
-            { href: "/dashboard/media", label: "Gerenciador de mídia", icon: HardDrive },
-            { href: "/dashboard/sessions/access", label: "Acesso às sessões", icon: UserPlus },
-            { href: "/dashboard/users", label: "Usuários", icon: Users },
-            { href: "/dashboard/settings", label: "Configurações", icon: Settings },
-            { href: "/dashboard/system-monitor", label: "Monitor do sistema", icon: Activity, superadminOnly: true },
-            { href: "/dashboard/notifications", label: "Notificações", icon: Bell, superadminOnly: true },
-        ],
-    },
-];
 
 export function MobileNav({ appName = "Saiaê" }: { appName?: string }) {
     const [open, setOpen] = useState(false);
