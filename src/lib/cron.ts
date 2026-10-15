@@ -11,14 +11,19 @@ import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
-import { withJobLock } from "@/lib/job-lock";
+import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 let running = false; // evita duas rodadas ao mesmo tempo
 export function initScheduler() {
-    // disparos que estavam em andamento quando o servidor reiniciou não continuam: marca como interrompidos
-    prisma.broadcastLog.updateMany({ where: { status: "running" }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
+    // Disparos em andamento quando o servidor reiniciou não continuam: marca como interrompidos. Com outra instância viva
+    // (deploy sobreposto) só mexe nos antigos (12 h), para não marcar como parado o que a outra está enviando.
+    outrasInstanciasVivas().then((outras) => {
+        registrarInstancia();
+        const antigos = outras === 0 ? {} : { startedAt: { lt: new Date(Date.now() - 12 * 3_600_000) } };
+        return prisma.broadcastLog.updateMany({ where: { status: "running", ...antigos }, data: { status: "stopped", completedAt: new Date() } });
+    }).catch(() => {});
 
     // Run every minute
     const tick = async () => {

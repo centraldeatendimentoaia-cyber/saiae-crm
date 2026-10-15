@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const h = vi.hoisted(() => ({
-    prisma: { jobLock: { create: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn() } },
+    prisma: { jobLock: { create: vi.fn(), updateMany: vi.fn(), deleteMany: vi.fn(), count: vi.fn(), upsert: vi.fn() } },
 }));
 vi.mock("./prisma", () => ({ prisma: h.prisma }));
 vi.mock("./logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import { acquireJobLock, withJobLock } from "./job-lock";
+import { acquireJobLock, withJobLock, outrasInstanciasVivas, registrarInstancia } from "./job-lock";
 
 const dup = Object.assign(new Error("unique"), { code: "P2002" });
 
@@ -65,5 +65,28 @@ describe("withJobLock", () => {
         await vi.advanceTimersByTimeAsync(5000);
         await p;
         expect(h.prisma.jobLock.updateMany).toHaveBeenCalled();
+    });
+});
+
+describe("presença de instâncias", () => {
+    it("conta só instâncias vivas (não expiradas) e exclui a própria", async () => {
+        h.prisma.jobLock.count.mockResolvedValue(2);
+        expect(await outrasInstanciasVivas()).toBe(2);
+        const where = h.prisma.jobLock.count.mock.calls[0][0].where;
+        expect(where.name.startsWith).toBe("instancia:");
+        expect(where.name.not).toMatch(/^instancia:/);
+        expect(where.expiresAt.gt).toBeInstanceOf(Date);
+    });
+    it("erro do banco conta como se houvesse outra instância (não mexe em nada)", async () => {
+        h.prisma.jobLock.count.mockRejectedValue(new Error("fora"));
+        expect(await outrasInstanciasVivas()).toBe(1);
+    });
+    it("registrarInstancia grava a presença e é idempotente", () => {
+        vi.useFakeTimers();
+        h.prisma.jobLock.upsert.mockResolvedValue({});
+        registrarInstancia();
+        registrarInstancia();
+        expect(h.prisma.jobLock.upsert).toHaveBeenCalledTimes(1);
+        expect(h.prisma.jobLock.upsert.mock.calls[0][0].where.name).toMatch(/^instancia:/);
     });
 });
