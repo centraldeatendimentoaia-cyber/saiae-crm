@@ -111,6 +111,7 @@ export async function PUT(
             await prisma.chatLabel.deleteMany({
                 where: {
                     labelId: { in: labelIds },
+                    label: { sessionId }, // só etiquetas desta sessão
                     chatJid: decodedJid
                 }
             });
