@@ -10,6 +10,7 @@ import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
 import { MAX_TEXTO } from "@/modules/ia-atendimento/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
+import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 
@@ -290,7 +291,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
 
         let conv = await garantirConversa(sessionId, jid, { telefone, nomePerfil });
         if (iaPausada(conv, agora)) return; // uma pessoa assumiu ou a recepção foi chamada
-        if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: { estado: "ia", pausadaAte: null, motivoPausa: null } });
+        if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: dadosRetomar({ motivoPausa: null }) });
         if (!podeResponder(MAX_RESPOSTAS_DIA)) {
             logger.warn(TAG, "teto diário de respostas do agente atingido: não responde mais hoje");
             return;
@@ -321,7 +322,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             }
             await prisma.agenteConversa.update({
                 where: { id: conv.id },
-                data: { estado: "humano", pausadaAte: new Date(Date.now() + cfg.pausaHoras * 3_600_000), motivoPausa: pedido.motivo, ...(pedido.servico ? { servico: pedido.servico } : {}) },
+                data: { ...dadosPausar(new Date(Date.now() + cfg.pausaHoras * 3_600_000), { motivoPausa: pedido.motivo }), ...(pedido.servico ? { servico: pedido.servico } : {}) },
             });
             if (cfg.etiquetaAguardando) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAguardando);
             return true;
@@ -419,7 +420,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         await prisma.agenteConversa.upsert({
                             where: { sessionId_jid: { sessionId, jid } },
                             create: { sessionId, jid },
-                            update: { estado: "ia", pausadaAte: null, motivoPausa: null },
+                            update: dadosRetomar({ motivoPausa: null }),
                         });
                         continue;
                     }
@@ -427,8 +428,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         const ate = new Date(Date.now() + cfg.pausaHoras * 3_600_000);
                         await prisma.agenteConversa.upsert({
                             where: { sessionId_jid: { sessionId, jid } },
-                            create: { sessionId, jid, estado: "humano", pausadaAte: ate, motivoPausa: "pessoa_assumiu", ultimaHumanoAt: new Date() },
-                            update: { estado: "humano", pausadaAte: ate, motivoPausa: "pessoa_assumiu", ultimaHumanoAt: new Date() },
+                            create: { sessionId, jid, ...dadosPausar(ate, { motivoPausa: "pessoa_assumiu" }), ultimaHumanoAt: new Date() },
+                            update: { ...dadosPausar(ate, { motivoPausa: "pessoa_assumiu" }), ultimaHumanoAt: new Date() },
                         });
                         const p = pendentes.get(jid);
                         if (p?.timer) clearTimeout(p.timer);

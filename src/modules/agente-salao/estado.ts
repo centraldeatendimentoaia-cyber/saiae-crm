@@ -3,6 +3,9 @@
  * quando vale um follow-up e como reconhecer que uma pessoa assumiu a conversa. Tudo testável com relógio injetado.
  */
 
+import { iaPausada } from "@/modules/atendimento-comum/pausa";
+import { diaEHora } from "@/modules/atendimento-comum/tempo";
+
 export interface ConfigHorario {
     diasAbertos: string; // "2,3,4,5,6" (0 = domingo)
     horaAbre: number;
@@ -19,26 +22,13 @@ export interface ConversaEstado {
     followUpEm: Date | null;
 }
 
-const TZ = "America/Sao_Paulo";
-
-/** Dia da semana (0 = domingo) e hora (0-23) em Brasília. */
-export function diaEHora(d: Date): { dia: number; hora: number } {
-    const f = new Intl.DateTimeFormat("en-US", { timeZone: TZ, weekday: "short", hour: "numeric", hourCycle: "h23" });
-    const o: Record<string, string> = {};
-    for (const p of f.formatToParts(d)) o[p.type] = p.value;
-    const dias = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    return { dia: dias.indexOf(o.weekday), hora: Number(o.hour) };
-}
+// Pausa (iaPausada) e fuso de São Paulo (diaEHora) são comuns ao módulo ia-atendimento.
+export { iaPausada, diaEHora };
 
 export function salaoAberto(cfg: ConfigHorario, agora: Date): boolean {
     const abertos = cfg.diasAbertos.split(",").map((s) => Number(s.trim())).filter((n) => Number.isInteger(n));
     const { dia, hora } = diaEHora(agora);
     return abertos.includes(dia) && hora >= cfg.horaAbre && hora < cfg.horaFecha;
-}
-
-/** A IA está calada nesta conversa? (uma pessoa assumiu ou a recepção foi chamada, e a pausa ainda não venceu) */
-export function iaPausada(c: Pick<ConversaEstado, "estado" | "pausadaAte">, agora: Date): boolean {
-    return c.estado === "humano" && c.pausadaAte !== null && c.pausadaAte > agora;
 }
 
 /** "#lavinia" digitado pela recepção na conversa devolve a IA na hora. */
