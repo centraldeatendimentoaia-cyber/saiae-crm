@@ -4,10 +4,10 @@ export const pathsUsuarios = {
     "/users": {
         get: {
             tags: ["Users"],
-            summary: "List users (SUPERADMIN only)",
+            summary: "Listar usuários (somente SUPERADMIN)",
             responses: {
                 200: {
-                    description: "List of users",
+                    description: "Lista de usuários",
                     content: {
                         "application/json": {
                             schema: {
@@ -39,7 +39,7 @@ export const pathsUsuarios = {
         },
         post: {
             tags: ["Users"],
-            summary: "Create user (SUPERADMIN only)",
+            summary: "Criar usuário (somente SUPERADMIN)",
             requestBody: {
                 content: {
                     "application/json": {
@@ -62,7 +62,7 @@ export const pathsUsuarios = {
             },
             responses: {
                 200: {
-                    description: "User created",
+                    description: "Usuário criado",
                     content: {
                         "application/json": {
                             schema: {
@@ -88,7 +88,7 @@ export const pathsUsuarios = {
     "/users/{id}": {
         patch: {
             tags: ["Users"],
-            summary: "Update user (SUPERADMIN only)",
+            summary: "Atualizar usuário (somente SUPERADMIN)",
             parameters: [
                 paramId
             ],
@@ -109,7 +109,7 @@ export const pathsUsuarios = {
             },
             responses: {
                 200: {
-                    description: "User updated",
+                    description: "Usuário atualizado",
                     content: {
                         "application/json": {
                             schema: {
@@ -137,19 +137,19 @@ export const pathsUsuarios = {
                 400: { $ref: "#/components/responses/BadRequest" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "User not found" },
+                404: { description: "Usuário não encontrado" },
                 500: { $ref: "#/components/responses/ServerError" }
             }
         },
         delete: {
             tags: ["Users"],
-            summary: "Delete user (SUPERADMIN only)",
+            summary: "Apagar usuário (somente SUPERADMIN)",
             parameters: [
                 paramId
             ],
             responses: {
                 200: {
-                    description: "User deleted",
+                    description: "Usuário apagado",
                     content: {
                         "application/json": {
                             schema: {
@@ -164,7 +164,7 @@ export const pathsUsuarios = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "User not found" },
+                404: { description: "Usuário não encontrado" },
                 500: { $ref: "#/components/responses/ServerError" }
             }
         }
@@ -172,10 +172,10 @@ export const pathsUsuarios = {
     "/user/api-key": {
         get: {
             tags: ["Users"],
-            summary: "Get current API key",
+            summary: "Obter a chave de API atual",
             responses: {
                 200: {
-                    description: "Current API key",
+                    description: "Chave de API atual",
                     content: {
                         "application/json": {
                             schema: {
@@ -192,10 +192,10 @@ export const pathsUsuarios = {
         },
         post: {
             tags: ["Users"],
-            summary: "Generate new API key",
+            summary: "Gerar uma nova chave de API",
             responses: {
                 200: {
-                    description: "New API key generated",
+                    description: "Nova chave de API gerada",
                     content: {
                         "application/json": {
                             schema: {
@@ -208,15 +208,15 @@ export const pathsUsuarios = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Failed to generate API key" }
+                500: { description: "Falha ao gerar a chave de API" }
             }
         },
         delete: {
             tags: ["Users"],
-            summary: "Revoke API key",
+            summary: "Revogar a chave de API",
             responses: {
                 200: {
-                    description: "API key revoked",
+                    description: "Chave de API revogada",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
@@ -224,7 +224,7 @@ export const pathsUsuarios = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Failed to revoke API key" }
+                500: { description: "Falha ao revogar a chave de API" }
             }
         }
     },

@@ -79,10 +79,10 @@ export function ApiKeyCard() {
                     </div>
                     {novaChave && (
                         <>
-                            <Button variant="ghost" size="icon" onClick={() => setShowApiKey(!showApiKey)}>
+                            <Button variant="ghost" size="icon" onClick={() => setShowApiKey(!showApiKey)} aria-label={showApiKey ? "Ocultar a chave de API" : "Mostrar a chave de API"} title={showApiKey ? "Ocultar a chave" : "Mostrar a chave"}>
                                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(novaChave)}>
+                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(novaChave)} aria-label="Copiar a chave de API" title="Copiar a chave">
                                 <Copy className="h-4 w-4" />
                             </Button>
                         </>
@@ -102,7 +102,7 @@ export function ApiKeyCard() {
                 )}
                 {apiKey && (
                     <p className="text-xs text-muted-foreground mt-2">
-                        Exemplo: <code className="bg-zinc-100 px-1 py-0.5 rounded">curl -H "X-API-Key: {novaChave ? novaChave.slice(0, 10) : "SUA_CHAVE"}..." http://your-server/api/sessions</code>
+                        Exemplo: <code className="bg-zinc-100 px-1 py-0.5 rounded">curl -H "X-API-Key: {novaChave ? novaChave.slice(0, 10) : "SUA_CHAVE"}..." http://seu-servidor/api/sessions</code>
                     </p>
                 )}
             </CardContent>

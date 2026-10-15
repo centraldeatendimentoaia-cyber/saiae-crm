@@ -6,6 +6,7 @@ import { getApiDocs } from "./index";
 type Operacao = { tags?: string[]; responses?: Record<string, unknown>; parameters?: { name?: string; $ref?: string }[] };
 type Spec = {
     openapi: string;
+    info: unknown;
     paths: Record<string, Record<string, Operacao>>;
     components: { schemas: Record<string, unknown>; responses: Record<string, unknown>; securitySchemes: Record<string, unknown> };
 };
@@ -47,6 +48,14 @@ describe("especificação OpenAPI (fonte única em src/lib/swagger)", () => {
                 for (const nome of esperados) expect(declarados, `${metodo} ${rota}: falta o parâmetro ${nome}`).toContain(nome);
             }
         }
+    });
+
+    it("os títulos das rotas (summary) estão em português, não em inglês", () => {
+        const ingles = /^(Get|List|Create|Update|Delete|Send|Check|Revoke|Generate|Mark|Search|Forward|Edit|Download|Block|Unblock|Register|Retrieve|Archive|Mute|Pin|Leave|Accept|Remove|Manage|Toggle|Perform|Grant|Test|React|Reply|Star|Unstar|Broadcast)\b/;
+        const resumos: string[] = [];
+        for (const metodos of Object.values(spec.paths)) for (const op of Object.values(metodos)) resumos.push((op as { summary?: string }).summary ?? "");
+        expect(resumos.filter((s) => ingles.test(s))).toEqual([]);
+        expect(JSON.stringify(spec.info)).toContain("Referência completa da API");
     });
 
     it("não existe mais cópia da spec em swagger.json nem o swagger.ts gigante", () => {

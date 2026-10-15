@@ -15,7 +15,7 @@ export const contentType = "image/png";
 export default async function Icon() {
     // Default config
     let letter = "s";
-    let color = "#FFC21A";
+    const color = "#FFC21A";
 
     try {
         // Fetch system config

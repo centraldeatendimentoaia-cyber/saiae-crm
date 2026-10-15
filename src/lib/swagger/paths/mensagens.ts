@@ -4,15 +4,15 @@ export const pathsMensagens = {
     "/messages/{sessionId}/{jid}/send": {
         post: {
             tags: ["Messaging"],
-            summary: "Send message (text/media/sticker)",
-            description: "Universal endpoint for sending text, images, videos, documents, and stickers. Supports mentions and all WhatsApp message types.",
+            summary: "Enviar mensagem (texto, mídia ou figurinha)",
+            description: "Rota universal para enviar texto, imagens, vídeos, documentos e figurinhas. Aceita menções e todos os tipos de mensagem do WhatsApp.",
             parameters: [
                 {
                     name: "sessionId",
                     in: "path",
                     required: true,
                     schema: { type: "string" },
-                    description: "Session identifier",
+                    description: "Identificador da sessão",
                     example: "sales-01"
                 },
                 {
@@ -20,7 +20,7 @@ export const pathsMensagens = {
                     in: "path",
                     required: true,
                     schema: { type: "string" },
-                    description: "Recipient JID",
+                    description: "JID do destinatário",
                     example: "628123456789@s.whatsapp.net"
                 }
             ],
@@ -34,7 +34,7 @@ export const pathsMensagens = {
                             properties: {
                                 message: {
                                     type: "object",
-                                    description: "Message content (text, image, sticker, etc.)",
+                                    description: "Conteúdo da mensagem (texto, imagem, figurinha etc.)",
                                     oneOf: [
                                         {
                                             properties: {
@@ -56,7 +56,7 @@ export const pathsMensagens = {
                                             properties: {
                                                 sticker: {
                                                     oneOf: [
-                                                        { type: "string", description: "URL to sticker image" },
+                                                        { type: "string", description: "URL da imagem da figurinha" },
                                                         {
                                                             type: "object",
                                                             properties: {
@@ -75,20 +75,20 @@ export const pathsMensagens = {
                                     type: "array",
                                     items: { type: "string" },
                                     example: ["628123456789@s.whatsapp.net"],
-                                    description: "List of JIDs to mention (for group messages)"
+                                    description: "Lista de JIDs a mencionar (em mensagens de grupo)"
                                 }
                             }
                         },
                         examples: {
                             text: {
-                                summary: "Text message",
+                                summary: "Mensagem de texto",
                                 value: {
                                     jid: "628123456789@s.whatsapp.net",
                                     message: { text: "Hello, how can I help you?" }
                                 }
                             },
                             image: {
-                                summary: "Image with caption",
+                                summary: "Imagem com legenda",
                                 value: {
                                     jid: "628123456789@s.whatsapp.net",
                                     message: {
@@ -98,7 +98,7 @@ export const pathsMensagens = {
                                 }
                             },
                             sticker: {
-                                summary: "Sticker from URL",
+                                summary: "Figurinha a partir de uma URL",
                                 value: {
                                     jid: "628123456789@s.whatsapp.net",
                                     message: {
@@ -111,7 +111,7 @@ export const pathsMensagens = {
                                 }
                             },
                             withMention: {
-                                summary: "Message with Mention",
+                                summary: "Mensagem com menção",
                                 value: {
                                     jid: "120363123456789@g.us",
                                     message: { text: "Hello @628123456789, welcome!" },
@@ -124,7 +124,7 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Message sent successfully",
+                    description: "Mensagem enviada com sucesso",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" },
@@ -146,34 +146,34 @@ export const pathsMensagens = {
                         }
                     }
                 },
-                400: { description: "Invalid request - jid and message are required" },
+                400: { description: "Requisição inválida: jid e message são obrigatórios" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found or disconnected" },
+                404: { description: "Sessão não encontrada ou desconectada" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send message" }
+                500: { description: "Falha ao enviar a mensagem" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/media": {
         post: {
             tags: ["Messaging"],
-            summary: "Send media (image/video/audio/document)",
-            description: "Send file using multipart/form-data",
+            summary: "Enviar mídia (imagem, vídeo, áudio ou documento)",
+            description: "Envia um arquivo usando multipart/form-data",
             parameters: [
                 {
                     name: "sessionId",
                     in: "path",
                     required: true,
                     schema: { type: "string" },
-                    description: "Session identifier"
+                    description: "Identificador da sessão"
                 },
                 {
                     name: "jid",
                     in: "path",
                     required: true,
                     schema: { type: "string" },
-                    description: "Recipient JID"
+                    description: "JID do destinatário"
                 }
             ],
             requestBody: {
@@ -197,26 +197,26 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Media sent successfully",
+                    description: "Mídia enviada com sucesso",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
                         }
                     }
                 },
-                400: { description: "Bad Request - File missing" },
+                400: { description: "Requisição inválida: arquivo ausente" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send media" }
+                500: { description: "Falha ao enviar a mídia" }
             }
         }
     },
     "/messages/{sessionId}/broadcast": {
         post: {
             tags: ["Messaging"],
-            summary: "Broadcast message to multiple recipients",
-            description: "Send same message to multiple contacts with anti-ban delays (10-20s random)",
+            summary: "Disparar mensagem para vários destinatários",
+            description: "Envia a mesma mensagem a vários contatos com intervalos anti-bloqueio (aleatórios, de 10 a 20 s)",
             parameters: [
                 paramSessionId
             ],
@@ -233,7 +233,7 @@ export const pathsMensagens = {
                                     example: ["628123456789@s.whatsapp.net", "628987654321@s.whatsapp.net"]
                                 },
                                 message: { type: "string", example: "Flash Sale! 50% off" },
-                                delay: { type: "number", description: "Optional delay (unused)" }
+                                delay: { type: "number", description: "Intervalo opcional (não usado)" }
                             }
                         }
                     }
@@ -241,7 +241,7 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Broadcast started",
+                    description: "Disparo iniciado",
                     content: {
                         "application/json": {
                             schema: {
@@ -257,23 +257,23 @@ export const pathsMensagens = {
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to start broadcast" }
+                500: { description: "Falha ao iniciar o disparo" }
             }
         }
     },
     "/messages/{sessionId}/broadcast/history": {
         get: {
             tags: ["Messaging"],
-            summary: "Get broadcast history",
-            description: "Retrieve list of past broadcasts with status, sent/failed counts (persisted in DB)",
+            summary: "Obter o histórico de disparos",
+            description: "Lista os disparos anteriores com status e contagem de enviados e falhas (guardados no banco)",
             parameters: [
                 paramSessionId,
-                { name: "limit", in: "query", schema: { type: "integer", default: 20 }, description: "Max results (max 50)" },
-                { name: "offset", in: "query", schema: { type: "integer", default: 0 }, description: "Pagination offset" }
+                { name: "limit", in: "query", schema: { type: "integer", default: 20 }, description: "Máximo de resultados (até 50)" },
+                { name: "offset", in: "query", schema: { type: "integer", default: 0 }, description: "Deslocamento da paginação" }
             ],
             responses: {
                 200: {
-                    description: "Broadcast history",
+                    description: "Histórico de disparos",
                     content: {
                         "application/json": {
                             schema: {
@@ -300,15 +300,15 @@ export const pathsMensagens = {
     "/messages/{sessionId}/broadcast/history/{logId}": {
         get: {
             tags: ["Messaging"],
-            summary: "Get broadcast detail",
-            description: "Retrieve full detail of a specific broadcast including per-recipient status",
+            summary: "Obter o detalhe de um disparo",
+            description: "Obtém o detalhe completo de um disparo, com o status de cada destinatário",
             parameters: [
                 paramSessionId,
                 { name: "logId", in: "path", required: true, schema: { type: "string" } }
             ],
             responses: {
                 200: {
-                    description: "Broadcast detail",
+                    description: "Detalhe do disparo",
                     content: {
                         "application/json": {
                             schema: {
@@ -341,15 +341,15 @@ export const pathsMensagens = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Broadcast not found" }
+                404: { description: "Disparo não encontrado" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/poll": {
         post: {
             tags: ["Messaging"],
-            summary: "Send poll message",
-            description: "Create interactive poll (2-12 options, single or multiple choice)",
+            summary: "Enviar enquete",
+            description: "Cria uma enquete interativa (de 2 a 12 opções, escolha única ou múltipla)",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -376,19 +376,19 @@ export const pathsMensagens = {
                 }
             },
             responses: {
-                200: { description: "Poll sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
+                200: { description: "Enquete enviada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send poll" }
+                500: { description: "Falha ao enviar a enquete" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/location": {
         post: {
             tags: ["Messaging"],
-            summary: "Send location",
-            description: "Share GPS coordinates with optional name and address",
+            summary: "Enviar localização",
+            description: "Compartilha coordenadas de GPS, com nome e endereço opcionais",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -410,19 +410,19 @@ export const pathsMensagens = {
                 }
             },
             responses: {
-                200: { description: "Location sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
+                200: { description: "Localização enviada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send location" }
+                500: { description: "Falha ao enviar a localização" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/contact": {
         post: {
             tags: ["Messaging"],
-            summary: "Send contact card",
-            description: "Share one or multiple contact vCards",
+            summary: "Enviar cartão de contato",
+            description: "Compartilha um ou vários cartões de contato (vCard)",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -451,41 +451,41 @@ export const pathsMensagens = {
                 }
             },
             responses: {
-                200: { description: "Contact sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
+                200: { description: "Contato enviado", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send contact" }
+                500: { description: "Falha ao enviar o contato" }
             }
         }
     },
     "/messages/{sessionId}/download/{messageId}/media": {
         get: {
             tags: ["Messaging"],
-            summary: "Download message media",
-            description: "Download media from a message (direct binary or redirect)",
+            summary: "Baixar a mídia de uma mensagem",
+            description: "Baixa a mídia de uma mensagem (binário direto ou redirecionamento)",
             parameters: [
                 paramSessionId,
                 paramMessageId
             ],
             responses: {
                 200: {
-                    description: "Binary media file",
+                    description: "Arquivo de mídia em binário",
                     content: {
                         "*/*": { schema: { type: "string", format: "binary" } }
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                403: { description: "Forbidden - Cannot access session or message" },
-                404: { description: "Message not found or has no media" }
+                403: { description: "Proibido: sem acesso à sessão ou à mensagem" },
+                404: { description: "Mensagem não encontrada ou sem mídia" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/{messageId}/react": {
         post: {
             tags: ["Messaging"],
-            summary: "React to message with emoji",
-            description: "Add emoji reaction to a message (empty string removes reaction)",
+            summary: "Reagir a uma mensagem com emoji",
+            description: "Adiciona uma reação com emoji a uma mensagem (texto vazio remove a reação)",
             parameters: [
                 paramSessionId,
                 paramJid,
@@ -498,30 +498,30 @@ export const pathsMensagens = {
                             type: "object",
                             required: ["emoji"],
                             properties: {
-                                emoji: { type: "string", example: "👍", description: "Emoji or empty string to remove" }
+                                emoji: { type: "string", example: "👍", description: "Emoji, ou texto vazio para remover" }
                             }
                         }
                     }
                 }
             },
             responses: {
-                200: { description: "Reaction sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" } } } } } },
+                200: { description: "Reação enviada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send reaction" }
+                500: { description: "Falha ao enviar a reação" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/{messageId}/reply": {
         post: {
             tags: ["Messaging"],
-            summary: "Reply to a message (quoted reply)",
-            description: "Send a quoted reply to a specific message by its ID. Uses same request format as /send — pass a Baileys message object.",
+            summary: "Responder a uma mensagem (citando)",
+            description: "Envia uma resposta citando uma mensagem específica, pelo ID dela. Usa o mesmo formato de requisição de /send: passe um objeto de mensagem do Baileys.",
             parameters: [
                 { name: "sessionId", in: "path", required: true, schema: { type: "string" }, example: "sales-01" },
                 { name: "jid", in: "path", required: true, schema: { type: "string" }, example: "628123456789@s.whatsapp.net" },
-                { name: "messageId", in: "path", required: true, schema: { type: "string" }, description: "ID of message to reply to", example: "3EB0ABCD1234567890" }
+                { name: "messageId", in: "path", required: true, schema: { type: "string" }, description: "ID da mensagem a responder", example: "3EB0ABCD1234567890" }
             ],
             requestBody: {
                 required: true,
@@ -533,20 +533,20 @@ export const pathsMensagens = {
                             properties: {
                                 message: {
                                     type: "object",
-                                    description: "Message content — same format as /send (text, image, video, etc.)",
+                                    description: "Conteúdo da mensagem, no mesmo formato de /send (texto, imagem, vídeo etc.)",
                                     example: { text: "Thanks for your message!" }
                                 },
-                                mentions: { type: "array", items: { type: "string" }, example: ["628123456789@s.whatsapp.net"], description: "JIDs to mention" },
-                                fromMe: { type: "boolean", default: false, description: "Whether the quoted message was sent by you" }
+                                mentions: { type: "array", items: { type: "string" }, example: ["628123456789@s.whatsapp.net"], description: "JIDs a mencionar" },
+                                fromMe: { type: "boolean", default: false, description: "Indica se a mensagem citada foi enviada por você" }
                             }
                         },
                         examples: {
                             textReply: {
-                                summary: "Text reply",
+                                summary: "Resposta de texto",
                                 value: { message: { text: "Got it, thanks!" } }
                             },
                             imageReply: {
-                                summary: "Image reply",
+                                summary: "Resposta com imagem",
                                 value: { message: { image: { url: "https://example.com/confirm.jpg" }, caption: "Confirmation image" } }
                             }
                         }
@@ -555,7 +555,7 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Reply sent successfully",
+                    description: "Resposta enviada com sucesso",
                     content: {
                         "application/json": {
                             schema: {
@@ -568,19 +568,19 @@ export const pathsMensagens = {
                         }
                     }
                 },
-                400: { description: "message is required" },
+                400: { description: "message é obrigatório" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send reply" }
+                500: { description: "Falha ao enviar a resposta" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/reply": {
         post: {
             tags: ["Messaging"],
-            summary: "Reply to a message (body-based)",
-            description: "Send a quoted reply with messageId provided in the request body. Same request format as /send with added messageId.",
+            summary: "Responder a uma mensagem (ID no corpo)",
+            description: "Envia uma resposta citando uma mensagem, com o messageId no corpo da requisição. Mesmo formato de /send, mais o messageId.",
             parameters: [
                 { name: "sessionId", in: "path", required: true, schema: { type: "string" }, example: "sales-01" },
                 { name: "jid", in: "path", required: true, schema: { type: "string" }, example: "628123456789@s.whatsapp.net" }
@@ -593,14 +593,14 @@ export const pathsMensagens = {
                             type: "object",
                             required: ["messageId", "message"],
                             properties: {
-                                messageId: { type: "string", example: "3EB0ABCD1234567890", description: "ID of the message to reply to" },
+                                messageId: { type: "string", example: "3EB0ABCD1234567890", description: "ID da mensagem a responder" },
                                 message: {
                                     type: "object",
-                                    description: "Message content — same format as /send (text, image, video, etc.)",
+                                    description: "Conteúdo da mensagem, no mesmo formato de /send (texto, imagem, vídeo etc.)",
                                     example: { text: "Sure, let me help you!" }
                                 },
-                                mentions: { type: "array", items: { type: "string" }, description: "JIDs to mention" },
-                                fromMe: { type: "boolean", default: false, description: "Whether the quoted message was sent by you" }
+                                mentions: { type: "array", items: { type: "string" }, description: "JIDs a mencionar" },
+                                fromMe: { type: "boolean", default: false, description: "Indica se a mensagem citada foi enviada por você" }
                             }
                         },
                         example: {
@@ -612,22 +612,22 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Reply sent successfully",
+                    description: "Resposta enviada com sucesso",
                     content: { "application/json": { schema: { $ref: "#/components/schemas/Success" } } }
                 },
-                400: { description: "messageId and message required" },
+                400: { description: "messageId e message são obrigatórios" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send reply" }
+                500: { description: "Falha ao enviar a resposta" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/{messageId}/star": {
         post: {
             tags: ["Messaging"],
-            summary: "Star or unstar a message",
-            description: "Mark a message as starred (saved) or remove the star. Starred messages appear in the Starred Messages section.",
+            summary: "Favoritar ou desfavoritar uma mensagem",
+            description: "Marca uma mensagem como favorita (salva) ou remove a marca. As favoritas aparecem na seção de mensagens favoritas.",
             parameters: [
                 paramSessionId,
                 paramJid,
@@ -639,20 +639,20 @@ export const pathsMensagens = {
                         schema: {
                             type: "object",
                             properties: {
-                                star: { type: "boolean", example: true, default: true, description: "true to star, false to unstar" },
-                                fromMe: { type: "boolean", example: false, default: false, description: "Whether the message was sent by you" }
+                                star: { type: "boolean", example: true, default: true, description: "true para favoritar, false para desfavoritar" },
+                                fromMe: { type: "boolean", example: false, default: false, description: "Indica se a mensagem foi enviada por você" }
                             }
                         },
                         examples: {
-                            star: { summary: "Star message", value: { star: true } },
-                            unstar: { summary: "Unstar message", value: { star: false } }
+                            star: { summary: "Favoritar mensagem", value: { star: true } },
+                            unstar: { summary: "Desfavoritar mensagem", value: { star: false } }
                         }
                     }
                 }
             },
             responses: {
                 200: {
-                    description: "Star status updated",
+                    description: "Favorito atualizado",
                     content: {
                         "application/json": {
                             schema: {
@@ -668,27 +668,27 @@ export const pathsMensagens = {
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to star/unstar message" }
+                500: { description: "Falha ao favoritar ou desfavoritar a mensagem" }
             }
         }
     },
     "/messages/{sessionId}/search": {
         get: {
             tags: ["Messaging"],
-            summary: "Search messages",
-            description: "Search messages stored in the database for a session. Supports full-text search, filtering by JID, type, and sender.",
+            summary: "Buscar mensagens",
+            description: "Busca mensagens guardadas no banco para uma sessão. Aceita busca por texto e filtros por JID, tipo e remetente.",
             parameters: [
                 { name: "sessionId", in: "path", required: true, schema: { type: "string" }, example: "sales-01" },
-                { name: "q", in: "query", schema: { type: "string" }, example: "invoice", description: "Text to search for in message content" },
-                { name: "jid", in: "query", schema: { type: "string" }, example: "628123456789@s.whatsapp.net", description: "Filter by chat JID" },
-                { name: "type", in: "query", schema: { type: "string", enum: ["TEXT", "IMAGE", "VIDEO", "AUDIO", "DOCUMENT", "STICKER", "LOCATION", "CONTACT"] }, description: "Filter by message type" },
-                { name: "fromMe", in: "query", schema: { type: "boolean" }, description: "Filter by sender (true=outgoing, false=incoming)" },
+                { name: "q", in: "query", schema: { type: "string" }, example: "invoice", description: "Texto a buscar no conteúdo das mensagens" },
+                { name: "jid", in: "query", schema: { type: "string" }, example: "628123456789@s.whatsapp.net", description: "Filtrar pelo JID da conversa" },
+                { name: "type", in: "query", schema: { type: "string", enum: ["TEXT", "IMAGE", "VIDEO", "AUDIO", "DOCUMENT", "STICKER", "LOCATION", "CONTACT"] }, description: "Filtrar pelo tipo de mensagem" },
+                { name: "fromMe", in: "query", schema: { type: "boolean" }, description: "Filtrar pelo remetente (true = enviadas, false = recebidas)" },
                 { name: "page", in: "query", schema: { type: "integer", default: 1, minimum: 1 } },
                 { name: "limit", in: "query", schema: { type: "integer", default: 20, maximum: 100 } }
             ],
             responses: {
                 200: {
-                    description: "Search results",
+                    description: "Resultados da busca",
                     content: {
                         "application/json": {
                             schema: {
@@ -727,19 +727,19 @@ export const pathsMensagens = {
                         }
                     }
                 },
-                400: { description: "q or jid is required" },
+                400: { description: "q ou jid é obrigatório" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found" },
-                500: { description: "Failed to search messages" }
+                404: { description: "Sessão não encontrada" },
+                500: { description: "Falha ao buscar as mensagens" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/list": {
         post: {
             tags: ["Messaging"],
-            summary: "Send list message",
-            description: "Send a formatted numbered list message",
+            summary: "Enviar mensagem em lista",
+            description: "Envia uma mensagem em lista numerada formatada",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -760,19 +760,19 @@ export const pathsMensagens = {
                 }
             },
             responses: {
-                200: { description: "Message sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
+                200: { description: "Mensagem enviada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send message" }
+                500: { description: "Falha ao enviar a mensagem" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/sticker": {
         post: {
             tags: ["Messaging"],
-            summary: "Send sticker",
-            description: "Convert an image to sticker and send it",
+            summary: "Enviar figurinha",
+            description: "Converte uma imagem em figurinha e envia",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -785,29 +785,29 @@ export const pathsMensagens = {
                             required: ["file"],
                             properties: {
                                 file: { type: "string", format: "binary" },
-                                pack: { type: "string", description: "Sticker pack name (default: Saiaê)" },
-                                author: { type: "string", description: "Sticker author name (default: User)" },
-                                type: { type: "string", enum: ["full", "crop", "circle"], description: "Sticker crop type (default: full)" },
-                                quality: { type: "integer", minimum: 1, maximum: 100, description: "Image quality (default: 50)" }
+                                pack: { type: "string", description: "Nome do pacote de figurinhas (padrão: Saiaê)" },
+                                author: { type: "string", description: "Nome do autor da figurinha (padrão: User)" },
+                                type: { type: "string", enum: ["full", "crop", "circle"], description: "Tipo de corte da figurinha (padrão: full)" },
+                                quality: { type: "integer", minimum: 1, maximum: 100, description: "Qualidade da imagem (padrão: 50)" }
                             }
                         }
                     }
                 }
             },
             responses: {
-                200: { description: "Sticker sent", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
+                200: { description: "Figurinha enviada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to create sticker" }
+                500: { description: "Falha ao criar a figurinha" }
             }
         }
     },
     "/messages/{sessionId}/forward": {
         post: {
             tags: ["Messaging"],
-            summary: "Forward message",
-            description: "Forward a message to one or multiple chats",
+            summary: "Encaminhar mensagem",
+            description: "Encaminha uma mensagem para uma ou várias conversas",
             parameters: [
                 paramSessionId
             ],
@@ -818,12 +818,12 @@ export const pathsMensagens = {
                             type: "object",
                             required: ["fromJid", "messageId", "toJids"],
                             properties: {
-                                fromJid: { type: "string", description: "Source chat JID", example: "628123456789@s.whatsapp.net" },
+                                fromJid: { type: "string", description: "JID da conversa de origem", example: "628123456789@s.whatsapp.net" },
                                 messageId: { type: "string", example: "3EB0ABCD1234567890" },
                                 toJids: {
                                     type: "array",
                                     items: { type: "string" },
-                                    description: "Recipient JIDs",
+                                    description: "JIDs dos destinatários",
                                     example: ["628987654321@s.whatsapp.net"]
                                 }
                             }
@@ -832,19 +832,19 @@ export const pathsMensagens = {
                 }
             },
             responses: {
-                200: { description: "Message forwarded", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" } } } } } },
+                200: { description: "Mensagem encaminhada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to forward message" }
+                500: { description: "Falha ao encaminhar a mensagem" }
             }
         }
     },
     "/messages/{sessionId}/{jid}/{messageId}": {
         delete: {
             tags: ["Messaging"],
-            summary: "Delete message for everyone",
-            description: "Delete message (only works for messages < 7 minutes old)",
+            summary: "Apagar a mensagem para todos",
+            description: "Apaga a mensagem (só funciona para mensagens com menos de 7 minutos)",
             parameters: [
                 paramSessionId,
                 paramJid,
@@ -852,7 +852,7 @@ export const pathsMensagens = {
             ],
             responses: {
                 200: {
-                    description: "Message deleted",
+                    description: "Mensagem apagada",
                     content: {
                         "application/json": {
                             schema: {
@@ -868,13 +868,13 @@ export const pathsMensagens = {
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to delete message" }
+                500: { description: "Falha ao apagar a mensagem" }
             }
         },
         patch: {
             tags: ["Messaging"],
-            summary: "Edit a sent message",
-            description: "Edit text of a sent message",
+            summary: "Editar uma mensagem enviada",
+            description: "Edita o texto de uma mensagem enviada",
             parameters: [
                 paramSessionId,
                 paramJid,
@@ -896,7 +896,7 @@ export const pathsMensagens = {
             },
             responses: {
                 200: {
-                    description: "Message edited",
+                    description: "Mensagem editada",
                     content: {
                         "application/json": {
                             schema: {
@@ -909,11 +909,11 @@ export const pathsMensagens = {
                         }
                     }
                 },
-                400: { description: "Bad Request" },
+                400: { description: "Requisição inválida" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to edit message" }
+                500: { description: "Falha ao editar a mensagem" }
             }
         }
     },

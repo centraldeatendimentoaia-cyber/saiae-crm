@@ -6,7 +6,7 @@ export const pathsConversas = {
             "tags": [
                 "Chats"
             ],
-            "summary": "Get chats by label ID",
+            "summary": "Obter conversas pelo ID da etiqueta",
             "parameters": [
                 {
                     "name": "labelId",
@@ -19,7 +19,7 @@ export const pathsConversas = {
             ],
             "responses": {
                 "200": {
-                    "description": "List of chats with the label"
+                    "description": "Lista de conversas com a etiqueta"
                 }
             }
         }
@@ -27,14 +27,14 @@ export const pathsConversas = {
     "/chat/{sessionId}": {
         get: {
             tags: ["Chat"],
-            summary: "Get chat list with contacts",
-            description: "Retrieve all contacts with last message for a session",
+            summary: "Obter a lista de conversas com contatos",
+            description: "Obtém todos os contatos de uma sessão, com a última mensagem",
             parameters: [
                 paramSessionId
             ],
             responses: {
                 200: {
-                    description: "Chat list",
+                    description: "Lista de conversas",
                     content: {
                         "application/json": {
                             schema: {
@@ -50,23 +50,23 @@ export const pathsConversas = {
     "/chat/{sessionId}/{jid}": {
         get: {
             tags: ["Chat"],
-            summary: "Get message history",
-            description: "Fetch up to 100 messages for a chat (enriched with participant info for groups)",
+            summary: "Obter o histórico de mensagens",
+            description: "Busca até 100 mensagens de uma conversa (com dados dos participantes em grupos)",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
-            responses: { 200: { description: "Message history (max 100 messages)" } }
+            responses: { 200: { description: "Histórico de mensagens (no máximo 100)" } }
         }
     },
     "/chat/{sessionId}/{jid}/read": {
         put: {
             tags: ["Chat"],
-            summary: "Mark messages as read",
-            description: "Mark specific messages or entire chat as read using RESTful path parameters",
+            summary: "Marcar mensagens como lidas",
+            description: "Marca mensagens específicas, ou a conversa inteira, como lidas, usando parâmetros no caminho",
             parameters: [
-                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "Session identifier" },
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded WhatsApp JID" }
+                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "Identificador da sessão" },
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID do WhatsApp codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -77,7 +77,7 @@ export const pathsConversas = {
                                 messageIds: {
                                     type: "array",
                                     items: { type: "string" },
-                                    description: "Optional: specific message IDs to mark as read. If not provided, marks entire chat as read"
+                                    description: "Opcional: IDs das mensagens a marcar como lidas. Se não for informado, marca a conversa inteira"
                                 }
                             }
                         }
@@ -86,7 +86,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Messages marked as read",
+                    description: "Mensagens marcadas como lidas",
                     content: {
                         "application/json": {
                             schema: {
@@ -102,18 +102,18 @@ export const pathsConversas = {
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to mark messages as read" }
+                500: { description: "Falha ao marcar as mensagens como lidas" }
             }
         }
     },
     "/chat/{sessionId}/{jid}/archive": {
         put: {
             tags: ["Chat"],
-            summary: "Archive/unarchive chat",
-            description: "Archive or unarchive a chat using RESTful path parameters",
+            summary: "Arquivar ou desarquivar conversa",
+            description: "Arquiva ou desarquiva uma conversa, usando parâmetros no caminho",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -122,7 +122,7 @@ export const pathsConversas = {
                             type: "object",
                             required: ["archive"],
                             properties: {
-                                archive: { type: "boolean", description: "true to archive, false to unarchive" }
+                                archive: { type: "boolean", description: "true para arquivar, false para desarquivar" }
                             }
                         }
                     }
@@ -130,7 +130,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Chat archived/unarchived",
+                    description: "Conversa arquivada ou desarquivada",
                     content: {
                         "application/json": {
                             schema: {
@@ -143,22 +143,22 @@ export const pathsConversas = {
                         }
                     }
                 },
-                400: { description: "Missing required fields" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to archive/unarchive chat" }
+                500: { description: "Falha ao arquivar ou desarquivar a conversa" }
             }
         }
     },
     "/chat/{sessionId}/{jid}/mute": {
         put: {
             tags: ["Chat"],
-            summary: "Mute/unmute chat",
-            description: "Mute chat with optional duration (default 8 hours)",
+            summary: "Silenciar ou reativar conversa",
+            description: "Silencia a conversa, com duração opcional (padrão: 8 horas)",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -168,7 +168,7 @@ export const pathsConversas = {
                             required: ["mute"],
                             properties: {
                                 mute: { type: "boolean" },
-                                duration: { type: "integer", description: "Duration in seconds (default: 8 hours)", example: 3600 }
+                                duration: { type: "integer", description: "Duração em segundos (padrão: 8 horas)", example: 3600 }
                             }
                         }
                     }
@@ -176,7 +176,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Chat muted/unmuted",
+                    description: "Conversa silenciada ou reativada",
                     content: {
                         "application/json": {
                             schema: {
@@ -189,22 +189,22 @@ export const pathsConversas = {
                         }
                     }
                 },
-                400: { description: "Missing required fields" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to mute/unmute chat" }
+                500: { description: "Falha ao silenciar ou reativar a conversa" }
             }
         }
     },
     "/chat/{sessionId}/{jid}/pin": {
         put: {
             tags: ["Chat"],
-            summary: "Pin/unpin chat",
-            description: "Pin or unpin a chat",
+            summary: "Fixar ou desafixar conversa",
+            description: "Fixa ou desafixa uma conversa",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -221,7 +221,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Chat pinned/unpinned",
+                    description: "Conversa fixada ou desafixada",
                     content: {
                         "application/json": {
                             schema: {
@@ -234,22 +234,22 @@ export const pathsConversas = {
                         }
                     }
                 },
-                400: { description: "Missing required fields" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to pin/unpin chat" }
+                500: { description: "Falha ao fixar ou desafixar a conversa" }
             }
         }
     },
     "/chat/{sessionId}/{jid}/presence": {
         post: {
             tags: ["Chat"],
-            summary: "Send presence (typing/recording)",
-            description: "Send presence status (typing, recording, online, etc.) to a chat",
+            summary: "Enviar presença (digitando ou gravando)",
+            description: "Envia o status de presença (digitando, gravando, online etc.) a uma conversa",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -270,7 +270,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Presence sent",
+                    description: "Presença enviada",
                     content: {
                         "application/json": {
                             schema: {
@@ -283,26 +283,26 @@ export const pathsConversas = {
                         }
                     }
                 },
-                400: { description: "Missing required fields or invalid presence" },
+                400: { description: "Campos obrigatórios ausentes ou presença inválida" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to send presence" }
+                500: { description: "Falha ao enviar a presença" }
             }
         }
     },
     "/chat/{sessionId}/{jid}/profile-picture": {
         post: {
             tags: ["Chat"],
-            summary: "Get profile picture URL",
-            description: "Get profile picture URL for a contact or group",
+            summary: "Obter a URL da foto de perfil",
+            description: "Obtém a URL da foto de perfil de um contato ou grupo",
             parameters: [
                 paramSessionId,
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID codificado para URL" }
             ],
             responses: {
                 200: {
-                    description: "Profile picture URL",
+                    description: "URL da foto de perfil",
                     content: {
                         "application/json": {
                             schema: {
@@ -320,15 +320,15 @@ export const pathsConversas = {
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to fetch profile picture" }
+                500: { description: "Falha ao buscar a foto de perfil" }
             }
         }
     },
     "/chat/{sessionId}/check": {
         post: {
             tags: ["Chat"],
-            summary: "Check if numbers exist on WhatsApp",
-            description: "Validate phone numbers (max 50 per request)",
+            summary: "Verificar se os números existem no WhatsApp",
+            description: "Valida números de telefone (no máximo 50 por requisição)",
             parameters: [
                 paramSessionId
             ],
@@ -352,7 +352,7 @@ export const pathsConversas = {
             },
             responses: {
                 200: {
-                    description: "Validation results",
+                    description: "Resultados da validação",
                     content: {
                         "application/json": {
                             schema: {
@@ -376,26 +376,26 @@ export const pathsConversas = {
                         }
                     }
                 },
-                400: { description: "Missing required fields" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to check numbers" }
+                500: { description: "Falha ao verificar os números" }
             }
         }
     },
     "/chats/{sessionId}/by-label/{labelId}": {
         get: {
             tags: ["Labels"],
-            summary: "Get chats by label",
-            description: "Get all chats associated with a specific label",
+            summary: "Obter conversas por etiqueta",
+            description: "Obtém todas as conversas associadas a uma etiqueta",
             parameters: [
                 paramSessionId,
                 paramLabelId
             ],
             responses: {
                 200: {
-                    description: "List of chats with label",
+                    description: "Lista de conversas com a etiqueta",
                     content: {
                         "application/json": {
                             schema: {
@@ -412,7 +412,7 @@ export const pathsConversas = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Label not found" }
+                404: { description: "Etiqueta não encontrada" }
             }
         }
     },
