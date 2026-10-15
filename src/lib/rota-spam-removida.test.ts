@@ -23,7 +23,7 @@ describe("remoção da rota de envio repetido (/spam)", () => {
         const spec = JSON.stringify(getApiDocs());
         expect(spec).not.toMatch(/\/messages\/(\{sessionId\}|\[sessionId\])\/(\{jid\}|\[jid\])\/spam/);
         expect(spec).not.toMatch(/Message bombing/i);
-        for (const file of ["docs/API_DOCUMENTATION.md"]) {
+        for (const file of ["docs/upstream/API_DOCUMENTATION.md"]) {
             const text = read(file);
             expect(text, file).not.toMatch(/\/messages\/(\{sessionId\}|\[sessionId\])\/(\{jid\}|\[jid\])\/spam/);
             expect(text, file).not.toMatch(/Message bombing/i);

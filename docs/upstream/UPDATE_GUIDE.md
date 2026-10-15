@@ -1,3 +1,5 @@
+> **Documento herdado do projeto original (upstream).** Mantido como referência histórica; pode estar desatualizado. A documentação atual da API é o Swagger UI em `/swagger` (spec em `src/lib/swagger/`). Índice do que é do Saiaê: [../README.md](../README.md).
+
 # 🔄 Saiaê Update Guide
 
 Keep your **Saiaê** instance up-to-date with the latest features, security patches, and performance improvements.
