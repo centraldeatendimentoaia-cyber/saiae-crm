@@ -8,7 +8,7 @@ import { RealtimeClock } from "@/components/dashboard/realtime-clock";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Bell, Inbox, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { formatDistanceToNow } from "date-fns";
+import { tempoRelativo } from "@/lib/tempo-relativo";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
@@ -162,11 +162,11 @@ export function Navbar({ appName }: NavbarProps) {
                             <div>
                                 <h4 className="font-semibold leading-none text-foreground">Notificações</h4>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    {unreadCount > 0 ? `You have ${unreadCount} unread updates.` : "Nenhuma notificação nova."}
+                                    {unreadCount > 0 ? `Você tem ${unreadCount} ${unreadCount === 1 ? "notificação não lida" : "notificações não lidas"}.` : "Nenhuma notificação nova."}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => { router.push("/dashboard/inbox"); setIsOpen(false); }}>
+                                <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => { router.push("/dashboard/notificacoes"); setIsOpen(false); }}>
                                     
                                     Ver todas
                                 </Button>
@@ -206,7 +206,7 @@ export function Navbar({ appName }: NavbarProps) {
                                                         {n.message}
                                                     </p>
                                                     <p className="text-[10px] text-zinc-400">
-                                                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                                                        {tempoRelativo(n.createdAt)}
                                                     </p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
