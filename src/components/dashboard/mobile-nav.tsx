@@ -17,7 +17,6 @@ export function MobileNav({ appName = "Saiaê" }: { appName?: string }) {
     const [open, setOpen] = useState(false);
     const pathname = usePathname();
     const { data: session } = useSession();
-    // @ts-ignore
     const userRole = session?.user?.role;
     const billingEnforced = useBillingEnforced();
 

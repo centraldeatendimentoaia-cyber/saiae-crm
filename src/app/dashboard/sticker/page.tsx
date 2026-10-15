@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +64,7 @@ export default function StickerPage() {
                 toast.error(err.error || "Failed to send sticker");
             }
         } catch (e) {
-            console.error(e);
+            logger.error("Sticker", "Erro", e);
             toast.error("Erro ao enviar a figurinha");
         } finally {
             setLoading(false);

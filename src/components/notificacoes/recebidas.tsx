@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ export function NotificacoesRecebidas() {
                 setNotifications(data?.data || []);
             }
         } catch (e) {
-            console.error("Falha ao carregar as notificações", e);
+            logger.error("Recebidas", "Falha ao carregar as notificações", e);
         } finally {
             setLoading(false);
         }
@@ -77,7 +78,7 @@ export function NotificacoesRecebidas() {
                 ));
             }
         } catch (e) {
-            console.error("Falha ao marcar como lida", e);
+            logger.error("Recebidas", "Falha ao marcar como lida", e);
         }
     };
 

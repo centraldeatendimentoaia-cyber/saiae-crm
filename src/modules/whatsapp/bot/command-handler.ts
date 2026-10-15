@@ -76,7 +76,6 @@ export async function handleBotCommand(
     if (!session) return;
 
     // Fetch BotConfig separately
-    // @ts-ignore - Prisma Client types might lag in IDE
     const botConfig = await (prisma as any).botConfig.findUnique({
         where: { sessionId: session.id }
     });

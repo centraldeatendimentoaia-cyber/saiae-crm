@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
     Dialog,
@@ -106,7 +107,7 @@ export default function WebhookLogDialog({ webhookId, webhookName, targetSession
                         }
                     }
                 } catch (e) {
-                    console.error("Failed to fetch system timezone", e);
+                    logger.error("WebhookLogDialog", "Failed to fetch system timezone", e);
                 }
             };
             fetchTimezone();
@@ -131,7 +132,7 @@ export default function WebhookLogDialog({ webhookId, webhookName, targetSession
                 });
             }
         } catch (e) {
-            console.error("Failed to fetch logs", e);
+            logger.error("WebhookLogDialog", "Failed to fetch logs", e);
         } finally {
             setLoading(false);
         }
@@ -148,7 +149,7 @@ export default function WebhookLogDialog({ webhookId, webhookName, targetSession
                 setMeta(prev => ({ total: data.total || prev.total, offset: prev.offset + newEntries.length }));
             }
         } catch (e) {
-            console.error("Failed to load more", e);
+            logger.error("WebhookLogDialog", "Failed to load more", e);
         } finally {
             setLoadingMore(false);
         }

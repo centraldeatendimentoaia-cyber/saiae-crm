@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -70,7 +71,7 @@ export default function SessionDetailPage() {
             setPairingCode(data.pairingCode || null);
             setUptime(data.uptime || 0);
         } catch (error) {
-            console.error(error);
+            logger.error("SessionId", "Erro", error);
             toast.error("Falha ao carregar os detalhes da sessão");
         } finally {
             setLoading(false);
@@ -98,12 +99,12 @@ export default function SessionDetailPage() {
         });
 
         socketInstance.on("connect", () => {
-            console.log("Connected to socket");
+            logger.info("SessionId", "Connected to socket");
             socketInstance.emit("join-session", sessionId);
         });
 
         socketInstance.on("connection.update", (data: { status: string, qr: string, pairingCode?: string }) => {
-            console.log("Socket update:", data);
+            logger.info("SessionId", "Socket update:", data);
             setSession(prev => prev ? { ...prev, status: data.status } : null);
             setQrCode(data.qr || null);
             if (data.pairingCode) setPairingCode(data.pairingCode);

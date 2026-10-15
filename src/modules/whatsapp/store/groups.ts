@@ -54,7 +54,7 @@ export async function syncGroups(sock: WASocket, sessionId: string) {
                      }
                  });
              } catch (e) {
-                 console.error(`Failed to sync group ${g.id}`, e);
+                 logger.error("Groups", `Failed to sync group ${g.id}`, e);
              }
         }
         logger.success("Store", `Synced ${groupList.length} groups for session ${sessionId}`);

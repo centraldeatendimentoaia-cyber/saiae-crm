@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -138,7 +139,7 @@ async function linkCheckout(session: any): Promise<void> {
     }
     if (!userId) {
         if (!email) {
-            console.error("[stripe] checkout sem e-mail e sem usuário conhecido:", session.id);
+            logger.error("StripeBilling", "checkout sem e-mail e sem usuário conhecido:", session.id);
             return;
         }
         userId = await createAccountForBuyer(email, session.customer_details?.name ?? null);
@@ -233,7 +234,7 @@ export async function handleStripeEvent(event: any): Promise<void> {
             processed = await handleSubscriptionEvent(event.type, obj);
             break;
         case "invoice.payment_failed":
-            console.warn("[stripe] pagamento falhou:", obj?.customer, obj?.subscription);
+            logger.warn("StripeBilling", "pagamento falhou:", obj?.customer, obj?.subscription);
             break;
         default:
             break; // invoice.paid e outros: o estado vem pelos eventos de assinatura

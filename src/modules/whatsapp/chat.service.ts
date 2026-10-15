@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { normalizeJid, batchResolveToPhoneJid } from "@/lib/jid-utils";
 import { waManager } from "@/modules/whatsapp/manager";
@@ -192,7 +193,7 @@ export class ChatService {
                     });
                 });
             } catch (e) {
-                console.error("Failed to batch load quoted messages:", e);
+                logger.error("ChatService", "Failed to batch load quoted messages:", e);
             }
         }
 
@@ -259,7 +260,7 @@ export class ChatService {
                     }
                 }
             } catch (e) {
-                console.error("Error fetching quoted message (non-fatal):", e);
+                logger.error("ChatService", "Error fetching quoted message (non-fatal):", e);
             }
         }
 
@@ -379,7 +380,7 @@ export class ChatService {
                 };
             }
 
-            onMessageSent(sessionId, webhookMsg).catch(e => console.error("Webhook error:", e));
+            onMessageSent(sessionId, webhookMsg).catch(e => logger.error("ChatService", "Webhook error:", e));
         } catch (e) {
             // Non-blocking — webhook failure shouldn't break message send
         }
@@ -457,7 +458,7 @@ export class ChatService {
                 webhookMsg.message = { stickerMessage: {} };
             }
 
-            onMessageSent(sessionId, webhookMsg).catch(e => console.error("Webhook error:", e));
+            onMessageSent(sessionId, webhookMsg).catch(e => logger.error("ChatService", "Webhook error:", e));
         } catch (e) {
             // Non-blocking
         }

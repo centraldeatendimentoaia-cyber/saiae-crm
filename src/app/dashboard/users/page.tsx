@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,7 @@ export default function UsersPage() {
                 toast.error("Não autorizado. Somente o Super Admin pode ver os usuários.");
             }
         } catch (error) {
-            console.error("Failed to fetch users", error);
+            logger.error("Users", "Failed to fetch users", error);
         } finally {
             setLoading(false);
         }

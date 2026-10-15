@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -88,7 +89,7 @@ function LabelAssignPopover({ sessionId, jid, children }: { sessionId: string; j
                 setAssigned(new Set((assignedData.data || []).map((cl: any) => cl.labelId)));
             }
         } catch (e) {
-            console.error("Failed to fetch labels", e);
+            logger.error("ChatList", "Failed to fetch labels", e);
         } finally {
             setLoading(false);
         }
@@ -318,7 +319,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
             }
             setHasMore((rawChats || []).length >= PAGE_SIZE);
         } catch (error) {
-            console.error("Failed to load chats", error);
+            logger.error("ChatList", "Failed to load chats", error);
         } finally {
             setLoading(false);
             fetchingRef.current = false;
@@ -381,7 +382,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                 }
                 setChatLabelMap(map);
             } catch (e) {
-                console.error("Failed to load label assignments", e);
+                logger.error("ChatList", "Failed to load label assignments", e);
             }
         })();
     }, [sessionId]);

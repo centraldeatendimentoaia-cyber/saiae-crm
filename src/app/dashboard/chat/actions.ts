@@ -1,5 +1,6 @@
 "use server";
 
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { ChatService } from "@/modules/whatsapp/chat.service";
 import { getAuthenticatedUserForAction } from "@/lib/server-action-auth";
@@ -112,7 +113,7 @@ export async function sendMediaMessage(formData: FormData) {
 
         return { success: true };
     } catch (error: any) {
-        console.error("Media send error:", error);
+        logger.error("Actions", "Media send error:", error);
         throw new Error(`Failed to send media: ${error.message}`);
     }
 }

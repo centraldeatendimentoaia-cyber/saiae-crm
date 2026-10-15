@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/components/dashboard/session-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -53,7 +54,7 @@ export default function ProfilePage() {
                 toast.error(data.message || "Failed to load profile");
             }
         } catch (error) {
-            console.error("Fetch profile error:", error);
+            logger.error("Profile", "Fetch profile error:", error);
             toast.error("Ocorreu um erro ao carregar o perfil");
         } finally {
             setLoading(false);
@@ -78,7 +79,7 @@ export default function ProfilePage() {
                 toast.error(data.message || "Failed to update profile name");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao atualizar o nome do perfil");
         } finally {
             setUpdatingName(false);
@@ -103,7 +104,7 @@ export default function ProfilePage() {
                 toast.error(data.message || "Failed to update status");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao atualizar o status");
         } finally {
             setUpdatingStatus(false);
@@ -132,7 +133,7 @@ export default function ProfilePage() {
                 toast.error(data.message || "Failed to upload picture");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao enviar a foto");
         } finally {
             setUpdatingPic(false);
@@ -158,7 +159,7 @@ export default function ProfilePage() {
                 toast.error(data.message || "Failed to remove picture");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao remover a foto");
         } finally {
             setUpdatingPic(false);

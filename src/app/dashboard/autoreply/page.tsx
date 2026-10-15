@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { EmojiTextarea } from "@/components/emoji-textarea";
 
 import { useState, useEffect } from "react";
@@ -88,7 +89,7 @@ export default function AutoReplyPage() {
             const data = await getAutoReplies(sessionId);
             setRules(data as unknown as AutoReply[]);
         } catch (error: any) {
-            console.error(error);
+            logger.error("Autoreply", "Erro", error);
             toast.error(error.message || "Error fetching auto-replies");
         } finally {
             setLoading(false);
@@ -120,7 +121,7 @@ export default function AutoReplyPage() {
             fetchRules();
             resetForm();
         } catch (error: any) {
-            console.error(error);
+            logger.error("Autoreply", "Erro", error);
             toast.error(error.message || "Error creating auto-reply");
         } finally {
             setSubmitting(false);
@@ -135,7 +136,7 @@ export default function AutoReplyPage() {
             toast.success("Resposta automática excluída");
             fetchRules();
         } catch (error: any) {
-            console.error(error);
+            logger.error("Autoreply", "Erro", error);
             toast.error(error.message || "Error deleting auto-reply");
         }
     };
@@ -183,7 +184,7 @@ export default function AutoReplyPage() {
             setIsEditOpen(false);
             fetchRules();
         } catch (error: any) {
-            console.error(error);
+            logger.error("Autoreply", "Erro", error);
             toast.error(error.message || "Error updating auto-reply");
         } finally {
             setSubmitting(false);

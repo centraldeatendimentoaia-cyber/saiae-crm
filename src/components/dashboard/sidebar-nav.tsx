@@ -20,7 +20,6 @@ export function SidebarNav() {
     const pathname = usePathname();
     const { data: session } = useSession();
     const { isCollapsed, toggleCollapse } = useSidebar();
-    // @ts-ignore
     const userRole = session?.user?.role;
     const billingEnforced = useBillingEnforced();
 

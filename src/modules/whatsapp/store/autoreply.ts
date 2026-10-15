@@ -58,13 +58,11 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
         // Fetch session ID and Bot Config once per batch (optimization)
         const session = await prisma.session.findUnique({
             where: { sessionId },
-            // @ts-ignore
             include: { botConfig: true }
         });
 
         if (!session) return;
 
-        // @ts-ignore
         let config = (session as any).botConfig;
 
         if (!config) {

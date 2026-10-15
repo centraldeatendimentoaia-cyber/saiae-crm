@@ -137,21 +137,17 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
                     create: {
                         sessionId: dbSessionId,
                         jid: c.id,
-                        // @ts-ignore
                         lid: c.lid || undefined,
                         name: c.name || c.notify || c.verifiedName,
                         notify: c.notify,
-                        // @ts-ignore
                         verifiedName: c.verifiedName,
                         profilePic: c.imgUrl || undefined,
                         data: c as any
                     },
                     update: {
-                        // @ts-ignore
                         lid: c.lid || undefined,
                         name: c.name || undefined,
                         notify: c.notify || undefined,
-                        // @ts-ignore
                         verifiedName: c.verifiedName || undefined,
                         profilePic: c.imgUrl || undefined,
                         data: c as any
@@ -544,12 +540,10 @@ async function processAndSaveMessage(
                     jid: contactJid,
                     notify: !fromMe ? pushName : undefined,
                     name: !fromMe ? pushName : undefined,
-                    // @ts-ignore
                     remoteJidAlt: remoteJidAlt || undefined
                 },
                 update: !fromMe ? {
                     notify: pushName,
-                    // @ts-ignore
                     remoteJidAlt: remoteJidAlt || undefined
                 } : {}
             });

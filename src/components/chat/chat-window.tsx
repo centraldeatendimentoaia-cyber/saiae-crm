@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -201,7 +202,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             else if (data.messages?.length > 0) setMessages(prev => [...(data.messages || []), ...prev]);
             setHasMore(data.hasMore);
             if (data.messages?.length > 0) setOldestTimestamp(data.messages[0].timestamp);
-        } catch (e) { console.error("Failed to load messages", e); }
+        } catch (e) { logger.error("ChatWindow", "Failed to load messages", e); }
         finally { setLoading(false); setLoadingMore(false); }
     }, [sessionId, jid]);
 

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -50,7 +51,7 @@ export function SessionManager({ user }: { user: any }) {
         });
 
         socketInstance.on('connect', () => {
-            console.log('Socket connected');
+            logger.info("SessionManager", 'Socket connected');
         });
 
         socketInstance.on('connection.update', (data: { sessionId: string, status: string, qr: string }) => {
@@ -117,7 +118,7 @@ export function SessionManager({ user }: { user: any }) {
             // Optionally redirect immediately or let user choose
             // router.push(`/dashboard/sessions/${session.sessionId}`);
         } catch (e: any) {
-            console.error(e);
+            logger.error("SessionManager", "Erro", e);
             toast.error(e.message || "Failed to create session");
         } finally {
             setLoading(false);

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
@@ -52,11 +53,10 @@ export const viewport: Viewport = {
 export async function generateMetadata(): Promise<Metadata> {
   let appName = "Saiaê";
   try {
-    // @ts-ignore
     const config = await prisma.systemConfig.findUnique({ where: { id: "default" } });
     if (config?.appName) appName = config.appName;
   } catch (e) {
-    console.error("Failed to fetch system config for metadata:", e);
+    logger.error("Layout", "Failed to fetch system config for metadata:", e);
   }
 
   const appDefaultTitle = `${appName} | Disparador de WhatsApp`;

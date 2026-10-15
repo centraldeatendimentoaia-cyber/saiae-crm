@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +26,7 @@ export default function SystemMonitorPage() {
                 toast.error(result.message || "Failed to fetch metrics");
             }
         } catch (error) {
-            console.error("Monitor fetch error:", error);
+            logger.error("SystemMonitor", "Monitor fetch error:", error);
         } finally {
             setLoading(false);
         }
