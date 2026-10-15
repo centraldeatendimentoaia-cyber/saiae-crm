@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma, BotConfig, MessageStatus, MessageType } from "@prisma/client";
 import type { WASocket, WAMessage, Contact } from "@whiskeysockets/baileys";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { onMessageReceived, onMessageSent, dispatchWebhook, downloadAndSaveMedia } from "@/lib/webhook";
@@ -59,7 +60,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
         for (const msg of messages) {
             try {
                 // Auto Read Logic
-                if (type === 'notify' && (config as any)?.autoRead && !msg.key.fromMe) {
+                if (type === 'notify' && config?.autoRead && !msg.key.fromMe) {
                     await sock.readMessages([msg.key]);
                 }
 
@@ -81,7 +82,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
         // Emit to socket room for real-time frontend updates
         if (processedMessages.length > 0) {
             // Serialize for frontend: convert Date to ISO string
-            const serialized = processedMessages.map((m: any) => ({
+            const serialized = processedMessages.map((m) => ({
                 ...m,
                 timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp
             }));
@@ -142,7 +143,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
                         notify: c.notify,
                         verifiedName: c.verifiedName,
                         profilePic: c.imgUrl || undefined,
-                        data: c as any
+                        data: c as unknown as Prisma.InputJsonObject
                     },
                     update: {
                         lid: c.lid || undefined,
@@ -150,7 +151,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
                         notify: c.notify || undefined,
                         verifiedName: c.verifiedName || undefined,
                         profilePic: c.imgUrl || undefined,
-                        data: c as any
+                        data: c as unknown as Prisma.InputJsonObject
                     }
                 });
 
@@ -171,7 +172,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
                 const keyId = update.key?.id;
                 if (!keyId) continue;
 
-                const statusMap: Record<number, string> = {
+                const statusMap: Record<number, MessageStatus> = {
                     0: 'PENDING',
                     1: 'SENT',
                     2: 'DELIVERED',
@@ -183,7 +184,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
 
                 await prisma.message.updateMany({
                     where: { sessionId: dbSessionId, keyId },
-                    data: { status: status as any }
+                    data: { status }
                 });
 
                 // Dispatch webhook for message status update
@@ -207,7 +208,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
                 if (!update.id) continue;
                 
                 // Keep DB in sync
-                const updateData: any = {};
+                const updateData: Prisma.GroupUpdateManyMutationInput = {};
                 if (update.subject !== undefined) updateData.subject = update.subject;
                 if (update.desc !== undefined) updateData.description = update.desc;
                 if (update.restrict !== undefined) updateData.restrict = update.restrict;
@@ -253,7 +254,7 @@ export const bindSessionStore = (sock: WASocket, sessionId: string, io: Server |
             sock.groupMetadata(update.id).then(async (g) => {
                 await prisma.group.updateMany({
                     where: { sessionId: dbSessionId as string, jid: update.id as string },
-                    data: { participants: g.participants as any }
+                    data: { participants: g.participants as unknown as Prisma.InputJsonArray }
                 });
             }).catch(e => {
                  logger.debug("Store", "Failed to refresh group participants metadata", e);
@@ -270,7 +271,7 @@ async function processAndSaveMessage(
     sessionId: string,
     triggerWebhook: boolean,
     sock?: WASocket,
-    config?: any,
+    config?: BotConfig | null,
     io?: Server | null
 ) {
     const keyId = msg.key.id;
@@ -343,7 +344,7 @@ async function processAndSaveMessage(
                     where: { sessionId },
                     select: { config: true }
                 });
-                antiDeleteEnabled = !!(s?.config as any)?.antiDelete;
+                antiDeleteEnabled = !!(s?.config as { antiDelete?: boolean } | null)?.antiDelete;
             } catch {}
 
             if (antiDeleteEnabled) {
@@ -427,7 +428,7 @@ async function processAndSaveMessage(
 
     const messageContent = normalizeMessageContent(msg.message);
     let text = "";
-    let messageType = "TEXT";
+    let messageType: MessageType = "TEXT";
 
     // Extract content based on message type
     if (messageContent?.conversation) {
@@ -487,11 +488,11 @@ async function processAndSaveMessage(
     // Extract contextInfo (quoted message ID)
     let quoteId: string | null = null;
     if (msg.message) {
-        const msgObj = msg.message as any;
+        const msgObj = msg.message as Record<string, unknown>;
         for (const key of Object.keys(msgObj)) {
             const inner = msgObj[key];
-            if (inner && typeof inner === 'object' && inner !== null && 'contextInfo' in inner) {
-                const contextInfo = (inner as any).contextInfo;
+            if (inner && typeof inner === 'object' && 'contextInfo' in inner) {
+                const contextInfo = (inner as { contextInfo?: { stanzaId?: string | null } | null }).contextInfo;
                 if (contextInfo?.stanzaId) {
                     quoteId = contextInfo.stanzaId;
                     break;
@@ -509,7 +510,7 @@ async function processAndSaveMessage(
                 fromMe: fromMe || false,
                 keyId,
                 pushName,
-                type: messageType as any,
+                type: messageType,
                 content: text,
                 mediaUrl: fileUrl, // Save Media URL
                 status: fromMe ? "SENT" : "PENDING",
@@ -522,17 +523,6 @@ async function processAndSaveMessage(
         const finalRemoteJid = normalizeJid(normalizedRemoteJid);
         if (remoteJid && !remoteJid.includes('@g.us') && !remoteJid.includes('status@broadcast')) {
             const contactJid = finalRemoteJid; // Use fully normalized JID
-            const contactData: any = {
-                sessionId: dbSessionId,
-                jid: contactJid
-            };
-
-            // Only update name/notify if message is FROM the contact (not from me)
-            if (!fromMe) {
-                if (pushName) contactData.notify = pushName;
-                if (pushName) contactData.name = pushName;
-            }
-
             const contact = await prisma.contact.upsert({
                 where: { sessionId_jid: { sessionId: dbSessionId, jid: contactJid } },
                 create: {

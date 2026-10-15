@@ -59,8 +59,8 @@ export class WhatsAppManager {
     }
 
     async createSession(userId: string, name: string, customSessionId?: string) {
-        if (!this.io && (global as any).io) {
-            this.io = (global as any).io;
+        if (!this.io && global.io) {
+            this.io = global.io;
         }
 
         if (!this.io) {

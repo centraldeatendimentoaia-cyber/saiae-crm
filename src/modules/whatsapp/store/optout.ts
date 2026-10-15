@@ -15,7 +15,7 @@ export function bindOptOut(sock: WASocket, sessionId: string) {
                 const text = content?.conversation || content?.extendedTextMessage?.text || "";
                 if (!text || text.length > 20) continue;
 
-                const target = (msg.key as any).remoteJidAlt || jid;
+                const target = msg.key.remoteJidAlt || jid;
                 if (isOptOutText(text)) {
                     await addOptOut(sessionId, target);
                     await sock.sendMessage(jid, { text: "Pronto, você não receberá mais mensagens de divulgação. Se mudar de ideia, responda VOLTAR." });

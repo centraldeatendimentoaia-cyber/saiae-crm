@@ -79,7 +79,7 @@ export function bindContactSync(sock: WASocket, sessionId: string) {
                         sessionId: dbSessionId,
                         jid: chat.id,
                         name: chat.name || undefined,
-                        notify: (chat as any).notify || undefined
+                        notify: (chat as { notify?: string }).notify || undefined
                     },
                     update: {
                         name: chat.name || undefined
