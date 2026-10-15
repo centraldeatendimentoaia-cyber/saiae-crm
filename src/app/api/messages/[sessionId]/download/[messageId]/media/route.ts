@@ -51,8 +51,14 @@ export async function GET(
         }
 
         // For local files, read and return
-        const filePath = path.join(process.cwd(), message.mediaUrl);
-        
+        // O banco guarda "/api/media/<arquivo>" (gravado em data/media). Só o nome do arquivo conta e o caminho final
+        // precisa ficar dentro de data/media (nada de ../ nem caminho absoluto vindo do valor gravado).
+        const mediaDir = path.resolve(process.cwd(), "data", "media");
+        const filePath = path.resolve(mediaDir, path.basename(message.mediaUrl.replace(/\\/g, "/")));
+        if (!filePath.startsWith(mediaDir + path.sep)) {
+            return NextResponse.json({ status: false, message: "Media file not found on disk", error: "Media file not found on disk" }, { status: 404 });
+        }
+
         if (!fs.existsSync(filePath)) {
             return NextResponse.json({ status: false, message: "Media file not found on disk", error: "Media file not found on disk" }, { status: 404 });
         }

@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     // Fetch auto-reply count for accessible sessions
     let autoReplyCount = 0;
     try {
-        const sessionIds = sessions.map(s => s.sessionId);
+        const sessionIds = sessions.map(s => s.id); // AutoReply.sessionId guarda o id interno, não o nome da sessão
         if (sessionIds.length > 0) {
             autoReplyCount = await prisma.autoReply.count({
                 where: { sessionId: { in: sessionIds } }
