@@ -1,3 +1,4 @@
+import { limparMidiasAntigas } from "@/lib/media-retention";
 import { withJobLock } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
@@ -81,6 +82,14 @@ export async function runRetention(): Promise<void> {
         }
 
         
+
+        // Imagens enviadas pelo painel (ficam no banco): apaga as antigas que nada pendente usa. 0 desliga.
+        try {
+            const midias = await limparMidiasAntigas(days("MEDIA_RETENTION_DAYS", 180));
+            if (midias) logger.info("Retention", `${midias} imagens antigas sem uso apagadas`);
+        } catch (e) {
+            logger.warn("Retention", `limpeza das imagens falhou: ${e instanceof Error ? e.name : "erro"}`);
+        }
 
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);
         if (logDays > 0) {

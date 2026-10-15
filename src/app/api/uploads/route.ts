@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { ownerIdOfSession } from "@/lib/plans";
+import { quotaMidiaBytes } from "@/lib/media-retention";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -24,6 +25,15 @@ export async function POST(request: NextRequest) {
         if (typeof sessionId === "string" && sessionId) {
             if (!(await canAccessSession(user.id, user.role, sessionId))) return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });
             ownerId = (await ownerIdOfSession(sessionId)) || user.id;
+        }
+
+        // Quota por dono: o arquivo fica no banco, então o total precisa de teto (imagens antigas são limpas pela retenção)
+        const quota = quotaMidiaBytes();
+        if (quota > 0) {
+            const usado = (await prisma.mediaFile.aggregate({ where: { userId: ownerId }, _sum: { size: true } }))._sum.size ?? 0;
+            if (usado + file.size > quota) {
+                return NextResponse.json({ status: false, message: "Limite de armazenamento de imagens atingido. Apague imagens antigas e tente de novo." }, { status: 413 });
+            }
         }
 
         const row = await prisma.mediaFile.create({
