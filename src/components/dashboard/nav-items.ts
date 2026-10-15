@@ -13,7 +13,6 @@ import {
     Bot,
     Sparkles,
     Bell,
-    FileText,
     Code,
     UserCheck,
     Megaphone,
@@ -89,8 +88,7 @@ export const navGroups: NavGroup[] = [
         label: "Desenvolvedor",
         items: [
             { href: "/dashboard/webhooks", label: "Webhooks e API", icon: Webhook },
-            { href: "/docs", label: "Documentação da API", icon: FileText },
-            { href: "/swagger", label: "Swagger UI", icon: Code, external: true },
+            { href: "/swagger", label: "Documentação da API", icon: Code, external: true },
         ],
     },
     {

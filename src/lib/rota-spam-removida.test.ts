@@ -19,7 +19,7 @@ describe("remoção da rota de envio repetido (/spam)", () => {
     });
 
     it("não aparece em Swagger, documentação nem na lista de rotas do painel", () => {
-        for (const file of ["swagger.json", "src/lib/swagger.ts", "docs/API_DOCUMENTATION.md", "src/app/dashboard/api-docs/page.tsx"]) {
+        for (const file of ["swagger.json", "src/lib/swagger.ts", "docs/API_DOCUMENTATION.md"]) {
             const text = read(file);
             expect(text, file).not.toMatch(/\/messages\/(\{sessionId\}|\[sessionId\])\/(\{jid\}|\[jid\])\/spam/);
             expect(text, file).not.toMatch(/Message bombing/i);

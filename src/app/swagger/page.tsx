@@ -136,10 +136,9 @@ export default function ApiDocsPage() {
             <div className="bg-gradient-to-r from-zinc-600 to-zinc-600 text-white p-4 shadow-lg">
                 <div className="container mx-auto flex justify-between items-center">
                     <div>
-                        <h1 className="text-2xl font-bold">Saiaê API Documentation</h1>
+                        <h1 className="text-2xl font-bold">Documentação da API Saiaê</h1>
                         <p className="text-zinc-100 text-sm mt-1">
-                            
-                            Documentação interativa da API com mais de 58 endpoints
+                            Documentação interativa da API, gerada a partir da especificação OpenAPI
                         </p>
                     </div>
                     <button
