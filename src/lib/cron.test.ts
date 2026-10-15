@@ -34,7 +34,7 @@ vi.mock("node-cron", () => ({ default: { schedule: h.schedule } }));
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: h.getInstance } }));
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock("@/lib/job-lock", () => ({ withJobLock: (_n: string, _t: number, fn: () => Promise<unknown>) => fn() }));
+vi.mock("@/lib/job-lock", () => ({ withJobLock: (_n: string, _t: number, fn: () => Promise<unknown>) => fn(), registrarInstancia: vi.fn(), outrasInstanciasVivas: async () => 0 }));
 vi.mock("@/lib/plans", () => ({ assertCanSend: h.assertCanSend, recordMessages: h.recordMessages }));
 vi.mock("@/lib/optout", () => ({ isOptedOut: h.isOptedOut }));
 vi.mock("@/lib/interaction", () => ({

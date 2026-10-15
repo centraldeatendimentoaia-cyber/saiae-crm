@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { isHexColor, parsePostingTimes } from "@/modules/social/validate";
@@ -10,7 +11,9 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
 
     const data: Record<string, string | null> = {};
     if ("nickname" in body) {

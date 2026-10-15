@@ -2,6 +2,17 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    title: z.string().min(1, "informe o título"),
+    message: z.string().min(1, "informe a mensagem"),
+    type: opt(z.string()),
+    href: opt(z.string()),
+    targetUserId: opt(z.string()),
+    broadcast: opt(z.boolean()),
+}).refine((b) => b.broadcast || !!b.targetUserId, { path: ["targetUserId"], message: "informe o usuário de destino ou use broadcast" });
 
 export async function GET(req: Request) {
     const session = await auth();
@@ -31,7 +42,9 @@ export async function POST(req: Request) {
     }
 
     try {
-        const { title, message, type, href, targetUserId, broadcast } = await req.json();
+        const lido = await lerCorpo(req, schema);
+        if (!lido.ok) return lido.response;
+        const { title, message, type, href, targetUserId, broadcast } = lido.data;
 
         if (broadcast) {
             // Send to ALL users

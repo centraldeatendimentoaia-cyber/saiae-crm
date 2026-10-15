@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 
@@ -16,7 +17,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
     const content = typeof body.content === "string" ? body.content.trim().slice(0, 2000) : "";
     if (!name || !content) return NextResponse.json({ status: false, message: "Informe um nome e o texto." }, { status: 400 });

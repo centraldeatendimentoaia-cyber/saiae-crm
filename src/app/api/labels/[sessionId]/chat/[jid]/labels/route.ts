@@ -1,6 +1,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    labelIds: z.array(z.string()),
+    action: z.enum(["add", "remove"], { error: "use add ou remove" }),
+});
 
 // GET: Get labels for a chat
 export async function GET(
@@ -60,16 +67,9 @@ export async function PUT(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { labelIds, action } = body;
-
-        if (!labelIds || !Array.isArray(labelIds) || !action) {
-            return NextResponse.json({ status: false, message: "labelIds (array), and action are required", error: "labelIds (array), and action are required" }, { status: 400 });
-        }
-
-        if (!['add', 'remove'].includes(action)) {
-            return NextResponse.json({ status: false, message: "action must be 'add' or 'remove'", error: "action must be 'add' or 'remove'" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { labelIds, action } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

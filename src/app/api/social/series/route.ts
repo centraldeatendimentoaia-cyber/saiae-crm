@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { asProvider, ensurePublicTokens } from "@/modules/social/posts";
@@ -34,7 +35,9 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
 
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     const wanted: string[] = Array.isArray(body?.accountIds) ? body.accountIds : [];
     const accounts = await prisma.socialAccount.findMany({ where: { id: { in: wanted }, userId: user.id }, select: { id: true, provider: true } });
     if (!accounts.length || accounts.length !== new Set(wanted).size) return NextResponse.json({ status: false, message: "Conta não encontrada." }, { status: 404 });

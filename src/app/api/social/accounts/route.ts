@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { encryptToken } from "@/modules/social/crypto";
@@ -25,7 +26,9 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
 
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     const userToken = typeof body.userToken === "string" ? body.userToken.trim() : "";
     if (userToken.length < 20) return NextResponse.json({ status: false, message: "Cole o token de acesso da Meta." }, { status: 400 });
 

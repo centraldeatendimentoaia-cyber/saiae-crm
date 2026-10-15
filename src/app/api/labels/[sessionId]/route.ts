@@ -1,6 +1,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    name: z.string().min(1, "informe o nome da etiqueta"),
+    color: opt(z.number().int("a cor deve ser um número inteiro")),
+});
 
 // GET: Get all labels for a session
 export async function GET(
@@ -54,12 +61,9 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { name, color } = body;
-
-        if (!sessionId || !name) {
-            return NextResponse.json({ status: false, message: "sessionId and name are required", error: "sessionId and name are required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name, color } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

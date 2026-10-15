@@ -4,6 +4,10 @@ import path from "path";
 import { existsSync } from "fs";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ filenames: z.array(z.string(), { error: "informe a lista de arquivos (filenames)" }).min(1, "informe ao menos um arquivo") });
 
 // Media directory — private, NOT in public/
 const MEDIA_DIR = path.join(process.cwd(), "data", "media");
@@ -152,12 +156,9 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
-        const body = await request.json();
-        const { filenames } = body;
-
-        if (!Array.isArray(filenames) || filenames.length === 0) {
-            return NextResponse.json({ status: false, message: "Invalid payload", error: "filenames array is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { filenames } = lido.data;
 
         let deleted = 0;
         let failed = 0;

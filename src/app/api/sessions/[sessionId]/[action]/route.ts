@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerObjetoOpcional } from "@/lib/validate";
 
 export async function POST(
     request: NextRequest,
@@ -29,13 +30,16 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Invalid action", error: "Invalid action" }, { status: 400 });
         }
 
-        const body = await request.json().catch(() => ({}));
+        // corpo ausente ou malformado vale como {}; só "pair" exige o número
+        const lido = await lerObjetoOpcional(request);
+        if (!lido.ok) return lido.response;
+        const body = lido.data;
 
         switch (action) {
             case "pair":
                 const { phoneNumber } = body;
                 if (!phoneNumber) {
-                    return NextResponse.json({ status: false, message: "Phone number required for pairing" }, { status: 400 });
+                    return NextResponse.json({ status: false, message: "Informe o número de telefone (phoneNumber) para gerar o código de pareamento" }, { status: 400 });
                 }
                 const pairingCode = await waManager.requestPairingCode(sessionId, phoneNumber);
                 return NextResponse.json({ status: true, message: "Pairing code generated", data: { pairingCode } });

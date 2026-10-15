@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { exigirSuperadmin } from "@/lib/admin-auth";
 import { prismaStore } from "@/modules/ia-atendimento/store";
@@ -13,7 +14,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (negado) return negado;
     const { id } = await params;
 
-    const body = await request.json().catch(() => ({}));
+    const lido = await lerObjetoOpcional(request);
+    if (!lido.ok) return lido.response;
+    const body = lido.data;
     const existe = await prisma.iaConversa.findUnique({ where: { id }, select: { id: true } });
     if (!existe) return NextResponse.json({ status: false, message: "Not found" }, { status: 404 });
 
