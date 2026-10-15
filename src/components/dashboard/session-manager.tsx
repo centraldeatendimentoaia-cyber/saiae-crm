@@ -1,7 +1,7 @@
-import { errorMessage } from "@/lib/errors";
-import { logger } from "@/lib/logger";
 'use client';
 
+import { errorMessage } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from 'react';
 import { rotuloStatusSessao } from "@/lib/status-sessao";
 import { io, Socket } from 'socket.io-client';

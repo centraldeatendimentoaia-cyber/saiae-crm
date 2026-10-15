@@ -1,6 +1,6 @@
-import { logger } from "@/lib/logger";
-
 "use client";
+
+import { logger } from "@/lib/logger";
 
 import { useState, useEffect } from "react";
 import { useSession } from "@/components/dashboard/session-provider";

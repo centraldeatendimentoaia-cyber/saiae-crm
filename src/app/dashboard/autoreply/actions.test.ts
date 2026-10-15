@@ -28,14 +28,14 @@ describe("server actions de autorresposta", () => {
         await createAutoReply("s1", dados);
         expect(h.prisma.autoReply.create).toHaveBeenCalled();
     });
-    it("sem acesso à sessão: Forbidden", async () => {
+    it("sem acesso à sessão: Acesso negado", async () => {
         h.acesso = false;
-        await expect(createAutoReply("s1", dados)).rejects.toThrow("Forbidden");
+        await expect(createAutoReply("s1", dados)).rejects.toThrow("Acesso negado");
     });
-    it("regra de outra sessão: Forbidden em editar e apagar", async () => {
+    it("regra de outra sessão: Acesso negado em editar e apagar", async () => {
         h.prisma.autoReply.findUnique.mockResolvedValue({ id: "r1", session: { sessionId: "outra" } });
-        await expect(updateAutoReply("s1", "r1", dados)).rejects.toThrow("Forbidden");
-        await expect(deleteAutoReply("s1", "r1")).rejects.toThrow("Forbidden");
+        await expect(updateAutoReply("s1", "r1", dados)).rejects.toThrow("Acesso negado");
+        await expect(deleteAutoReply("s1", "r1")).rejects.toThrow("Acesso negado");
         expect(h.prisma.autoReply.update).not.toHaveBeenCalled();
         expect(h.prisma.autoReply.delete).not.toHaveBeenCalled();
     });
