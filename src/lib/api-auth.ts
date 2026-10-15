@@ -2,6 +2,9 @@ import { prisma } from "./prisma";
 import { NextRequest } from "next/server";
 import { auth } from "./auth";
 import { logger } from "./logger";
+import { hashApiKey, apiKeyHint } from "./api-key";
+
+export { generateApiKey } from "./api-key";
 
 // Role hierarchy for permission checks
 const ROLE_HIERARCHY = {
@@ -23,12 +26,19 @@ export async function validateApiKey(request: NextRequest) {
     }
 
     try {
-        const user = await prisma.user.findUnique({
-            where: { apiKey },
-            select: { id: true, email: true, name: true, role: true }
-        });
+        const select = { id: true, email: true, name: true, role: true } as const;
+        const hashed = await prisma.user.findUnique({ where: { apiKeyHash: hashApiKey(apiKey) }, select });
+        if (hashed) return hashed;
 
-        return user;
+        // Legado: chave ainda em texto puro. Valida e migra para hash no primeiro uso.
+        const legacy = await prisma.user.findUnique({ where: { apiKey }, select });
+        if (legacy) {
+            await prisma.user.update({
+                where: { id: legacy.id },
+                data: { apiKeyHash: hashApiKey(apiKey), apiKeyHint: apiKeyHint(apiKey), apiKey: null }
+            });
+        }
+        return legacy;
     } catch (error) {
         logger.error("Auth", "API key validation error:", error);
         return null;
@@ -245,14 +255,3 @@ export async function getAccessibleSessions(userId: string, userRole: string) {
     return [...ownedSessions, ...sharedSessions];
 }
 
-/**
- * Generate a new API key
- */
-export function generateApiKey(): string {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    let result = "wag_"; // Prefix for easy identification
-    for (let i = 0; i < 32; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}

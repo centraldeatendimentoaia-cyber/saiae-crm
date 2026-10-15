@@ -41,7 +41,9 @@ model User {
   email    String  @unique
   password String
   role     Role    @default(OWNER)
-  apiKey   String? @unique // API Key for authentication
+  apiKey   String? @unique // LEGADO (texto puro): só existe até o primeiro uso da chave, quando migra para apiKeyHash
+  apiKeyHash String? @unique // SHA-256 da chave de API (a chave em si só é mostrada na criação)
+  apiKeyHint String? // chave mascarada para exibição (prefixo + últimos 4 caracteres)
 
   // Assinatura (contas existentes ficam ILIMITADO)
   plan                 String    @default("ILIMITADO") // TRIAL | ESSENCIAL | PRO | ESCALA | ILIMITADO
