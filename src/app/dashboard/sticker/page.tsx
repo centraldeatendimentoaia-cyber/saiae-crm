@@ -61,7 +61,7 @@ export default function StickerPage() {
                 setTarget("");
             } else {
                 const err = await res.json();
-                toast.error(err.error || "Failed to send sticker");
+                toast.error(err.error || "Falha ao enviar a figurinha");
             }
         } catch (e) {
             logger.error("Sticker", "Erro", e);

@@ -17,17 +17,17 @@ export async function getChatsStatus(
     search?: string
 ) {
     const user = await getAuthenticatedUserForAction();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Não autorizado");
 
     const canAccess = await canAccessSession(user.id, user.role, sessionId);
-    if (!canAccess) throw new Error("Forbidden");
+    if (!canAccess) throw new Error("Acesso negado");
 
     const session = await prisma.session.findUnique({
         where: { sessionId },
         select: { id: true }
     });
 
-    if (!session) throw new Error("Session not found");
+    if (!session) throw new Error("Sessão não encontrada");
 
     return await ChatService.getChatsList(session.id, limit, before, search);
 }
@@ -40,17 +40,17 @@ export async function getChatMessages(
     before?: string
 ) {
     const user = await getAuthenticatedUserForAction();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Não autorizado");
 
     const canAccess = await canAccessSession(user.id, user.role, sessionId);
-    if (!canAccess) throw new Error("Forbidden");
+    if (!canAccess) throw new Error("Acesso negado");
 
     const session = await prisma.session.findUnique({
         where: { sessionId },
         select: { id: true }
     });
 
-    if (!session) throw new Error("Session not found");
+    if (!session) throw new Error("Sessão não encontrada");
 
     const { messages, hasMore } = await ChatService.getMessages(session.id, jid, limit, before);
 
@@ -68,10 +68,10 @@ export async function getChatMessages(
 // Send a basic text message
 export async function sendChatMessage(sessionId: string, jid: string, text: string, quotedMessageId?: string) {
     const user = await getAuthenticatedUserForAction();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Não autorizado");
 
     const canAccess = await canAccessSession(user.id, user.role, sessionId);
-    if (!canAccess) throw new Error("Forbidden");
+    if (!canAccess) throw new Error("Acesso negado");
 
     try {
         await ChatService.sendTextMessage(sessionId, jid, { text }, undefined, quotedMessageId);
@@ -84,7 +84,7 @@ export async function sendChatMessage(sessionId: string, jid: string, text: stri
 // Upload and Send Media
 export async function sendMediaMessage(formData: FormData) {
     const user = await getAuthenticatedUserForAction();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Não autorizado");
 
     const sessionId = formData.get("sessionId") as string;
     const jid = formData.get("jid") as string;
@@ -93,11 +93,11 @@ export async function sendMediaMessage(formData: FormData) {
     const caption = formData.get("caption") as string || "";
 
     if (!sessionId || !jid || !file || !type) {
-        throw new Error("Missing required fields");
+        throw new Error("Campos obrigatórios ausentes");
     }
 
     const canAccess = await canAccessSession(user.id, user.role, sessionId);
-    if (!canAccess) throw new Error("Forbidden");
+    if (!canAccess) throw new Error("Acesso negado");
 
     try {
         const buffer = Buffer.from(await file.arrayBuffer());
@@ -122,13 +122,13 @@ export async function sendMediaMessage(formData: FormData) {
 // Marca a conversa como lida (zera o contador de não lidas)
 export async function markChatRead(sessionId: string, jid: string) {
     const user = await getAuthenticatedUserForAction();
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Não autorizado");
 
     const canAccess = await canAccessSession(user.id, user.role, sessionId);
-    if (!canAccess) throw new Error("Forbidden");
+    if (!canAccess) throw new Error("Acesso negado");
 
     const session = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });
-    if (!session) throw new Error("Session not found");
+    if (!session) throw new Error("Sessão não encontrada");
 
     await prisma.chatRead.upsert({
         where: { sessionId_jid: { sessionId: session.id, jid } },

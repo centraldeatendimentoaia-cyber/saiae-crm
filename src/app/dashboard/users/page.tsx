@@ -95,7 +95,7 @@ export default function UsersPage() {
                 fetchUsers();
             } else {
                 const error = await res.json();
-                toast.error(error.error || "Operation failed");
+                toast.error(error.error || "A operação falhou");
             }
         } catch (error) {
             toast.error("A operação falhou");
@@ -118,7 +118,7 @@ export default function UsersPage() {
                 fetchUsers();
             } else {
                 const error = await res.json();
-                toast.error(error.error || "Failed to delete");
+                toast.error(error.error || "Falha ao excluir");
             }
         } catch (error) {
             toast.error("Falha ao excluir o usuário");

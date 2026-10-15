@@ -109,7 +109,7 @@ export function SessionManager({ user }: { user?: { id: string } }) {
             const responseData = await res.json();
             const session = responseData?.data;
 
-            if (!res.ok || !session) throw new Error(responseData.error || responseData.message || "Failed to create");
+            if (!res.ok || !session) throw new Error(responseData.error || responseData.message || "Falha ao criar");
 
             setSessions([...sessions, session]);
             setNewSessionName("");

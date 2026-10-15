@@ -308,12 +308,12 @@ export class WhatsAppInstance {
 
     async requestPairingCode(phoneNumber: string) {
         if (!this.socket) {
-            throw new Error("Socket not initialized");
+            throw new Error("O WhatsApp ainda não foi iniciado nesta sessão");
         }
 
         try {
             const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-            if (!cleanNumber) throw new Error("Invalid phone number");
+            if (!cleanNumber) throw new Error("Número de telefone inválido");
 
             const code = await this.socket.requestPairingCode(cleanNumber);
             this.pairingCode = code;

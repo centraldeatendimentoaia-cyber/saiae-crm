@@ -51,7 +51,7 @@ export default function ProfilePage() {
                 setNameForm(data.data.name || data.data.pushname || "");
                 setStatusForm(data.data.status || "");
             } else {
-                toast.error(data.message || "Failed to load profile");
+                toast.error(data.message || "Falha ao carregar o perfil");
             }
         } catch (error) {
             logger.error("Profile", "Fetch profile error:", error);
@@ -76,7 +76,7 @@ export default function ProfilePage() {
                 toast.success("Nome do perfil atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, name: nameForm } : null);
             } else {
-                toast.error(data.message || "Failed to update profile name");
+                toast.error(data.message || "Falha ao atualizar o nome do perfil");
             }
         } catch (error) {
             logger.error("Profile", "Erro", error);
@@ -101,7 +101,7 @@ export default function ProfilePage() {
                 toast.success("Recado/status atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, status: statusForm } : null);
             } else {
-                toast.error(data.message || "Failed to update status");
+                toast.error(data.message || "Falha ao atualizar o status");
             }
         } catch (error) {
             logger.error("Profile", "Erro", error);
@@ -130,7 +130,7 @@ export default function ProfilePage() {
                 toast.success("Foto de perfil atualizada");
                 fetchProfile(); // Re-fetch to get the new picture URL
             } else {
-                toast.error(data.message || "Failed to upload picture");
+                toast.error(data.message || "Falha ao enviar a foto");
             }
         } catch (error) {
             logger.error("Profile", "Erro", error);
@@ -156,7 +156,7 @@ export default function ProfilePage() {
                 toast.success("Foto de perfil removida");
                 setProfile(prev => prev ? { ...prev, pictureUrl: "" } : null);
             } else {
-                toast.error(data.message || "Failed to remove picture");
+                toast.error(data.message || "Falha ao remover a foto");
             }
         } catch (error) {
             logger.error("Profile", "Erro", error);

@@ -325,7 +325,7 @@ export class ChatService {
         if (stUrl) {
             try {
                 const res = await fetch(stUrl);
-                if (!res.ok) throw new Error(`Failed to fetch sticker media`);
+                if (!res.ok) throw new Error(`Falha ao baixar a figurinha`);
                 const buffer = await res.arrayBuffer();
                 const sticker = new Sticker(Buffer.from(buffer), {
                     pack: stObj?.pack || "Saiaê Bot",

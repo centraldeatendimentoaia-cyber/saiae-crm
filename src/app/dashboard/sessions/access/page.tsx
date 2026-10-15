@@ -136,11 +136,11 @@ export default function SessionAccessPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success(data.message || "Access granted successfully");
+                toast.success(data.message || "Acesso concedido com sucesso");
                 setEmail("");
                 fetchAccessList();
             } else {
-                toast.error(data.message || "Failed to grant access");
+                toast.error(data.message || "Falha ao conceder o acesso");
             }
         } catch (error) {
             toast.error("Falha ao conceder o acesso");
@@ -165,7 +165,7 @@ export default function SessionAccessPage() {
                 toast.success("Acesso revogado com sucesso");
                 fetchAccessList();
             } else {
-                toast.error(data.message || "Failed to revoke access");
+                toast.error(data.message || "Falha ao revogar o acesso");
             }
         } catch (error) {
             toast.error("Falha ao revogar o acesso");

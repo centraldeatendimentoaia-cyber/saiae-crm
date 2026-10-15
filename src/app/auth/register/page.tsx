@@ -21,9 +21,9 @@ import Link from 'next/link';
 import { BrandLogo } from "@/components/brand-logo";
 
 const formSchema = z.object({
-    name: z.string().min(2, "Name must be at least 2 characters"),
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(6, "Password must be at least 6 characters"),
+    name: z.string().min(2, "O nome precisa ter pelo menos 2 caracteres"),
+    email: z.string().email("Digite um e-mail válido"),
+    password: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres"),
     confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
     message: "As senhas não coincidem",
@@ -64,7 +64,7 @@ export default function RegisterPage() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || "Failed to register");
+                throw new Error(errorData.error || "Falha ao criar a conta");
             }
 
             setSuccess(true);

@@ -21,8 +21,8 @@ import Link from 'next/link';
 import { BrandLogo } from "@/components/brand-logo";
 
 const formSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Digite um e-mail válido"),
+  password: z.string().min(1, "Informe a senha"),
 });
 
 function LoginForm() {
