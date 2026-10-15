@@ -1,3 +1,4 @@
+import { withJobLock } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -94,5 +95,5 @@ export async function runRetention(): Promise<void> {
 }
 
 export function startRetention(): void {
-    cron.schedule("30 3 * * *", () => { runRetention(); }, { timezone: "America/Sao_Paulo" });
+    cron.schedule("30 3 * * *", () => { void withJobLock("cron:retencao", 60 * 60_000, runRetention); }, { timezone: "America/Sao_Paulo" });
 }

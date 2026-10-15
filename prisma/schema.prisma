@@ -716,3 +716,11 @@ model AgenteConversa {
   @@index([sessionId, estado])
   @@index([sessionId, ultimaIaAt])
 }
+
+// Trava dos crons: só uma instância executa cada job por vez (src/lib/job-lock.ts)
+model JobLock {
+  name      String   @id
+  holder    String
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+}
