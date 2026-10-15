@@ -2,6 +2,11 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+// emoji vazio é válido (remove a reação)
+const schema = z.object({ emoji: z.string() });
 
 // POST: Send reaction to message
 export async function POST(
@@ -15,13 +20,9 @@ export async function POST(
         }
 
         const { sessionId, jid, messageId } = await params;
-        const body = await request.json();
-        const { emoji } = body;
-
-        // Emoji empty string is valid (removes reaction)
-        if (emoji === undefined) {
-            return NextResponse.json({ status: false, message: "emoji is required", error: "emoji is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { emoji } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

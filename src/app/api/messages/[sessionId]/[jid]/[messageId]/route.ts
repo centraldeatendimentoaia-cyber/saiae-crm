@@ -2,6 +2,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ text: z.string().min(1, "informe o novo texto da mensagem") });
 
 // DELETE: Delete message for everyone
 export async function DELETE(
@@ -65,12 +69,9 @@ export async function PATCH(
         }
 
         const { sessionId, jid, messageId } = await params;
-        const body = await request.json().catch(() => ({}));
-        const { text } = body;
-
-        if (!text) {
-            return NextResponse.json({ status: false, message: "Text is required to edit message", error: "Bad Request" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { text } = lido.data;
 
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
         if (!canAccess) {

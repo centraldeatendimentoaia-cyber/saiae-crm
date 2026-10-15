@@ -2,6 +2,13 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    star: opt(z.boolean()),
+    fromMe: opt(z.boolean()),
+});
 
 /**
  * POST /api/messages/{sessionId}/{jid}/{messageId}/star
@@ -20,8 +27,9 @@ export async function POST(
         const { sessionId, jid: rawJid, messageId } = await params;
         const jid = decodeURIComponent(rawJid);
 
-        const body = await request.json();
-        const { star = true, fromMe = false } = body;
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { star = true, fromMe = false } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

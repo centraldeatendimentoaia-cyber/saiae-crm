@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { paginaSoParaSuperadmin } from "@/lib/superadmin-pages";
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -77,6 +78,11 @@ export async function proxy(request: NextRequest) {
             const loginUrl = new URL("/auth/login", request.url);
             loginUrl.searchParams.set("callbackUrl", pathname);
             return NextResponse.redirect(loginUrl);
+        }
+
+        // Páginas só do SUPERADMIN: esconder no menu não basta, barra também a URL digitada.
+        if (paginaSoParaSuperadmin(pathname) && (session.user as { role?: string }).role !== "SUPERADMIN") {
+            return NextResponse.redirect(new URL("/dashboard", request.url));
         }
 
         return NextResponse.next();

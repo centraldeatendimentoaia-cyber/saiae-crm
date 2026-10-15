@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAuthenticatedUser } from "@/lib/api-auth";
+import { exigirSuperadmin } from "@/lib/admin-auth";
 import { formatarConversa } from "@/modules/ia-atendimento/avaliacao/anonimizar";
 import { apagarConversasDoCliente } from "@/modules/ia-atendimento/apagar";
 
@@ -11,9 +11,8 @@ import { apagarConversasDoCliente } from "@/modules/ia-atendimento/apagar";
  * A IA guarda no máximo 30 dias de conversa, então "dias" passa disso não traz mais.
  */
 export async function GET(request: NextRequest) {
-    const user = await getAuthenticatedUser(request);
-    if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
-    if (user.role !== "SUPERADMIN") return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });
+    const negado = await exigirSuperadmin(request);
+    if (negado) return negado;
 
     const q = new URL(request.url).searchParams;
     const dias = Math.min(Math.max(parseInt(q.get("dias") || "30", 10) || 30, 1), 30);
@@ -50,9 +49,8 @@ export async function GET(request: NextRequest) {
  * Só SUPERADMIN. Não grava o telefone em log.
  */
 export async function DELETE(request: NextRequest) {
-    const user = await getAuthenticatedUser(request);
-    if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
-    if (user.role !== "SUPERADMIN") return NextResponse.json({ status: false, message: "Forbidden" }, { status: 403 });
+    const negado = await exigirSuperadmin(request);
+    if (negado) return negado;
 
     const telefone = new URL(request.url).searchParams.get("telefone") || "";
     const apagadas = await apagarConversasDoCliente("VENDAS", telefone);

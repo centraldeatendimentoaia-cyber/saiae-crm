@@ -3,6 +3,15 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    // conteúdo no formato do Baileys, igual ao /send: { text, mentions } ou { image, caption } etc.
+    message: z.looseObject({}, { error: "informe a mensagem (objeto com text, caption etc.)" }),
+    mentions: opt(z.array(z.string())),
+    fromMe: opt(z.boolean()),
+});
 
 /**
  * POST /api/messages/{sessionId}/{jid}/{messageId}/reply
@@ -22,12 +31,9 @@ export async function POST(
         const { sessionId, jid: rawJid, messageId } = await params;
         const jid = decodeURIComponent(rawJid);
 
-        const body = await request.json();
-        const { message, mentions, fromMe } = body;
-
-        if (!message) {
-            return NextResponse.json({ status: false, message: "message is required", error: "message is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { message, mentions, fromMe } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
@@ -150,7 +156,7 @@ export async function POST(
         };
 
         // Process message payload (same as /send)
-        let msgPayload = message;
+        let msgPayload = message as any;
 
         if (msgPayload.text && mentions && Array.isArray(mentions)) {
             msgPayload.mentions = mentions;

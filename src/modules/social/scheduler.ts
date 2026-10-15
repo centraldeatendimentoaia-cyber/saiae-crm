@@ -1,3 +1,4 @@
+import { withJobLock } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -89,10 +90,10 @@ export function startSocialScheduler() {
         })
         .catch(() => {});
 
-    cron.schedule("* * * * *", () => void publishDue());
+    cron.schedule("* * * * *", () => void withJobLock("cron:social-publicar", 10 * 60_000, publishDue));
 
     // séries recorrentes: mantém as próximas 8 semanas geradas (na subida e a cada hora)
-    void extendAllSeries();
-    cron.schedule("7 * * * *", () => void extendAllSeries());
+    void withJobLock("cron:social-series", 10 * 60_000, extendAllSeries);
+    cron.schedule("7 * * * *", () => void withJobLock("cron:social-series", 10 * 60_000, extendAllSeries));
     logger.info("Social", "Social scheduler initialized");
 }

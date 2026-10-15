@@ -1,3 +1,4 @@
+import { withJobLock } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -68,5 +69,5 @@ export async function rodarFollowUps(agora: Date = new Date()): Promise<number> 
 
 export function startFollowUps(): void {
     if (process.env.AGENTE_SALAO?.trim().toLowerCase() === "off") return;
-    cron.schedule("*/10 * * * *", () => { rodarFollowUps(); }, { timezone: "America/Sao_Paulo" });
+    cron.schedule("*/10 * * * *", () => { void withJobLock("cron:agente-followup", 30 * 60_000, () => rodarFollowUps()); }, { timezone: "America/Sao_Paulo" });
 }

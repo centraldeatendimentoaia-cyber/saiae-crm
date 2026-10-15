@@ -1,6 +1,12 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    presence: z.enum(["unavailable", "available", "composing", "recording", "paused"], { error: "use unavailable, available, composing, recording ou paused" }),
+});
 
 // POST: Send presence (typing, recording, online)
 export async function POST(
@@ -14,19 +20,9 @@ export async function POST(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { presence } = body;
-
-        if (!presence) {
-            return NextResponse.json({ status: false, message: "presence is required", error: "presence is required" }, { status: 400 });
-        }
-
-        const validPresences = ['composing', 'recording', 'paused', 'available', 'unavailable'];
-        if (!validPresences.includes(presence)) {
-            return NextResponse.json({ 
-                error: `Invalid presence. Must be one of: ${validPresences.join(', ')}` 
-            }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { presence } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

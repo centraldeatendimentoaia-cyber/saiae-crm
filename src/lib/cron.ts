@@ -11,6 +11,7 @@ import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
+import { withJobLock } from "@/lib/job-lock";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -20,7 +21,7 @@ export function initScheduler() {
     prisma.broadcastLog.updateMany({ where: { status: "running" }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
 
     // Run every minute
-    cron.schedule("* * * * *", async () => {
+    const tick = async () => {
         if (running) return;
         running = true;
         try {
@@ -153,7 +154,9 @@ export function initScheduler() {
         } finally {
             running = false;
         }
-    });
+    };
+    // Com mais de uma instância (deploy sobreposto, escala), só uma executa a rodada.
+    cron.schedule("* * * * *", () => withJobLock("cron:mensagens-agendadas", 10 * 60_000, tick));
     
     startRetention();
     startFollowUps();
