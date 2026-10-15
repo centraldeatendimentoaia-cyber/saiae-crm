@@ -55,7 +55,7 @@ export async function getChatMessages(
     const { messages, hasMore } = await ChatService.getMessages(session.id, jid, limit, before);
 
     return {
-        messages: messages.map((msg: any) => ({
+        messages: messages.map((msg) => ({
             ...msg,
             timestamp: msg.timestamp instanceof Date
                 ? msg.timestamp.toISOString()

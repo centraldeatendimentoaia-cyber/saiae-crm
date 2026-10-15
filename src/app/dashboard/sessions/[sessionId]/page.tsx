@@ -48,7 +48,7 @@ export default function SessionDetailPage() {
     const [qrCode, setQrCode] = useState<string | null>(null);
     const [socket, setSocket] = useState<Socket | null>(null);
     const [uptime, setUptime] = useState(0);
-    const [systemMetrics, setSystemMetrics] = useState<any>(null);
+    const [systemMetrics, setSystemMetrics] = useState<{ ping?: string | number; store?: { contacts?: number; chats?: number; messages?: number } } | null>(null);
     const [phoneNumber, setPhoneNumber] = useState("");
     const [pairingCode, setPairingCode] = useState<string | null>(null);
     const [isPairing, setIsPairing] = useState(false);
@@ -134,8 +134,8 @@ export default function SessionDetailPage() {
         };
     }, [sessionId]);
 
-    const performAction = async (action: string, payload: any = {}) => {
-        const loadingToast = toast.loading(` performing ${action}...`);
+    const performAction = async (action: string, payload: Record<string, unknown> = {}) => {
+        const loadingToast = toast.loading(`Executando ${action}...`);
         try {
             const res = await fetch(`/api/sessions/${sessionId}/${action}`, {
                 method: "POST",
@@ -144,9 +144,9 @@ export default function SessionDetailPage() {
             });
             const data = await res.json();
 
-            if (!res.ok) throw new Error(data.message || data.error || "Action failed");
+            if (!res.ok) throw new Error(data.message || data.error || "A ação falhou");
 
-            toast.success(data.message || "Success");
+            toast.success(data.message || "Concluído");
 
             // Refresh logic
             if (action === 'logout') {

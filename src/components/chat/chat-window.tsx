@@ -198,7 +198,8 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
         try {
             if (!before) setLoading(true);
             else setLoadingMore(true);
-            const data: any = await getChatMessages(sessionId, jid, PAGE_LIMIT, before);
+            // o Message local é mais estreito que o do banco (campos nulos viram undefined na tela)
+            const data = (await getChatMessages(sessionId, jid, PAGE_LIMIT, before)) as unknown as { messages: Message[]; hasMore: boolean };
             if (!before) { setMessages(data.messages || []); setAutoScroll(true); }
             else if (data.messages?.length > 0) setMessages(prev => [...(data.messages || []), ...prev]);
             setHasMore(data.hasMore);

@@ -16,6 +16,15 @@ import { getChatsStatus, markChatRead} from "@/app/dashboard/chat/actions";
 import { useSocket } from "./socket-context";
 import { toast } from "sonner";
 
+/** Mensagem recebida pelo socket (evento de novas mensagens). */
+interface IncomingMessage {
+    remoteJid: string;
+    fromMe: boolean;
+    content: string | null;
+    timestamp: string;
+    type: string;
+}
+
 interface ChatContact {
     jid: string;
     phoneJid?: string;
@@ -86,7 +95,7 @@ function LabelAssignPopover({ sessionId, jid, children }: { sessionId: string; j
 
             if (labelRes.ok) setLabels(labelData.data?.labels || []);
             if (assignedRes.ok) {
-                setAssigned(new Set((assignedData.data || []).map((cl: any) => cl.labelId)));
+                setAssigned(new Set((assignedData.data || []).map((cl: { labelId: string }) => cl.labelId)));
             }
         } catch (e) {
             logger.error("ChatList", "Failed to fetch labels", e);
@@ -299,11 +308,11 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         fetchingRef.current = true;
         try {
             if (!cursor) setLoading(true);
-            const rawChats: any = await getChatsStatus(sessionId, PAGE_SIZE, cursor || undefined, searchQuery || undefined);
+            const rawChats: ChatContact[] = await getChatsStatus(sessionId, PAGE_SIZE, cursor || undefined, searchQuery || undefined);
             
             const processChats = (newChatsList: ChatContact[], existingChatsList: ChatContact[] = []) => {
                 const merged = new Map(existingChatsList.map(c => [c.jid, c]));
-                (newChatsList || []).forEach((c: any) => {
+                (newChatsList || []).forEach((c) => {
                     const existing = merged.get(c.jid);
                     if (!existing || (c.lastMessage?.timestamp && (!existing.lastMessage?.timestamp || new Date(c.lastMessage.timestamp) > new Date(existing.lastMessage.timestamp)))) {
                         merged.set(c.jid, c);
@@ -334,7 +343,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         const onConnect = () => joinSession(sessionId);
         if (socket.connected) joinSession(sessionId);
         socket.on("connect", onConnect);
-        const handler = async (newMessages: any[]) => {
+        const handler = async (newMessages: IncomingMessage[]) => {
             let needsReload = false;
             setChats(prev => {
                 const updated = [...prev];

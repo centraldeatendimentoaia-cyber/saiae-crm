@@ -34,7 +34,7 @@ type Session = {
     } | null;
 };
 
-export function SessionManager({ user }: { user: any }) {
+export function SessionManager({ user }: { user?: { id: string } }) {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [newSessionName, setNewSessionName] = useState("");
     const [newSessionId, setNewSessionId] = useState("");
@@ -101,7 +101,7 @@ export function SessionManager({ user }: { user: any }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId: user.id,
+                    userId: user?.id,
                     name: newSessionName,
                     sessionId: newSessionId || undefined // Optional, backend will generate if empty
                 })
