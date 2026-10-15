@@ -3,6 +3,15 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { fireSentWebhook } from "@/lib/webhook";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    contacts: z.array(z.object({
+        displayName: z.string().min(1, "informe o displayName de cada contato"),
+        vcard: z.string().min(1, "informe o vcard de cada contato"),
+    })).min(1, "informe ao menos um contato"),
+});
 
 // POST: Send contact card
 export async function POST(
@@ -16,23 +25,9 @@ export async function POST(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { contacts } = body;
-
-        if (!contacts || !Array.isArray(contacts)) {
-            return NextResponse.json({ status: false, message: "contacts (array) is required", error: "contacts (array) is required" }, { status: 400 });
-        }
-
-        if (contacts.length === 0) {
-            return NextResponse.json({ status: false, message: "At least one contact is required", error: "At least one contact is required" }, { status: 400 });
-        }
-
-        // Validate contacts structure
-        for (const contact of contacts) {
-            if (!contact.displayName || !contact.vcard) {
-                return NextResponse.json({ status: false, message: "Each contact must have displayName and vcard", error: "Each contact must have displayName and vcard" }, { status: 400 });
-            }
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { contacts } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

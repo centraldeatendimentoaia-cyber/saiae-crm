@@ -2,6 +2,13 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+// duração em segundos: 0 (desligado), 1 dia, 7 dias ou 90 dias
+const schema = z.object({
+    expiration: z.union([z.literal(0), z.literal(86400), z.literal(604800), z.literal(7776000)], { error: "use 0 (desligado), 86400 (1 dia), 604800 (7 dias) ou 7776000 (90 dias)" }),
+});
 
 // PUT: Toggle ephemeral/disappearing messages
 export async function PUT(
@@ -16,18 +23,9 @@ export async function PUT(
         
         const { sessionId, jid } = await params;
         const decodedJid = decodeURIComponent(jid);
-        const body = await request.json();
-        const { expiration } = body; // expiration is duration in seconds
-
-        if (expiration === undefined) {
-            return NextResponse.json({ status: false, message: "expiration is required", error: "expiration is required" }, { status: 400 });
-        }
-
-        // Expiration values: 0 (off), 86400 (1 day), 604800 (7 days), 7776000 (90 days)
-        const validExpirations = [0, 86400, 604800, 7776000];
-        if (!validExpirations.includes(expiration)) {
-            return NextResponse.json({ status: false, message: "Invalid expiration. Must be 0 (off), 86400 (1 day), 604800 (7 days), or 7776000 (90 days)", error: "Invalid expiration. Must be 0 (off), 86400 (1 day), 604800 (7 days), or 7776000 (90 days)" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { expiration } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

@@ -3,6 +3,14 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { proto } from "@whiskeysockets/baileys";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    fromJid: z.string().min(1, "informe o fromJid"),
+    messageId: z.string().min(1, "informe o messageId"),
+    toJids: z.array(z.string().min(1)).min(1, "informe ao menos um destinatário"),
+});
 
 // POST: Forward message to other chats
 export async function POST(
@@ -16,16 +24,9 @@ export async function POST(
         }
 
         const { sessionId } = await params;
-        const body = await request.json();
-        const { fromJid, messageId, toJids } = body;
-
-        if (!fromJid || !messageId || !toJids || !Array.isArray(toJids)) {
-             return NextResponse.json({ status: false, message: "fromJid, messageId, and toJids (array) are required", error: "fromJid, messageId, and toJids (array) are required" }, { status: 400 });
-        }
-        
-        if (toJids.length === 0) {
-            return NextResponse.json({ status: false, message: "At least one recipient is required", error: "At least one recipient is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { fromJid, messageId, toJids } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

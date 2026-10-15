@@ -2,6 +2,11 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+// descrição vazia remove a descrição
+const schema = z.object({ description: opt(z.string().max(512, "a descrição pode ter no máximo 512 caracteres")) });
 
 // PUT: Update group description
 export async function PUT(
@@ -16,13 +21,9 @@ export async function PUT(
         
         const { sessionId, jid } = await params;
         const decodedJid = decodeURIComponent(jid);
-        const body = await request.json();
-        const { description } = body;
-
-        // Description can be empty string to remove
-        if (description && description.length > 512) {
-            return NextResponse.json({ status: false, message: "Description must be 512 characters or less", error: "Description must be 512 characters or less" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { description } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

@@ -2,6 +2,10 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ inviteCode: z.string().min(1, "informe o inviteCode") });
 
 // POST: Accept group invite
 export async function POST(
@@ -15,12 +19,9 @@ export async function POST(
         }
 
         const { sessionId } = await params;
-        const body = await request.json();
-        const { inviteCode } = body;
-
-        if (!inviteCode) {
-            return NextResponse.json({ status: false, message: "inviteCode is required", error: "inviteCode is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { inviteCode } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

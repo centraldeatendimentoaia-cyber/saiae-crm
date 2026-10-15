@@ -2,6 +2,14 @@ import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { requireCapability } from "@/modules/whatsapp/provider/require";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    title: z.string().min(1, "informe o título"),
+    options: z.array(z.any()).min(1, "informe ao menos uma opção"),
+    footer: opt(z.string()),
+});
 
 // POST: Send formatted text message with options (List/Button alternative)
 export async function POST(
@@ -17,16 +25,9 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { title, options, footer } = body;
-
-        if (!title || !options || !Array.isArray(options)) {
-            return NextResponse.json({ status: false, message: "title and options (array) are required", error: "title and options (array) are required" }, { status: 400 });
-        }
-
-        if (options.length === 0) {
-            return NextResponse.json({ status: false, message: "At least one option is required", error: "At least one option is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { title, options, footer } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
