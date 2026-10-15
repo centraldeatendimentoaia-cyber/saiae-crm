@@ -158,7 +158,7 @@ export async function POST(
         };
 
         // Process message payload (same as /send)
-        let msgPayload = message as any;
+        const msgPayload = message as any;
 
         if (msgPayload.text && mentions && Array.isArray(mentions)) {
             msgPayload.mentions = mentions;
