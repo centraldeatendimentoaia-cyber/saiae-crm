@@ -3,6 +3,13 @@ import { assertCanCreateSession, PlanError } from "@/lib/plans";
 import { waManager } from "@/modules/whatsapp/manager";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, getAccessibleSessions } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    name: z.string().min(1, "informe o nome da sessão").max(100, "o nome da sessão pode ter no máximo 100 caracteres"),
+    sessionId: opt(z.string().min(1).max(100)),
+});
 
 export const dynamic = 'force-dynamic';
 
@@ -31,12 +38,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { name, sessionId } = body;
-
-        if (!name) {
-            return NextResponse.json({ status: false, message: "Session name is required", error: "Session name is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name, sessionId } = lido.data;
 
         await assertCanCreateSession(user.id);
 

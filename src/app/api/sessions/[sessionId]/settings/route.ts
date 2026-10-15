@@ -2,6 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession, isAdmin } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ config: z.record(z.string(), z.json(), { error: "config deve ser um objeto" }) });
 
 // GET: Retrieve session settings
 export async function GET(
@@ -56,8 +60,9 @@ export async function PATCH(
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
 
-        const body = await request.json();
-        const { config } = body;
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { config } = lido.data;
 
         const updated = await prisma.session.update({
             where: { sessionId },

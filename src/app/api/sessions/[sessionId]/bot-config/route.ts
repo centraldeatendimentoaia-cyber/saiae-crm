@@ -1,6 +1,43 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const jids = z.array(z.string()).nullish();
+const bool = z.boolean().nullish();
+const schema = z.object({
+    enabled: bool,
+    botMode: z.enum(["ALL", "OWNER", "SPECIFIC", "BLACKLIST"], { error: "use ALL, OWNER, SPECIFIC ou BLACKLIST" }).nullish(),
+    botAllowedJids: jids,
+    botBlockedJids: jids,
+    autoReplyMode: z.enum(["ALL", "OWNER", "SPECIFIC", "BLACKLIST"], { error: "use ALL, OWNER, SPECIFIC ou BLACKLIST" }).nullish(),
+    autoReplyAllowedJids: jids,
+    autoReplyBlockedJids: jids,
+    botName: z.string().max(100).nullish(),
+    enableSticker: bool,
+    enableVideoSticker: bool,
+    maxStickerDuration: z.coerce.number().min(0).max(600).nullish(),
+    enablePing: bool,
+    enableUptime: bool,
+    removeBgApiKey: z.string().nullish(),
+    prefix: z.string().max(10, "o prefixo pode ter no máximo 10 caracteres").nullish(),
+    antiSpamEnabled: bool,
+    spamLimit: z.coerce.number().min(0).max(10000).nullish(),
+    spamInterval: z.coerce.number().min(0).max(100000).nullish(),
+    spamDelayMin: z.coerce.number().min(0).max(3600000).nullish(),
+    spamDelayMax: z.coerce.number().min(0).max(3600000).nullish(),
+    safeDelayMin: z.coerce.number().min(0).max(3600).nullish(),
+    safeDelayMax: z.coerce.number().min(0).max(3600).nullish(),
+    safeBatchSize: z.coerce.number().min(0).max(10000).nullish(),
+    safeBatchPause: z.coerce.number().min(0).max(1440).nullish(),
+    safeStartHour: z.coerce.number().min(0).max(24).nullish(),
+    safeEndHour: z.coerce.number().min(0).max(24).nullish(),
+    onlyInteracted: bool,
+    welcomeMessage: z.string().nullish(),
+    autoRead: bool,
+    alwaysOnline: bool,
+});
 
 export async function GET(
     request: NextRequest,
@@ -83,7 +120,9 @@ export async function POST(
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
         if (!canAccess) return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
 
-        const body = await request.json();
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const body = lido.data;
 
         // Find session DB ID
         const session = await prisma.session.findUnique({

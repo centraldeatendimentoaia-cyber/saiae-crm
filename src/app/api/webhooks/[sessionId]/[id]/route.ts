@@ -1,6 +1,16 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    name: z.string().min(1, "informe o nome").optional(),
+    url: z.url({ protocol: /^https?$/, error: "informe uma URL http ou https válida" }).optional(),
+    secret: z.string().nullish(),
+    events: z.array(z.string().min(1)).min(1, "informe ao menos um evento").optional(),
+    isActive: z.boolean().optional(),
+});
 
 export async function PUT(
     request: NextRequest,
@@ -19,8 +29,9 @@ export async function PUT(
     }
 
     try {
-        const body = await request.json();
-        const { name, url, secret, events, isActive } = body;
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name, url, secret, events, isActive } = lido.data;
 
         const session = await prisma.session.findFirst({
             where: {

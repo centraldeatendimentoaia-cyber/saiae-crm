@@ -1,6 +1,16 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    appName: z.string().min(1, "informe o nome do app").max(100).optional(),
+    logoUrl: z.string().nullish(),
+    faviconUrl: z.string().nullish(),
+    timezone: z.string().min(1).optional(),
+    enableRegistration: z.boolean().nullish(),
+});
 
 export async function GET(request: NextRequest) {
     try {
@@ -28,8 +38,9 @@ export async function POST(req: Request) {
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await req.json();
-        const { appName, logoUrl, faviconUrl, timezone, enableRegistration } = body;
+        const lido = await lerCorpo(req, schema);
+        if (!lido.ok) return lido.response;
+        const { appName, logoUrl, faviconUrl, timezone, enableRegistration } = lido.data;
 
         // @ts-ignore
         const config = await prisma.systemConfig.upsert({
