@@ -7,6 +7,7 @@ const { auth } = vi.hoisted(() => ({ auth: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth }));
 
 import { proxy } from "@/proxy";
+import { getApiDocs } from "@/lib/swagger";
 
 const root = path.resolve(__dirname, "../..");
 const read = (p: string) => fs.readFileSync(path.join(root, p), "utf8");
@@ -18,16 +19,19 @@ describe("remoção da rota de envio repetido (/spam)", () => {
         expect(fs.existsSync(path.join(root, "src/app/api/messages/[sessionId]/[jid]/spam"))).toBe(false);
     });
 
-    it("não aparece em Swagger, documentação nem na lista de rotas do painel", () => {
-        for (const file of ["swagger.json", "src/lib/swagger.ts", "docs/API_DOCUMENTATION.md"]) {
+    it("não aparece na especificação do Swagger nem na documentação", () => {
+        const spec = JSON.stringify(getApiDocs());
+        expect(spec).not.toMatch(/\/messages\/(\{sessionId\}|\[sessionId\])\/(\{jid\}|\[jid\])\/spam/);
+        expect(spec).not.toMatch(/Message bombing/i);
+        for (const file of ["docs/API_DOCUMENTATION.md"]) {
             const text = read(file);
             expect(text, file).not.toMatch(/\/messages\/(\{sessionId\}|\[sessionId\])\/(\{jid\}|\[jid\])\/spam/);
             expect(text, file).not.toMatch(/Message bombing/i);
         }
     });
 
-    it("o swagger.json continua sendo JSON válido e mantém as outras rotas de envio", () => {
-        const spec = JSON.parse(read("swagger.json"));
+    it("a especificação mantém as outras rotas de envio", () => {
+        const spec = getApiDocs() as { paths: Record<string, unknown> };
         expect(spec.paths["/messages/{sessionId}/{jid}/send"]).toBeDefined();
         expect(spec.paths["/messages/{sessionId}/{jid}/sticker"]).toBeDefined();
         expect(spec.paths["/messages/{sessionId}/{jid}/spam"]).toBeUndefined();
