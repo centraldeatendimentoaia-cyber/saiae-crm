@@ -26,7 +26,7 @@ interface Item {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-    { id: "inbox", label: "Inbox" },
+    { id: "inbox", label: "Conversas" },
     { id: "contacts", label: "Contatos" },
     { id: "labels", label: "Etiquetas" },
     { id: "groups", label: "Grupos" },

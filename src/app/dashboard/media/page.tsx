@@ -32,6 +32,8 @@ import { GroupTree } from "./_components/group-tree";
 import { PreviewModal } from "./_components/preview-modal";
 import { collapsibleKeys, formatFileSize, groupMedia, matchesFilters, type MediaFile, type UserGroup } from "./_components/grouping";
 
+const FILTROS_TIPO: Record<string, string> = { all: "Todos", image: "Imagens", video: "Vídeos", audio: "Áudios", document: "Documentos" };
+
 export default function MediaPage() {
     const [files, setFiles] = useState<MediaFile[]>([]);
     const [totalSize, setTotalSize] = useState(0);
@@ -171,8 +173,8 @@ export default function MediaPage() {
                     <Input placeholder="Buscar por nome do arquivo, sessão, usuário ou remetente..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-9 pl-8 text-sm" />
                 </div>
                 <div className="flex gap-1.5 flex-wrap">
-                    {["all", "image", "video", "audio", "document"].map((t) => (
-                        <Button key={t} variant={filterType === t ? "default" : "outline"} size="sm" className="h-9 text-xs capitalize px-3" onClick={() => setFilterType(t)}>{t}</Button>
+                    {Object.keys(FILTROS_TIPO).map((t) => (
+                        <Button key={t} variant={filterType === t ? "default" : "outline"} size="sm" className="h-9 text-xs capitalize px-3" onClick={() => setFilterType(t)}>{FILTROS_TIPO[t]}</Button>
                     ))}
                 </div>
             </div>

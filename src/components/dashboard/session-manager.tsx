@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { rotuloStatusSessao } from "@/lib/status-sessao";
 import { io, Socket } from 'socket.io-client';
 import QRCode from 'qrcode';
 import { Button } from "@/components/ui/button";
@@ -217,7 +218,7 @@ export function SessionManager({ user }: { user: any }) {
                                                     <span className={`h-1.5 w-1.5 rounded-full mr-1.5 ${
                                                         session.status === 'CONNECTED' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
                                                     }`} />
-                                                    {session.status}
+                                                    {rotuloStatusSessao(session.status)}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="py-3">

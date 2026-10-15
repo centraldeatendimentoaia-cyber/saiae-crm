@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { rotuloStatusSessao } from "@/lib/status-sessao";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -200,7 +201,7 @@ export default async function DashboardPage() {
                                                     ${isConnected ? 'bg-emerald-50 text-emerald-700' : isDisconnected ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}
                                                 `}>
                                                     <span className={`h-1.5 w-1.5 rounded-full ${isConnected ? 'bg-emerald-500' : isDisconnected ? 'bg-red-400' : 'bg-amber-400'}`} />
-                                                    {s.status}
+                                                    {rotuloStatusSessao(s.status)}
                                                 </div>
                                             </div>
                                         </CardContent>
