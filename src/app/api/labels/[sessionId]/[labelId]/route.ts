@@ -1,6 +1,13 @@
 import { NextResponse, NextRequest } from "next/server";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    name: opt(z.string()),
+    color: opt(z.number().int("a cor deve ser um número inteiro")),
+});
 
 // PUT: Update label
 export async function PUT(
@@ -15,8 +22,9 @@ export async function PUT(
             return NextResponse.json({ status: false, message: "Unauthorized", error: "Unauthorized" }, { status: 401 });
         }
 
-        const body = await request.json();
-        const { name, color } = body;
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { name, color } = lido.data;
 
         // Find label and verify access
         const label = await prisma.label.findUnique({

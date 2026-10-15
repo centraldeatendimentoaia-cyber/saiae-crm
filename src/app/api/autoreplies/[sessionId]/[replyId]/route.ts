@@ -1,6 +1,18 @@
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({
+    keyword: z.string().min(1, "informe a palavra-chave"),
+    response: opt(z.string()),
+    matchType: opt(z.enum(["EXACT", "CONTAINS", "REGEX"], { error: "use EXACT, CONTAINS ou REGEX" })),
+    triggerType: opt(z.enum(["ALL", "GROUP", "PRIVATE"], { error: "use ALL, GROUP ou PRIVATE" })),
+    isMedia: opt(z.boolean()),
+    mediaUrl: opt(z.string()),
+    mediaType: opt(z.string()),
+}).refine((b) => !!b.response || !!b.mediaUrl, { path: ["response"], message: "informe a resposta ou uma mídia" });
 
 export async function PUT(
     request: NextRequest,
@@ -18,12 +30,9 @@ export async function PUT(
             return NextResponse.json({ status: false, message: "Forbidden - Cannot access this session", error: "Forbidden - Cannot access this session" }, { status: 403 });
         }
 
-        const body = await request.json();
-        const { keyword, response, matchType, triggerType, isMedia, mediaUrl, mediaType } = body;
-
-        if (!keyword || (!response && !mediaUrl)) {
-            return NextResponse.json({ status: false, message: "Keyword and either response or media are required", error: "Keyword and response are required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { keyword, response, matchType, triggerType, isMedia, mediaUrl, mediaType } = lido.data;
 
         const updated = await prisma.autoReply.update({
             where: { id: replyId },

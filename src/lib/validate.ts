@@ -37,3 +37,16 @@ export async function lerCorpo<S extends z.ZodType>(request: Request, schema: S)
 
 /** Campo opcional que aceita ausente ou null (vira undefined), como as rotas já toleravam. */
 export const opt = <T extends z.ZodType>(s: T) => s.nullish().transform((v) => v ?? undefined);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const objetoQualquer = z.record(z.string(), z.any(), { error: "Corpo inválido: envie um objeto JSON." });
+
+/**
+ * Para rotas que já validam os campos à mão (social, opt-outs...) e toleravam corpo ausente ou malformado (viram {}):
+ * mantém essa tolerância, mas corpo que não é objeto (null, lista, texto) vira 400 em vez de estourar 500 depois.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function lerObjetoOpcional(request: Request): Promise<Lido<Record<string, any>>> {
+    const corpo = await request.json().catch(() => ({}));
+    return validar(objetoQualquer, corpo);
+}
