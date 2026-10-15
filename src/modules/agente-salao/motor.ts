@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { DefinicaoFerramenta, Llm } from "@/modules/ia-atendimento/llm";
 import { filtrarSaida, MAX_PASSOS, montarMensagens, MSG_FALHA } from "@/modules/ia-atendimento/motor";
-import { agoraSaoPaulo, neutralizar } from "@/modules/ia-atendimento/prompt";
+import { agoraSaoPaulo } from "@/modules/atendimento-comum/tempo";
+import { neutralizar } from "@/modules/ia-atendimento/prompt";
 import { protegerSaida } from "@/modules/ia-atendimento/vendas/saida";
 
 /**

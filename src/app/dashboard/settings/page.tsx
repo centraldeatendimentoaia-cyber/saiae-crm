@@ -1,5 +1,6 @@
 "use client";
 
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { logger } from "@/lib/logger";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
@@ -18,11 +19,11 @@ export default function SettingsPage() {
         appName: "Saiaê",
         logoUrl: "",
         faviconUrl: "/favicon.ico",
-        timezone: "America/Sao_Paulo",
+        timezone: TZ_SAO_PAULO,
         enableRegistration: true
     });
     const [systemLoading, setSystemLoading] = useState(false);
-    const [timezones, setTimezones] = useState<string[]>(["UTC", "America/Sao_Paulo", "Asia/Makassar", "Asia/Jayapura"]);
+    const [timezones, setTimezones] = useState<string[]>(["UTC", TZ_SAO_PAULO, "Asia/Makassar", "Asia/Jayapura"]);
 
     useEffect(() => {
         try {
@@ -49,7 +50,7 @@ export default function SettingsPage() {
                         appName: data.appName || "Saiaê",
                         logoUrl: data.logoUrl || "",
                         faviconUrl: data.faviconUrl || "/favicon.ico",
-                        timezone: data.timezone || "America/Sao_Paulo",
+                        timezone: data.timezone || TZ_SAO_PAULO,
                         enableRegistration: data.enableRegistration !== undefined ? data.enableRegistration : true
                     });
                 }

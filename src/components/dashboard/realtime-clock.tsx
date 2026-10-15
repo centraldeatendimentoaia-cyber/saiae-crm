@@ -1,12 +1,13 @@
 "use client";
 
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { useEffect, useState } from "react";
 import moment from "moment-timezone";
 import { Clock } from "lucide-react";
 
 export function RealtimeClock() {
     const [time, setTime] = useState("");
-    const [timezone, setTimezone] = useState("America/Sao_Paulo");
+    const [timezone, setTimezone] = useState(TZ_SAO_PAULO);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {

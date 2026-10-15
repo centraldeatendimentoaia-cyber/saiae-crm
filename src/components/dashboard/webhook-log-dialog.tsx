@@ -1,5 +1,6 @@
 "use client";
 
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { logger } from "@/lib/logger";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -88,7 +89,7 @@ export default function WebhookLogDialog({ webhookId, webhookName, targetSession
     const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<"payload" | "response" | "headers">("payload");
     const [showMobileDetails, setShowMobileDetails] = useState(false);
-    const [timezone, setTimezone] = useState<string>("America/Sao_Paulo");
+    const [timezone, setTimezone] = useState<string>(TZ_SAO_PAULO);
 
     // Reset log selection and fetch timezone when dialog changes state
     useEffect(() => {

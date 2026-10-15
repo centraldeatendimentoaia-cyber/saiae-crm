@@ -7,7 +7,7 @@ import { logger } from "@/lib/logger";
 import { canonicalPhone, formatPhoneBr } from "@/lib/phone";
 import { isOptedOut, isOptInText, isOptOutText } from "@/lib/optout";
 import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
-import { MAX_TEXTO } from "@/modules/ia-atendimento/constantes";
+import { MAX_TEXTO } from "@/modules/atendimento-comum/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";

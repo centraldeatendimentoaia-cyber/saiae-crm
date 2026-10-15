@@ -1,5 +1,6 @@
 "use client";
 
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { parseRecipients } from "@/lib/phone";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +37,7 @@ export default function SchedulerPage() {
     const [messages, setMessages] = useState<ScheduledMessage[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
-    const [systemTimezone, setSystemTimezone] = useState("America/Sao_Paulo");
+    const [systemTimezone, setSystemTimezone] = useState(TZ_SAO_PAULO);
     const [activeTab, setActiveTab] = useState("pending");
 
     // Form state

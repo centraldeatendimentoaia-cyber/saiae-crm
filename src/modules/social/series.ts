@@ -1,9 +1,10 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import moment from "moment-timezone";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { PostType, Provider, asRecord, parseClock } from "./validate";
 
-export const TZ = "America/Sao_Paulo";
+export const TZ = TZ_SAO_PAULO;
 /** Quanto à frente o sistema mantém postagens geradas. */
 export const HORIZON_DAYS = 56;
 export const MAX_ACCOUNTS = 5;
