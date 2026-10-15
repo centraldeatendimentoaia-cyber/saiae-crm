@@ -7,7 +7,6 @@
 export const PAGINAS_SO_SUPERADMIN = [
     "/dashboard/users",
     "/dashboard/system-monitor",
-    "/dashboard/notifications",
     "/dashboard/atendente-ia",
     "/dashboard/agente-ia",
 ] as const;

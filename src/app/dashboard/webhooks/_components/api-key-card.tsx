@@ -19,6 +19,8 @@ import {
 
 export function ApiKeyCard() {
     const [apiKey, setApiKey] = useState<string | null>(null);
+    // Chave completa: o servidor só a devolve na criação; depois disso só existe a máscara.
+    const [novaChave, setNovaChave] = useState<string | null>(null);
     const [showApiKey, setShowApiKey] = useState(false);
     const [showRegenConfirm, setShowRegenConfirm] = useState(false);
 
@@ -42,7 +44,9 @@ export function ApiKeyCard() {
             if (res.ok) {
                 const data = await res.json();
                 setApiKey(data?.data?.apiKey);
-                toast.success("Nova chave de API gerada!");
+                setNovaChave(data?.data?.apiKey ?? null);
+                setShowApiKey(true);
+                toast.success("Nova chave de API gerada! Copie agora: ela não será mostrada de novo.");
             }
         } catch {
             toast.error("Falha ao gerar a chave de API");
@@ -68,17 +72,17 @@ export function ApiKeyCard() {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
                     <div className="flex-1 bg-zinc-100 rounded-md p-2 sm:p-3 font-mono text-xs sm:text-sm overflow-x-auto">
                         {apiKey ? (
-                            showApiKey ? apiKey : "••••••••••••••••••••••••••••••••"
+                            novaChave && !showApiKey ? "••••••••••••••••••••••••••••••••" : apiKey
                         ) : (
                             <span className="text-muted-foreground">Nenhuma chave de API gerada</span>
                         )}
                     </div>
-                    {apiKey && (
+                    {novaChave && (
                         <>
                             <Button variant="ghost" size="icon" onClick={() => setShowApiKey(!showApiKey)}>
                                 {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(apiKey)}>
+                            <Button variant="ghost" size="icon" onClick={() => copyToClipboard(novaChave)}>
                                 <Copy className="h-4 w-4" />
                             </Button>
                         </>
@@ -91,9 +95,14 @@ export function ApiKeyCard() {
                         {apiKey ? "Gerar nova" : "Gerar"}
                     </Button>
                 </div>
+                {apiKey && !novaChave && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                        Por segurança a chave completa só aparece ao ser gerada. Se a perdeu, use "Gerar nova".
+                    </p>
+                )}
                 {apiKey && (
                     <p className="text-xs text-muted-foreground mt-2">
-                        Exemplo: <code className="bg-zinc-100 px-1 py-0.5 rounded">curl -H "X-API-Key: {apiKey?.slice(0, 10)}..." http://your-server/api/sessions</code>
+                        Exemplo: <code className="bg-zinc-100 px-1 py-0.5 rounded">curl -H "X-API-Key: {novaChave ? novaChave.slice(0, 10) : "SUA_CHAVE"}..." http://your-server/api/sessions</code>
                     </p>
                 )}
             </CardContent>
