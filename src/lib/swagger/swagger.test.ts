@@ -6,6 +6,7 @@ import { getApiDocs } from "./index";
 type Operacao = { tags?: string[]; responses?: Record<string, unknown>; parameters?: { name?: string; $ref?: string }[] };
 type Spec = {
     openapi: string;
+    info: unknown;
     paths: Record<string, Record<string, Operacao>>;
     components: { schemas: Record<string, unknown>; responses: Record<string, unknown>; securitySchemes: Record<string, unknown> };
 };
