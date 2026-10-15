@@ -1,6 +1,7 @@
 import { logger } from "@/lib/logger";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendMail, welcomeMail } from "@/lib/mailer";
 import type { PlanKey } from "@/lib/plans";
@@ -9,6 +10,22 @@ import type { PlanKey } from "@/lib/plans";
  * Integração com a Stripe sem SDK nem chave secreta: o servidor só recebe webhooks
  * assinados (STRIPE_WEBHOOK_SECRET) e reconhece os planos pela "lookup key" dos preços.
  */
+
+// Formas (parciais) dos objetos da Stripe que lemos; sem o SDK, só os campos usados aqui.
+interface StripeItem { quantity?: number; price?: { lookup_key?: string } }
+interface StripeSubscriptionObject { id: string; status?: string; customer?: string; items?: { data?: StripeItem[] } }
+interface StripeCheckoutSession {
+    id: string;
+    mode?: string;
+    subscription?: string | null;
+    customer?: string | null;
+    customer_email?: string | null;
+    customer_details?: { email?: string | null; name?: string | null };
+    client_reference_id?: string | null;
+}
+type StripeObject = StripeSubscriptionObject & StripeCheckoutSession;
+type StripeEventPayload = { data?: { object?: StripeObject } } | null;
+export interface StripeEventShape { id: string; type: string; data?: { object?: unknown } }
 
 const LOOKUP_TO_PLAN: Record<string, PlanKey> = {
     saiae_essencial: "ESSENCIAL",
@@ -66,11 +83,11 @@ export async function recomputeUserPlan(userId: string): Promise<void> {
 }
 
 /** Aplica um evento customer.subscription.* em uma assinatura já vinculada a um usuário. */
-async function applySubscriptionObject(obj: any): Promise<boolean> {
+async function applySubscriptionObject(obj: StripeSubscriptionObject): Promise<boolean> {
     const existing = await prisma.stripeSubscription.findUnique({ where: { id: obj.id } });
     if (!existing) return false;
 
-    const items: any[] = obj.items?.data || [];
+    const items: StripeItem[] = obj.items?.data || [];
     let planKey: string | null = null;
     let extraQuantity = 0;
     for (const it of items) {
@@ -115,8 +132,8 @@ async function createAccountForBuyer(email: string, name: string | null): Promis
 }
 
 /** A assinatura é do Sai aê CRM? (a conta Stripe também tem outros produtos, como o PDV) */
-function isOurSubscription(obj: any): boolean {
-    const items: any[] = obj?.items?.data || [];
+function isOurSubscription(obj: StripeSubscriptionObject | undefined): boolean {
+    const items: StripeItem[] = obj?.items?.data || [];
     return items.some((it) => {
         const key = it?.price?.lookup_key as string | undefined;
         return !!key && (!!LOOKUP_TO_PLAN[key] || key === EXTRA_LOOKUP);
@@ -124,7 +141,7 @@ function isOurSubscription(obj: any): boolean {
 }
 
 /** Vincula o checkout concluído a uma conta (cria a conta se o comprador ainda não tiver). */
-async function linkCheckout(session: any): Promise<void> {
+async function linkCheckout(session: StripeCheckoutSession): Promise<void> {
     const email = String(session.customer_details?.email || session.customer_email || "").trim().toLowerCase();
     let userId: string | null = null;
 
@@ -162,7 +179,7 @@ async function linkCheckout(session: any): Promise<void> {
  * em qualquer ordem, quem chegar primeiro espera pelo outro.
  * Retorna true quando o evento foi resolvido (vinculado ou ignorado).
  */
-async function handleCheckoutCompleted(session: any): Promise<boolean> {
+async function handleCheckoutCompleted(session: StripeCheckoutSession): Promise<boolean> {
     if (session.mode !== "subscription" || !session.subscription) return true;
 
     const subEvent = await prisma.stripeEvent.findFirst({
@@ -171,7 +188,7 @@ async function handleCheckoutCompleted(session: any): Promise<boolean> {
     });
     if (!subEvent) return false; // ainda não sabemos o que foi comprado: aguarda a assinatura chegar
 
-    const subObj = (subEvent.payload as any)?.data?.object;
+    const subObj = (subEvent.payload as StripeEventPayload)?.data?.object;
     if (!isOurSubscription(subObj)) return true; // compra de outro produto (ex.: PDV): ignora
 
     await linkCheckout(session);
@@ -182,7 +199,7 @@ async function handleCheckoutCompleted(session: any): Promise<boolean> {
         orderBy: { createdAt: "asc" },
     });
     for (const ev of pending) {
-        const o = (ev.payload as any)?.data?.object;
+        const o = (ev.payload as StripeEventPayload)?.data?.object;
         if (o && (await applySubscriptionObject(ev.type === "customer.subscription.deleted" ? { ...o, status: "canceled" } : o))) {
             await prisma.stripeEvent.update({ where: { id: ev.id }, data: { processedAt: new Date() } });
         }
@@ -191,7 +208,7 @@ async function handleCheckoutCompleted(session: any): Promise<boolean> {
 }
 
 /** Evento customer.subscription.*: aplica se já houver vínculo; senão tenta resolver um checkout pendente. */
-async function handleSubscriptionEvent(type: string, obj: any): Promise<boolean> {
+async function handleSubscriptionEvent(type: string, obj: StripeSubscriptionObject): Promise<boolean> {
     if (!isOurSubscription(obj)) return true; // outro produto: ignora
 
     const data = type === "customer.subscription.deleted" ? { ...obj, status: "canceled" } : obj;
@@ -203,15 +220,15 @@ async function handleSubscriptionEvent(type: string, obj: any): Promise<boolean>
         orderBy: { createdAt: "asc" },
     });
     if (!checkout) return false;
-    const session = (checkout.payload as any)?.data?.object;
+    const session = (checkout.payload as StripeEventPayload)?.data?.object as StripeCheckoutSession;
     await linkCheckout(session);
     await prisma.stripeEvent.update({ where: { id: checkout.id }, data: { processedAt: new Date() } });
     return applySubscriptionObject(data);
 }
 
 /** Processa um evento já validado. Idempotente: o mesmo evento nunca é aplicado duas vezes. */
-export async function handleStripeEvent(event: any): Promise<void> {
-    const obj = event?.data?.object;
+export async function handleStripeEvent(event: StripeEventShape): Promise<void> {
+    const obj = event?.data?.object as StripeObject;
     const already = await prisma.stripeEvent.findUnique({ where: { id: event.id }, select: { processedAt: true } });
     if (already?.processedAt) return;
 
@@ -220,7 +237,7 @@ export async function handleStripeEvent(event: any): Promise<void> {
         const objectId = event.type === "checkout.session.completed"
             ? (obj?.subscription ? String(obj.subscription) : null)
             : (obj?.id ? String(obj.id) : null);
-        await prisma.stripeEvent.create({ data: { id: event.id, type: event.type, objectId, payload: event } });
+        await prisma.stripeEvent.create({ data: { id: event.id, type: event.type, objectId, payload: event as unknown as Prisma.InputJsonObject } });
     }
 
     let processed = true;
