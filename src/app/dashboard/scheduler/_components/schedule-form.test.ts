@@ -51,7 +51,7 @@ describe("parseRecurrence", () => {
     });
 
     it("le tipo e valor da regra guardada", () => {
-        expect(parseRecurrence('{"type":"minutes","value":15}', "*/15 * * * *")).toEqual({ isRecurring: "recurring", customCron: "*/15 * * * *", recurrenceType: "minutes", recurringMinutes: 15, customCron: "*/15 * * * *" });
+        expect(parseRecurrence('{"type":"minutes","value":15}', "*/15 * * * *")).toEqual({ isRecurring: "recurring", customCron: "*/15 * * * *", recurrenceType: "minutes", recurringMinutes: 15 });
         expect(parseRecurrence('{"type":"days","value":[1,3]}', "30 14 * * 1,3").recurringDays).toEqual([1, 3]);
     });
 
