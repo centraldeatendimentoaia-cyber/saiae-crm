@@ -3,33 +3,17 @@
 import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { parseRecipients } from "@/lib/phone";
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { EmojiTextarea } from "@/components/emoji-textarea";
-import { MediaUpload } from "@/components/media-upload";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus, CalendarClock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import moment from "moment-timezone";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog";
 import { SearchFilter } from "@/components/dashboard/search-filter";
 import { useSession } from "@/components/dashboard/session-provider";
 import { SessionGuard } from "@/components/dashboard/session-guard";
-import { parseRecurrence, buildCronData } from "./_components/recurrence";
-import { RecurrenceForm } from "./_components/recurrence-form";
 import { PendingList, HistoryList, DeleteDialog, type ScheduledMessage } from "./_components/message-list";
+import { NewScheduleCard } from "./_components/new-schedule-card";
+import { EditScheduleDialog } from "./_components/edit-schedule-dialog";
+import { EMPTY_SCHEDULE_FORM, computeSendAt, cronDataFor, formFromMessage, jidWithSuffix, type ScheduleFormValues } from "./_components/schedule-form";
 
 export default function SchedulerPage() {
     const { sessionId: selectedSessionId } = useSession();
@@ -42,21 +26,8 @@ export default function SchedulerPage() {
 
     // Form state
     const [showForm, setShowForm] = useState(false);
-    const [newJidType, setNewJidType] = useState("personal");
-    const [newJid, setNewJid] = useState("");
-    const [newContent, setNewContent] = useState("");
-    const [newSendAt, setNewSendAt] = useState("");
-    const [newSendTime, setNewSendTime] = useState("");
-    const [newMediaUrl, setNewMediaUrl] = useState("");
-    const [newMediaType, setNewMediaType] = useState("image");
-    
-    // Recurrence State for Create
-    const [isRecurring, setIsRecurring] = useState("once");
-    const [recurrenceType, setRecurrenceType] = useState("minutes");
-    const [recurringMinutes, setRecurringMinutes] = useState(5);
-    const [recurringHours, setRecurringHours] = useState(1);
-    const [recurringDays, setRecurringDays] = useState<number[]>([]);
-    const [customCron, setCustomCron] = useState("");
+    const [form, setForm] = useState<ScheduleFormValues>(EMPTY_SCHEDULE_FORM);
+    const patchForm = (patch: Partial<ScheduleFormValues>) => setForm(prev => ({ ...prev, ...patch }));
 
     // Delete state
     const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -64,20 +35,8 @@ export default function SchedulerPage() {
     // Edit state
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
-    const [editJidType, setEditJidType] = useState("personal");
-    const [editJid, setEditJid] = useState("");
-    const [editContent, setEditContent] = useState("");
-    const [editSendAt, setEditSendAt] = useState("");
-    const [editSendTime, setEditSendTime] = useState("");
-    const [editMediaUrl, setEditMediaUrl] = useState("");
-    const [editMediaType, setEditMediaType] = useState("image");
-
-    const [editIsRecurring, setEditIsRecurring] = useState("once");
-    const [editRecurrenceType, setEditRecurrenceType] = useState("minutes");
-    const [editRecurringMinutes, setEditRecurringMinutes] = useState(5);
-    const [editRecurringHours, setEditRecurringHours] = useState(1);
-    const [editRecurringDays, setEditRecurringDays] = useState<number[]>([]);
-    const [editCustomCron, setEditCustomCron] = useState("");
+    const [editForm, setEditForm] = useState<ScheduleFormValues>(EMPTY_SCHEDULE_FORM);
+    const patchEditForm = (patch: Partial<ScheduleFormValues>) => setEditForm(prev => ({ ...prev, ...patch }));
 
     useEffect(() => {
         fetch('/api/settings/system')
@@ -108,7 +67,7 @@ export default function SchedulerPage() {
             } else {
                 setMessages([]);
             }
-        } catch (error) {
+        } catch {
             toast.error("Falha ao carregar as mensagens agendadas");
         } finally {
             setLoading(false);
@@ -117,69 +76,37 @@ export default function SchedulerPage() {
 
     const handleEdit = (msg: ScheduledMessage) => {
         setEditId(msg.id);
-        const isGroup = msg.jid.includes("@g.us");
-        const isNewsletter = msg.jid.includes("@newsletter");
-        setEditJidType(isGroup ? "group" : isNewsletter ? "newsletter" : "personal");
-        const jidUser = msg.jid.split('@')[0];
-        setEditJid(jidUser);
-        setEditContent(msg.content || "");
-        setEditMediaUrl(msg.mediaUrl || "");
-        setEditMediaType(msg.mediaType || "image");
-        
-        const localIso = moment.tz(msg.sendAt, systemTimezone).format('YYYY-MM-DDTHH:mm');
-        setEditSendAt(localIso);
-        
-        const localTime = moment.tz(msg.sendAt, systemTimezone).format('HH:mm');
-        setEditSendTime(localTime);
-        
-        parseRecurrence(msg.recurrenceRule, msg.cronExpression, {
-            setRecurring: setEditIsRecurring, setType: setEditRecurrenceType, setMins: setEditRecurringMinutes,
-            setHrs: setEditRecurringHours, setDays: setEditRecurringDays, setCron: setEditCustomCron,
-        });
-
+        setEditForm(formFromMessage(msg, systemTimezone));
         setIsEditOpen(true);
     };
 
     const handleSaveSchedule = async () => {
-        if (!selectedSessionId || !newJid || (!newContent && !newMediaUrl)) {
+        if (!selectedSessionId || !form.jid || (!form.content && !form.mediaUrl)) {
             toast.error("Preencha os campos obrigatórios (JID, conteúdo/mídia)");
             return;
         }
 
-        let finalSendAt = newSendAt;
-        if (isRecurring === "recurring") {
-            if (recurrenceType === "days") {
-                if (!newSendTime) {
-                    toast.error("Informe o horário do dia");
-                    return;
-                }
-                // Construct a valid local date-time string
-                finalSendAt = `${moment().format('YYYY-MM-DD')}T${newSendTime}:00`;
-            } else {
-                // For minutes, hours, cron: start from now
-                finalSendAt = moment().tz(systemTimezone).format('YYYY-MM-DDTHH:mm:ss');
-            }
-        } else {
-            if (!newSendAt) {
-                toast.error("Informe a data e hora de envio");
-                return;
-            }
+        const when = computeSendAt(form, systemTimezone);
+        if ("error" in when) {
+            toast.error(when.error);
+            return;
         }
+        const finalSendAt = when.value;
 
         let jids: string[];
-        if (newJidType === "personal") {
-            jids = parseRecipients(newJid);
+        if (form.jidType === "personal") {
+            jids = parseRecipients(form.jid);
             if (jids.length === 0) {
                 toast.error("Informe ao menos um número válido");
                 return;
             }
         } else {
-            let single = newJid.trim();
-            if (!single.includes("@")) single += newJidType === "group" ? "@g.us" : "@newsletter";
+            let single = form.jid.trim();
+            if (!single.includes("@")) single += form.jidType === "group" ? "@g.us" : "@newsletter";
             jids = [single];
         }
 
-        const cronData = buildCronData(isRecurring, recurrenceType, recurringMinutes, recurringHours, recurringDays, customCron, finalSendAt);
+        const cronData = cronDataFor(form, finalSendAt);
 
         try {
             const res = await fetch(`/api/scheduler/${selectedSessionId}`, {
@@ -187,10 +114,10 @@ export default function SchedulerPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     ...(jids.length > 1 ? { jids, spacingMs: 5000 } : { jid: jids[0] }),
-                    content: newContent,
+                    content: form.content,
                     sendAt: finalSendAt,
-                    mediaUrl: newMediaUrl,
-                    mediaType: newMediaType,
+                    mediaUrl: form.mediaUrl,
+                    mediaType: form.mediaType,
                     ...cronData
                 })
             });
@@ -198,54 +125,32 @@ export default function SchedulerPage() {
             if (res.ok) {
                 toast.success(jids.length > 1 ? `${jids.length} mensagens agendadas` : "Mensagem agendada");
                 setShowForm(false);
-                setNewJid("");
-                setNewContent("");
-                setNewSendAt("");
-                setNewSendTime("");
-                setNewMediaUrl("");
-                setNewMediaType("image");
-                setNewJidType("personal");
+                // limpa só os campos de conteúdo; a recorrência escolhida fica para o próximo agendamento
+                patchForm({ jid: "", content: "", sendAt: "", sendTime: "", mediaUrl: "", mediaType: "image", jidType: "personal" });
                 fetchMessages(selectedSessionId, activeTab);
             } else {
                 toast.error("Falha ao agendar a mensagem");
             }
-        } catch (error) {
+        } catch {
             toast.error("Ocorreu um erro");
         }
     };
 
     const handleUpdateSchedule = async () => {
-        if (!selectedSessionId || !editId || !editJid || (!editContent && !editMediaUrl)) {
+        if (!selectedSessionId || !editId || !editForm.jid || (!editForm.content && !editForm.mediaUrl)) {
             toast.error("Preencha os campos obrigatórios");
             return;
         }
 
-        let finalSendAt = editSendAt;
-        if (editIsRecurring === "recurring") {
-            if (editRecurrenceType === "days") {
-                if (!editSendTime) {
-                    toast.error("Informe o horário do dia");
-                    return;
-                }
-                finalSendAt = `${moment().format('YYYY-MM-DD')}T${editSendTime}:00`;
-            } else {
-                finalSendAt = moment().tz(systemTimezone).format('YYYY-MM-DDTHH:mm:ss');
-            }
-        } else {
-            if (!editSendAt) {
-                toast.error("Informe a data e hora de envio");
-                return;
-            }
+        const when = computeSendAt(editForm, systemTimezone);
+        if ("error" in when) {
+            toast.error(when.error);
+            return;
         }
+        const finalSendAt = when.value;
 
-        let jid = editJid;
-        if (!jid.includes("@")) {
-            if (editJidType === "group") jid += "@g.us";
-            else if (editJidType === "newsletter") jid += "@newsletter";
-            else jid += "@s.whatsapp.net";
-        }
-
-        const cronData = buildCronData(editIsRecurring, editRecurrenceType, editRecurringMinutes, editRecurringHours, editRecurringDays, editCustomCron, finalSendAt);
+        const jid = jidWithSuffix(editForm.jid, editForm.jidType);
+        const cronData = cronDataFor(editForm, finalSendAt);
 
         try {
             const res = await fetch(`/api/scheduler/${selectedSessionId}/${editId}`, {
@@ -253,10 +158,10 @@ export default function SchedulerPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     jid,
-                    content: editContent,
+                    content: editForm.content,
                     sendAt: finalSendAt,
-                    mediaUrl: editMediaUrl,
-                    mediaType: editMediaType,
+                    mediaUrl: editForm.mediaUrl,
+                    mediaType: editForm.mediaType,
                     ...cronData
                 })
             });
@@ -268,7 +173,7 @@ export default function SchedulerPage() {
             } else {
                 toast.error("Falha ao atualizar o agendamento");
             }
-        } catch (error) {
+        } catch {
             toast.error("Ocorreu um erro");
         }
     };
@@ -283,7 +188,7 @@ export default function SchedulerPage() {
             } else {
                 toast.error("Falha ao excluir o agendamento");
             }
-        } catch (error) {
+        } catch {
             toast.error("Falha ao excluir o agendamento");
         } finally {
             setDeleteId(null);
@@ -311,7 +216,6 @@ export default function SchedulerPage() {
                     <div className="flex items-center gap-2 w-full sm:w-auto">
                         <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => selectedSessionId && fetchMessages(selectedSessionId, activeTab)} disabled={loading || !selectedSessionId}>
                             <RefreshCw className={`h-4 w-4 mr-1 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
-                            
                             Atualizar
                         </Button>
                         <Button size="sm" className="flex-1 sm:flex-none" onClick={() => setShowForm(!showForm)} disabled={!selectedSessionId}>
@@ -326,91 +230,7 @@ export default function SchedulerPage() {
                 />
 
                 {showForm && (
-                    <Card className="border-2 border-primary/20">
-                        <CardHeader>
-                            <CardTitle>Agendar nova mensagem</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <Label>Destinatários</Label>
-                                    <RadioGroup value={newJidType} onValueChange={setNewJidType} className="flex gap-4">
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="personal" id="new-personal" />
-                                            <Label htmlFor="new-personal" className="cursor-pointer">Pessoal</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="group" id="new-group" />
-                                            <Label htmlFor="new-group" className="cursor-pointer">Grupo</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="newsletter" id="new-newsletter" />
-                                            <Label htmlFor="new-newsletter" className="cursor-pointer">Canal</Label>
-                                        </div>
-                                    </RadioGroup>
-                                </div>
-                                {newJidType === "personal" ? (
-                                    <>
-                                        <Textarea
-                                            value={newJid}
-                                            onChange={e => setNewJid(e.target.value)}
-                                            placeholder={"5511999999999\n5511988888888"}
-                                            className="min-h-[120px] font-mono"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            {parseRecipients(newJid).length} números identificados. Um por linha ou separados por vírgula.
-                                            {parseRecipients(newJid).length > 1 && " As mensagens saem uma a uma, com alguns segundos entre elas."}
-                                        </p>
-                                    </>
-                                ) : (
-                                    <Input value={newJid} onChange={e => setNewJid(e.target.value)} placeholder={newJidType === 'group' ? "120363... (ID do grupo)" : "120363... (ID do canal)"} />
-                                )}
-                            </div>
-                            
-                            <RecurrenceForm
-                                isRec={isRecurring} setRec={setIsRecurring}
-                                type={recurrenceType} setType={setRecurrenceType}
-                                mins={recurringMinutes} setMins={setRecurringMinutes}
-                                hrs={recurringHours} setHrs={setRecurringHours}
-                                days={recurringDays} setDays={setRecurringDays}
-                                cron={customCron} setCron={setCustomCron}
-                                sendAtStr={newSendAt} setSendAtStr={setNewSendAt}
-                                sendTimeStr={newSendTime} setSendTimeStr={setNewSendTime}
-                            />
-
-                            <div className="space-y-2 mt-4">
-                                <Label>Mensagem (opcional)</Label>
-                                <EmojiTextarea value={newContent} onValueChange={setNewContent} placeholder="Olá!" className="min-h-[110px]" />
-                            </div>
-
-                            <div className="space-y-2 mt-4">
-                                <Label>Imagem (opcional)</Label>
-                                <MediaUpload value={newMediaUrl.startsWith("/api/uploads/") ? newMediaUrl : ""} onChange={u => { setNewMediaUrl(u); if (u) setNewMediaType("image"); }} />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Ou URL da mídia (opcional)</Label>
-                                    <Input value={newMediaUrl} onChange={e => setNewMediaUrl(e.target.value)} placeholder="https://..." />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Tipo de mídia</Label>
-                                    <Select value={newMediaType} onValueChange={setNewMediaType}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="image">Imagem</SelectItem>
-                                            <SelectItem value="video">Vídeo</SelectItem>
-                                            <SelectItem value="document">Documento</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                            <div className="flex justify-end gap-2 mt-4">
-                                <Button variant="ghost" onClick={() => setShowForm(false)}>Cancelar</Button>
-                                <Button onClick={handleSaveSchedule} disabled={(!newContent && !newMediaUrl) || !newJid}>Agendar</Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <NewScheduleCard values={form} onChange={patchForm} onCancel={() => setShowForm(false)} onSubmit={handleSaveSchedule} />
                 )}
 
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -428,72 +248,13 @@ export default function SchedulerPage() {
 
                 <DeleteDialog open={!!deleteId} onCancel={() => setDeleteId(null)} onConfirm={confirmDelete} />
 
-                <Dialog open={isEditOpen} onOpenChange={o => !o && setIsEditOpen(false)}>
-                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                        <DialogHeader>
-                            <DialogTitle>Editar agendamento</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <Label>JID do destinatário</Label>
-                                    <RadioGroup value={editJidType} onValueChange={setEditJidType} className="flex gap-4">
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="personal" id="edit-personal" />
-                                            <Label htmlFor="edit-personal" className="cursor-pointer">Pessoal</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="group" id="edit-group" />
-                                            <Label htmlFor="edit-group" className="cursor-pointer">Grupo</Label>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <RadioGroupItem value="newsletter" id="edit-newsletter" />
-                                            <Label htmlFor="edit-newsletter" className="cursor-pointer">Canal</Label>
-                                        </div>
-                                    </RadioGroup>
-                                </div>
-                                <Input value={editJid} onChange={e => setEditJid(e.target.value)} placeholder={editJidType === 'group' ? "120363... (ID do grupo)" : editJidType === 'newsletter' ? "120363... (ID do canal)" : "62812345678"} />
-                            </div>
-                            
-                            <RecurrenceForm
-                                isRec={editIsRecurring} setRec={setEditIsRecurring}
-                                type={editRecurrenceType} setType={setEditRecurrenceType}
-                                mins={editRecurringMinutes} setMins={setEditRecurringMinutes}
-                                hrs={editRecurringHours} setHrs={setEditRecurringHours}
-                                days={editRecurringDays} setDays={setEditRecurringDays}
-                                cron={editCustomCron} setCron={setEditCustomCron}
-                                sendAtStr={editSendAt} setSendAtStr={setEditSendAt}
-                                sendTimeStr={editSendTime} setSendTimeStr={setEditSendTime}
-                            />
-
-                            <div className="space-y-2 mt-4">
-                                <Label>Mensagem (opcional)</Label>
-                                <EmojiTextarea value={editContent} onValueChange={setEditContent} className="min-h-[110px]" />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>URL da mídia (opcional)</Label>
-                                    <Input value={editMediaUrl} onChange={e => setEditMediaUrl(e.target.value)} />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Tipo de mídia</Label>
-                                    <Select value={editMediaType} onValueChange={setEditMediaType}>
-                                        <SelectTrigger><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="image">Imagem</SelectItem>
-                                            <SelectItem value="video">Vídeo</SelectItem>
-                                            <SelectItem value="document">Documento</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="ghost" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-                            <Button onClick={handleUpdateSchedule} disabled={(!editContent && !editMediaUrl) || !editJid}>Salvar alterações</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <EditScheduleDialog
+                    open={isEditOpen}
+                    onClose={() => setIsEditOpen(false)}
+                    values={editForm}
+                    onChange={patchEditForm}
+                    onSubmit={handleUpdateSchedule}
+                />
             </div>
         </SessionGuard>
     );
