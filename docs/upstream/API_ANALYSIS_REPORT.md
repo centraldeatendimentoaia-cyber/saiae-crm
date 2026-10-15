@@ -1,3 +1,5 @@
+> **Documento herdado do projeto original (upstream).** Mantido como referência histórica; pode estar desatualizado. A documentação atual da API é o Swagger UI em `/swagger` (spec em `src/lib/swagger/`). Índice do que é do Saiaê: [../README.md](../README.md).
+
 # API Deep Analysis Report
 
 > **Date**: January 17, 2026

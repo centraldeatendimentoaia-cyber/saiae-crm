@@ -13,7 +13,6 @@ import {
     Bot,
     Sparkles,
     Bell,
-    FileText,
     Code,
     UserCheck,
     Megaphone,
@@ -49,6 +48,7 @@ export const navGroups: NavGroup[] = [
             { href: "/dashboard/sessions", label: "Sessões / QR", icon: QrCode },
             { href: "/dashboard/guia", label: "Guia de uso", icon: BookOpen },
             { href: "/dashboard/assinatura", label: "Plano e assinatura", icon: CreditCard },
+            { href: "/dashboard/notificacoes", label: "Notificações", icon: Bell },
         ],
     },
     {
@@ -89,8 +89,7 @@ export const navGroups: NavGroup[] = [
         label: "Desenvolvedor",
         items: [
             { href: "/dashboard/webhooks", label: "Webhooks e API", icon: Webhook },
-            { href: "/docs", label: "Documentação da API", icon: FileText },
-            { href: "/swagger", label: "Swagger UI", icon: Code, external: true },
+            { href: "/swagger", label: "Documentação da API", icon: Code, external: true },
         ],
     },
     {
@@ -101,7 +100,6 @@ export const navGroups: NavGroup[] = [
             { href: "/dashboard/users", label: "Usuários", icon: Users, superadminOnly: true },
             { href: "/dashboard/settings", label: "Configurações", icon: Settings },
             { href: "/dashboard/system-monitor", label: "Monitor do sistema", icon: Activity, superadminOnly: true },
-            { href: "/dashboard/notifications", label: "Notificações", icon: Bell, superadminOnly: true },
         ],
     },
 ];
