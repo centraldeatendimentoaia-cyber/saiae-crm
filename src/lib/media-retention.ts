@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { UPLOAD_PREFIX } from "@/lib/media";
+import { mediaStorage } from "@/lib/media-storage";
 
 const LOTE = 200;
 
@@ -51,7 +52,7 @@ export async function limparMidiasAntigas(dias: number): Promise<number> {
         const ids = lote.map((m) => m.id);
         const emUso = await idsEmUso(ids);
         const apagar = ids.filter((id) => !emUso.has(id));
-        if (apagar.length) total += (await prisma.mediaFile.deleteMany({ where: { id: { in: apagar } } })).count;
+        if (apagar.length) total += await mediaStorage.remove(apagar);
         jaVistos.push(...ids.filter((id) => emUso.has(id)));
         if (lote.length < LOTE) break;
     }

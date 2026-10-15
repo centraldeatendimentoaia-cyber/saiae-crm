@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { ownerIdOfSession } from "@/lib/plans";
 import { quotaMidiaBytes } from "@/lib/media-retention";
+import { mediaStorage } from "@/lib/media-storage";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -36,10 +37,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const row = await prisma.mediaFile.create({
-            data: { userId: ownerId, name: file.name.slice(0, 200), mime: file.type, size: file.size, data: Buffer.from(await file.arrayBuffer()) },
-            select: { id: true },
-        });
+        const row = await mediaStorage.save({ userId: ownerId, name: file.name, mime: file.type, data: Buffer.from(await file.arrayBuffer()) });
         return NextResponse.json({ status: true, data: { url: `/api/uploads/${row.id}`, type: "image", name: file.name } });
     } catch (e) {
         console.error("Upload error", e);
