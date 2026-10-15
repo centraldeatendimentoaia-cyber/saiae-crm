@@ -1,6 +1,10 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ archive: z.boolean({ error: "informe archive (true ou false)" }) });
 
 // PUT: Archive or unarchive chat
 export async function PUT(
@@ -14,12 +18,9 @@ export async function PUT(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { archive } = body;
-
-        if (archive === undefined) {
-            return NextResponse.json({ status: false, message: "archive (boolean) is required", error: "archive (boolean) is required" }, { status: 400 });
-        }
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { archive } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);

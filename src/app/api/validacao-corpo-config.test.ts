@@ -26,6 +26,11 @@ const casos: Array<[string, () => Promise<object>, string, unknown]> = [
     ["sessão sem nome", () => import("./sessions/route"), "POST", { name: "" }],
     ["settings da sessão sem objeto", () => import("./sessions/[sessionId]/settings/route"), "PATCH", { config: "x" }],
     ["config do sistema com nome vazio", () => import("./settings/system/route"), "POST", { appName: "" }],
+    ["chat: archive sem boolean", () => import("./chat/[sessionId]/[jid]/archive/route"), "PUT", {}],
+    ["chat: presence inválida", () => import("./chat/[sessionId]/[jid]/presence/route"), "POST", { presence: "dancando" }],
+    ["chat: mute sem boolean", () => import("./chat/[sessionId]/[jid]/mute/route"), "PUT", { duration: 10 }],
+    ["chat: check com mais de 50 números", () => import("./chat/[sessionId]/check/route"), "POST", { numbers: Array.from({ length: 51 }, (_, i) => String(i + 1)) }],
+    ["perfil: nome vazio", () => import("./profile/[sessionId]/name/route"), "PUT", { name: "" }],
 ];
 
 beforeEach(() => vi.clearAllMocks());

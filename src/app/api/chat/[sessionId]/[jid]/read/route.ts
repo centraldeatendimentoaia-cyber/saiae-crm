@@ -1,6 +1,10 @@
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
+import { lerCorpo, opt } from "@/lib/validate";
+import { z } from "zod";
+
+const schema = z.object({ messageIds: opt(z.array(z.string())) });
 
 // PUT: Mark messages as read
 export async function PUT(
@@ -14,8 +18,9 @@ export async function PUT(
         }
 
         const { sessionId, jid } = await params;
-        const body = await request.json();
-        const { messageIds } = body;
+        const lido = await lerCorpo(request, schema);
+        if (!lido.ok) return lido.response;
+        const { messageIds } = lido.data;
 
         // Check if user can access this session
         const canAccess = await canAccessSession(user.id, user.role, sessionId);
