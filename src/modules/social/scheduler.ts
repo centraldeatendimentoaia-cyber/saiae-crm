@@ -42,8 +42,8 @@ export async function publishOne(postId: string): Promise<void> {
             data: { status: "PUBLISHED", releaseId: result.id, releaseUrl: result.url ?? null, publishedAt: new Date(), error: null },
         });
         logger.info("Social", `Post ${post.id} publicado (${account.provider}/${type})`);
-    } catch (err: any) {
-        const message = String(err?.message || err).slice(0, 1000);
+    } catch (err) {
+        const message = String((err as Error)?.message || err).slice(0, 1000);
         logger.error("Social", `Post ${postId} falhou: ${message}`);
         await prisma.scheduledPost.update({ where: { id: postId }, data: { status: "FAILED", error: message } });
         const reconnect = err instanceof GraphError && err.needsReconnect;
