@@ -1,7 +1,18 @@
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { paginaSoParaSuperadmin } from "@/lib/superadmin-pages";
+
+async function ehSuperadminNoBanco(userId: string | undefined): Promise<boolean> {
+    if (!userId) return false;
+    try {
+        const u = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
+        return u?.role === "SUPERADMIN";
+    } catch {
+        return false;
+    }
+}
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -80,8 +91,10 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(loginUrl);
         }
 
-        // Páginas só do SUPERADMIN: esconder no menu não basta, barra também a URL digitada.
-        if (paginaSoParaSuperadmin(pathname) && (session.user as { role?: string }).role !== "SUPERADMIN") {
+        // Páginas só do SUPERADMIN: esconder no menu não basta, barra também a URL digitada. O papel vem do banco (o do
+        // token JWT só muda no próximo login, então um superadmin rebaixado continuaria entrando). O proxy do Next 16 roda
+        // em Node (o auth() acima já carrega o Prisma), então a consulta é possível; se falhar, nega (falha fechada).
+        if (paginaSoParaSuperadmin(pathname) && !(await ehSuperadminNoBanco(session.user.id))) {
             return NextResponse.redirect(new URL("/dashboard", request.url));
         }
 
