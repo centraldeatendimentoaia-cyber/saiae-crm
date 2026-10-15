@@ -4,19 +4,19 @@ export const pathsWebhooks = {
     "/webhooks/{sessionId}": {
         get: {
             tags: ["Webhooks"],
-            summary: "List webhooks for a session",
+            summary: "Listar os webhooks de uma sessão",
             parameters: [
                 paramSessionId
             ],
             responses: {
-                200: { description: "List of webhooks" },
+                200: { description: "Lista de webhooks" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" }
             }
         },
         post: {
             tags: ["Webhooks"],
-            summary: "Create a webhook",
+            summary: "Criar um webhook",
             parameters: [
                 paramSessionId
             ],
@@ -37,8 +37,8 @@ export const pathsWebhooks = {
                 }
             },
             responses: {
-                200: { description: "Webhook created" },
-                400: { description: "Invalid input" },
+                200: { description: "Webhook criado" },
+                400: { description: "Dados inválidos" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" }
             }
@@ -47,7 +47,7 @@ export const pathsWebhooks = {
     "/webhooks/{sessionId}/{id}": {
         put: {
             tags: ["Webhooks"],
-            summary: "Update webhook",
+            summary: "Atualizar webhook",
             parameters: [
                 paramSessionId,
                 paramId
@@ -69,37 +69,37 @@ export const pathsWebhooks = {
                 }
             },
             responses: {
-                200: { description: "Webhook updated" },
+                200: { description: "Webhook atualizado" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Webhook not found" }
+                404: { description: "Webhook não encontrado" }
             }
         },
         delete: {
             tags: ["Webhooks"],
-            summary: "Delete webhook",
+            summary: "Apagar webhook",
             parameters: [
                 paramSessionId,
                 paramId
             ],
             responses: {
-                200: { description: "Webhook deleted" },
+                200: { description: "Webhook apagado" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Webhook not found" }
+                404: { description: "Webhook não encontrado" }
             }
         }
     },
     "/webhooks/{id}": {
         delete: {
             tags: ["Webhooks"],
-            summary: "Delete webhook",
+            summary: "Apagar webhook",
             parameters: [
                 paramId
             ],
             responses: {
                 200: {
-                    description: "Webhook deleted",
+                    description: "Webhook apagado",
                     content: {
                         "application/json": {
                             schema: {
@@ -112,7 +112,7 @@ export const pathsWebhooks = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                404: { description: "Webhook not found" },
+                404: { description: "Webhook não encontrado" },
                 500: { $ref: "#/components/responses/ServerError" }
             }
         }
@@ -120,15 +120,15 @@ export const pathsWebhooks = {
     "/webhooks/{sessionId}/{id}/test": {
         post: {
             tags: ["Webhooks"],
-            summary: "Test webhook endpoint",
-            description: "Fire a test payload to verify the webhook endpoint is reachable and responding correctly",
+            summary: "Testar o endereço do webhook",
+            description: "Dispara um envio de teste para verificar se o endereço do webhook está acessível e respondendo corretamente",
             parameters: [
                 paramSessionId,
                 paramId
             ],
             responses: {
                 200: {
-                    description: "Test result",
+                    description: "Resultado do teste",
                     content: {
                         "application/json": {
                             schema: {
@@ -153,15 +153,15 @@ export const pathsWebhooks = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Webhook not found" }
+                404: { description: "Webhook não encontrado" }
             }
         }
     },
     "/webhooks/{sessionId}/{id}/logs": {
         get: {
             tags: ["Webhooks"],
-            summary: "Get webhook delivery logs",
-            description: "Retrieve delivery history for a specific webhook",
+            summary: "Obter o registro de entregas do webhook",
+            description: "Obtém o histórico de entregas de um webhook",
             parameters: [
                 paramSessionId,
                 paramId,
@@ -170,7 +170,7 @@ export const pathsWebhooks = {
             ],
             responses: {
                 200: {
-                    description: "Webhook delivery logs",
+                    description: "Registro de entregas do webhook",
                     content: {
                         "application/json": {
                             schema: {
@@ -191,7 +191,7 @@ export const pathsWebhooks = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Webhook not found" }
+                404: { description: "Webhook não encontrado" }
             }
         }
     },

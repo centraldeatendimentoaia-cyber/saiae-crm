@@ -6,7 +6,7 @@ export const pathsAutomacao = {
             "tags": [
                 "Auto Replies"
             ],
-            "summary": "Delete all autoreplies",
+            "summary": "Apagar todas as respostas automáticas",
             "parameters": [
                 {
                     "name": "sessionId",
@@ -19,26 +19,26 @@ export const pathsAutomacao = {
             ],
             "responses": {
                 "200": {
-                    "description": "Autoreplies deleted"
+                    "description": "Respostas automáticas apagadas"
                 }
             }
         },
         get: {
             tags: ["Auto Reply"],
-            summary: "List auto-reply rules",
+            summary: "Listar regras de resposta automática",
             parameters: [
                 paramSessionId
             ],
             responses: {
-                200: { description: "List of auto-reply rules" },
+                200: { description: "Lista de regras de resposta automática" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found" }
+                404: { description: "Sessão não encontrada" }
             }
         },
         post: {
             tags: ["Auto Reply"],
-            summary: "Create auto-reply rule",
+            summary: "Criar regra de resposta automática",
             parameters: [
                 paramSessionId
             ],
@@ -71,8 +71,8 @@ export const pathsAutomacao = {
                 }
             },
             responses: {
-                200: { description: "Rule created" },
-                400: { description: "Missing required fields" },
+                200: { description: "Regra criada" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" }
             }
@@ -81,7 +81,7 @@ export const pathsAutomacao = {
     "/autoreplies/{sessionId}/{replyId}": {
         put: {
             tags: ["Auto Reply"],
-            summary: "Update auto-reply rule",
+            summary: "Atualizar regra de resposta automática",
             parameters: [
                 paramSessionId,
                 { name: "replyId", in: "path", required: true, schema: { type: "string" } }
@@ -114,24 +114,24 @@ export const pathsAutomacao = {
                 }
             },
             responses: {
-                200: { description: "Rule updated" },
+                200: { description: "Regra atualizada" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Rule not found" }
+                404: { description: "Regra não encontrada" }
             }
         },
         delete: {
             tags: ["Auto Reply"],
-            summary: "Delete auto-reply rule",
+            summary: "Apagar regra de resposta automática",
             parameters: [
                 paramSessionId,
                 { name: "replyId", in: "path", required: true, schema: { type: "string" } }
             ],
             responses: {
-                200: { description: "Rule deleted" },
+                200: { description: "Regra apagada" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Rule not found" }
+                404: { description: "Regra não encontrada" }
             }
         }
     },
@@ -140,7 +140,7 @@ export const pathsAutomacao = {
             "tags": [
                 "Scheduler"
             ],
-            "summary": "Delete all scheduled messages for a session",
+            "summary": "Apagar todas as mensagens agendadas de uma sessão",
             "parameters": [
                 {
                     "name": "sessionId",
@@ -153,26 +153,26 @@ export const pathsAutomacao = {
             ],
             "responses": {
                 "200": {
-                    "description": "Scheduled messages deleted"
+                    "description": "Mensagens agendadas apagadas"
                 }
             }
         },
         get: {
             tags: ["Scheduler"],
-            summary: "List scheduled messages",
+            summary: "Listar mensagens agendadas",
             parameters: [
                 paramSessionId
             ],
             responses: {
-                200: { description: "List of scheduled messages" },
+                200: { description: "Lista de mensagens agendadas" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found" }
+                404: { description: "Sessão não encontrada" }
             }
         },
         post: {
             tags: ["Scheduler"],
-            summary: "Create scheduled message",
+            summary: "Criar mensagem agendada",
             parameters: [
                 paramSessionId
             ],
@@ -205,8 +205,8 @@ export const pathsAutomacao = {
                 }
             },
             responses: {
-                200: { description: "Scheduled message created" },
-                400: { description: "Missing required fields" },
+                200: { description: "Mensagem agendada criada" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" }
             }
@@ -215,7 +215,7 @@ export const pathsAutomacao = {
     "/scheduler/{sessionId}/{scheduleId}": {
         put: {
             tags: ["Scheduler"],
-            summary: "Update scheduled message",
+            summary: "Atualizar mensagem agendada",
             parameters: [
                 paramSessionId,
                 { name: "scheduleId", in: "path", required: true, schema: { type: "string" } }
@@ -249,24 +249,24 @@ export const pathsAutomacao = {
                 }
             },
             responses: {
-                200: { description: "Message updated" },
+                200: { description: "Mensagem atualizada" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Message not found" }
+                404: { description: "Mensagem não encontrada" }
             }
         },
         delete: {
             tags: ["Scheduler"],
-            summary: "Delete scheduled message",
+            summary: "Apagar mensagem agendada",
             parameters: [
                 paramSessionId,
                 { name: "scheduleId", in: "path", required: true, schema: { type: "string" } }
             ],
             responses: {
-                200: { description: "Message deleted" },
+                200: { description: "Mensagem apagada" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Message not found" }
+                404: { description: "Mensagem não encontrada" }
             }
         }
     },
@@ -275,10 +275,10 @@ export const pathsAutomacao = {
             "tags": [
                 "Scheduler"
             ],
-            "summary": "Create a scheduled message task",
+            "summary": "Criar uma tarefa de mensagem agendada",
             "responses": {
                 "200": {
-                    "description": "Scheduled task created"
+                    "description": "Tarefa agendada criada"
                 }
             }
         }

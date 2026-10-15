@@ -4,32 +4,32 @@ export const info = {
     title: "Saiaê API Documentation",
     version: "1.6.1",
     description: `
-# WhatsApp AI Gateway - Complete API Reference
+# Saiaê - Referência completa da API
 
-Professional WhatsApp Gateway with **93 API endpoints** for complete WhatsApp automation.
+Gateway profissional de WhatsApp com **mais de 100 operações** para automatizar o WhatsApp.
 
-## 🔐 Authentication
-All endpoints require authentication via:
-1. **API Key Header**: \`X-API-Key: your-api-key\`
-2. **Session Cookie**: \`next-auth.session-token\` (automatically sent by browser)
+## 🔐 Autenticação
+Todas as rotas exigem autenticação por um destes meios:
+1. **Cabeçalho com chave de API**: \`X-API-Key: sua-chave-de-api\`
+2. **Cookie de sessão**: \`next-auth.session-token\` (enviado automaticamente pelo navegador)
 
-## 📋 Common Parameters
-- **sessionId**: Unique session identifier (e.g., "mysession-01")
-- **jid**: WhatsApp JID format:
-  - Personal: \`628123456789@s.whatsapp.net\`
-  - Group: \`120363123456789@g.us\`
+## 📋 Parâmetros comuns
+- **sessionId**: identificador único da sessão (ex.: "minha-sessao-01")
+- **jid**: formato de JID do WhatsApp:
+  - Pessoa: \`628123456789@s.whatsapp.net\`
+  - Grupo: \`120363123456789@g.us\`
 
-## 📊 Rate Limits
-- Phone check: Max 50 numbers per request
-- Broadcast: 10-20s random delay between messages
-- Message history: Max 100 messages
+## 📊 Limites
+- Verificação de números: no máximo 50 por requisição
+- Disparo: intervalo aleatório de 10 a 20 s entre as mensagens
+- Histórico de mensagens: no máximo 100 mensagens
     `,
 };
 
 export const servers = [
     {
         url: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000/api",
-        description: "API Server",
+        description: "Servidor da API",
     },
 ];
 
@@ -38,13 +38,13 @@ export const securitySchemes = {
         type: "apiKey",
         in: "header",
         name: "X-API-Key",
-        description: "API Key for authentication"
+        description: "Chave de API para autenticação"
     },
     SessionAuth: {
         type: "apiKey",
         in: "cookie",
         name: "next-auth.session-token",
-        description: "Session cookie (browser only)"
+        description: "Cookie de sessão (somente navegador)"
     }
 };
 

@@ -2,11 +2,11 @@ export const pathsNotificacoes = {
     "/notifications": {
         get: {
             tags: ["Notifications"],
-            summary: "List notifications",
-            description: "Get the last 50 notifications for the authenticated user",
+            summary: "Listar notificações",
+            description: "Obtém as últimas 50 notificações do usuário autenticado",
             responses: {
                 200: {
-                    description: "List of notifications",
+                    description: "Lista de notificações",
                     content: {
                         "application/json": {
                             schema: {
@@ -29,13 +29,13 @@ export const pathsNotificacoes = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Error fetching notifications" }
+                500: { description: "Erro ao buscar as notificações" }
             }
         },
         post: {
             tags: ["Notifications"],
-            summary: "Create notification",
-            description: "Send a notification to a specific user or broadcast to all (Superadmin only)",
+            summary: "Criar notificação",
+            description: "Envia uma notificação a um usuário específico ou a todos (somente SUPERADMIN)",
             requestBody: {
                 content: {
                     "application/json": {
@@ -47,7 +47,7 @@ export const pathsNotificacoes = {
                                 message: { type: "string", example: "System update in 5 minutes" },
                                 type: { type: "string", enum: ["INFO", "SUCCESS", "WARNING", "ERROR"], default: "INFO" },
                                 href: { type: "string", example: "/settings" },
-                                targetUserId: { type: "string", description: "Target user UUID" },
+                                targetUserId: { type: "string", description: "UUID do usuário de destino" },
                                 broadcast: { type: "boolean", default: false }
                             }
                         }
@@ -56,31 +56,31 @@ export const pathsNotificacoes = {
             },
             responses: {
                 200: {
-                    description: "Notification created",
+                    description: "Notificação criada",
                     content: {
                         "application/json": {
                             schema: {
                                 type: "object",
                                 properties: {
                                     success: { type: "boolean", example: true },
-                                    count: { type: "integer", description: "Number of users notified if broadcast" }
+                                    count: { type: "integer", description: "Quantidade de usuários notificados, no envio para todos" }
                                 }
                             }
                         }
                     }
                 },
-                400: { description: "Invalid request" },
+                400: { description: "Requisição inválida" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                500: { description: "Error creating notification" }
+                500: { description: "Erro ao criar a notificação" }
             }
         }
     },
     "/notifications/read": {
         patch: {
             tags: ["Notifications"],
-            summary: "Mark notifications as read",
-            description: "Mark specific or all notifications as read for the authenticated user",
+            summary: "Marcar notificações como lidas",
+            description: "Marca notificações específicas, ou todas, como lidas para o usuário autenticado",
             requestBody: {
                 content: {
                     "application/json": {
@@ -90,7 +90,7 @@ export const pathsNotificacoes = {
                                 ids: {
                                     type: "array",
                                     items: { type: "string" },
-                                    description: "Array of notification IDs. If omitted or empty, all notifications are marked as read."
+                                    description: "Lista de IDs de notificações. Se for omitida ou vazia, todas as notificações são marcadas como lidas."
                                 }
                             }
                         }
@@ -99,7 +99,7 @@ export const pathsNotificacoes = {
             },
             responses: {
                 200: {
-                    description: "Notifications updated",
+                    description: "Notificações atualizadas",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
@@ -107,35 +107,35 @@ export const pathsNotificacoes = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Error updating notifications" }
+                500: { description: "Erro ao atualizar as notificações" }
             }
         }
     },
     "/notifications/delete": {
         delete: {
             tags: ["Notifications"],
-            summary: "Delete specific notification",
+            summary: "Apagar uma notificação",
             parameters: [
                 {
                     name: "id",
                     in: "query",
                     required: true,
                     schema: { type: "string" },
-                    description: "Notification UUID"
+                    description: "UUID da notificação"
                 }
             ],
             responses: {
                 200: {
-                    description: "Notification deleted",
+                    description: "Notificação apagada",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
                         }
                     }
                 },
-                400: { description: "Notification ID required" },
+                400: { description: "O ID da notificação é obrigatório" },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Error deleting notification" }
+                500: { description: "Erro ao apagar a notificação" }
             }
         }
     },

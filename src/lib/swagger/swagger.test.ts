@@ -49,6 +49,14 @@ describe("especificação OpenAPI (fonte única em src/lib/swagger)", () => {
         }
     });
 
+    it("os títulos das rotas (summary) estão em português, não em inglês", () => {
+        const ingles = /^(Get|List|Create|Update|Delete|Send|Check|Revoke|Generate|Mark|Search|Forward|Edit|Download|Block|Unblock|Register|Retrieve|Archive|Mute|Pin|Leave|Accept|Remove|Manage|Toggle|Perform|Grant|Test|React|Reply|Star|Unstar|Broadcast)\b/;
+        const resumos: string[] = [];
+        for (const metodos of Object.values(spec.paths)) for (const op of Object.values(metodos)) resumos.push((op as { summary?: string }).summary ?? "");
+        expect(resumos.filter((s) => ingles.test(s))).toEqual([]);
+        expect(JSON.stringify(spec.info)).toContain("Referência completa da API");
+    });
+
     it("não existe mais cópia da spec em swagger.json nem o swagger.ts gigante", () => {
         expect(fs.existsSync(path.join(raiz, "swagger.json"))).toBe(false);
         expect(fs.existsSync(path.join(raiz, "src/lib/swagger.ts"))).toBe(false);

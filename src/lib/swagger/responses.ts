@@ -2,7 +2,7 @@
 
 export const responses = {
     Unauthorized: {
-        description: "Unauthorized - Invalid or missing API key",
+        description: "Não autorizado: chave de API ausente ou inválida",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -11,7 +11,7 @@ export const responses = {
         }
     },
     Forbidden: {
-        description: "Forbidden - Access denied",
+        description: "Proibido: acesso negado",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -20,7 +20,7 @@ export const responses = {
         }
     },
     NotFound: {
-        description: "Resource not found",
+        description: "Recurso não encontrado",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -29,7 +29,7 @@ export const responses = {
         }
     },
     SessionNotReady: {
-        description: "Session not connected or ready",
+        description: "Sessão não conectada ou não está pronta",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -38,7 +38,7 @@ export const responses = {
         }
     },
     BadRequest: {
-        description: "Bad Request - Invalid parameters",
+        description: "Requisição inválida: parâmetros incorretos",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -47,7 +47,7 @@ export const responses = {
         }
     },
     ServerError: {
-        description: "Internal Server Error",
+        description: "Erro interno do servidor",
         content: {
             "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },

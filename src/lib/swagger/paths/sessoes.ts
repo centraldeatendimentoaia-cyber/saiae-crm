@@ -4,11 +4,11 @@ export const pathsSessoes = {
     "/sessions": {
         get: {
             tags: ["Sessions"],
-            summary: "List all accessible sessions",
-            description: "Get all sessions accessible to the authenticated user (role-based filtering)",
+            summary: "Listar todas as sessões acessíveis",
+            description: "Lista todas as sessões que o usuário autenticado pode acessar (filtradas pelo papel)",
             responses: {
                 200: {
-                    description: "List of sessions",
+                    description: "Lista de sessões",
                     content: {
                         "application/json": {
                             schema: {
@@ -23,8 +23,8 @@ export const pathsSessoes = {
         },
         post: {
             tags: ["Sessions"],
-            summary: "Create new WhatsApp session",
-            description: "Creates a new WhatsApp session for QR code pairing",
+            summary: "Criar uma nova sessão de WhatsApp",
+            description: "Cria uma nova sessão de WhatsApp para conectar por QR code",
             requestBody: {
                 required: true,
                 content: {
@@ -33,8 +33,8 @@ export const pathsSessoes = {
                             type: "object",
                             required: ["name"],
                             properties: {
-                                name: { type: "string", example: "Sales Bot", description: "Display name for the session" },
-                                sessionId: { type: "string", example: "sales-01", description: "Unique session ID (auto-generated if not provided)" }
+                                name: { type: "string", example: "Sales Bot", description: "Nome de exibição da sessão" },
+                                sessionId: { type: "string", example: "sales-01", description: "ID único da sessão (gerado automaticamente se não for informado)" }
                             }
                         },
                         example: {
@@ -46,14 +46,14 @@ export const pathsSessoes = {
             },
             responses: {
                 200: {
-                    description: "Session created successfully",
+                    description: "Sessão criada com sucesso",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Session" }
                         }
                     }
                 },
-                400: { description: "Invalid request body" },
+                400: { description: "Corpo da requisição inválido" },
                 401: { $ref: "#/components/responses/Unauthorized" }
             }
         }
@@ -61,50 +61,50 @@ export const pathsSessoes = {
     "/sessions/{id}/qr": {
         get: {
             tags: ["Sessions"],
-            summary: "Get QR code for pairing",
-            description: "Retrieve QR code (string and base64 image) for WhatsApp pairing",
+            summary: "Obter o QR code para conectar",
+            description: "Obtém o QR code (texto e imagem em base64) para conectar o WhatsApp",
             parameters: [
                 {
                     name: "id",
                     in: "path",
                     required: true,
                     schema: { type: "string" },
-                    description: "Session ID",
+                    description: "ID da sessão",
                     example: "sales-01"
                 }
             ],
             responses: {
                 200: {
-                    description: "QR code generated",
+                    description: "QR code gerado",
                     content: {
                         "application/json": {
                             schema: {
                                 type: "object",
                                 properties: {
                                     success: { type: "boolean" },
-                                    qr: { type: "string", description: "QR code string" },
-                                    base64: { type: "string", description: "Base64 data URL for image" }
+                                    qr: { type: "string", description: "Texto do QR code" },
+                                    base64: { type: "string", description: "URL de dados em base64 da imagem" }
                                 }
                             },
                             example: { status: true, message: "QR code generated", data: { success: true, qr: "2@AbCdEfGhIjKlMnOp...", base64: "data:image/png;base64,iVBORw0KGgo..." } }
                         }
                     }
                 },
-                400: { description: "Already connected" },
-                404: { description: "QR not available yet" }
+                400: { description: "Já está conectada" },
+                404: { description: "QR code ainda não disponível" }
             }
         }
     },
     "/sessions/{id}/bot-config": {
         get: {
             tags: ["Sessions"],
-            summary: "Get bot configuration",
+            summary: "Obter a configuração do bot",
             parameters: [paramId],
-            responses: { 200: { description: "Bot configuration retrieved" } }
+            responses: { 200: { description: "Configuração do bot obtida" } }
         },
         post: {
             tags: ["Sessions"],
-            summary: "Update bot configuration",
+            summary: "Atualizar a configuração do bot",
             parameters: [paramId],
             requestBody: {
                 content: {
@@ -142,7 +142,7 @@ export const pathsSessoes = {
             },
             responses: {
                 200: {
-                    description: "Configuration updated",
+                    description: "Configuração atualizada",
                     content: {
                         "application/json": {
                             schema: {
@@ -171,22 +171,22 @@ export const pathsSessoes = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found" },
-                500: { description: "Internal Server Error" }
+                404: { description: "Sessão não encontrada" },
+                500: { description: "Erro interno do servidor" }
             }
         }
     },
     "/sessions/{id}": {
         get: {
             tags: ["Sessions"],
-            summary: "Get session details",
-            description: "Get detailed information about a specific session including uptime and status",
+            summary: "Obter os detalhes da sessão",
+            description: "Obtém informações detalhadas de uma sessão, incluindo tempo ativo e status",
             parameters: [
                 paramId
             ],
             responses: {
                 200: {
-                    description: "Session details",
+                    description: "Detalhes da sessão",
                     content: {
                         "application/json": {
                             schema: {
@@ -195,7 +195,7 @@ export const pathsSessoes = {
                                     {
                                         type: "object",
                                         properties: {
-                                            uptime: { type: "integer", description: "Uptime in seconds" },
+                                            uptime: { type: "integer", description: "Tempo ativo em segundos" },
                                             messageCount: { type: "integer" },
                                             hasInstance: { type: "boolean" },
                                             me: { type: "object", nullable: true }
@@ -206,37 +206,37 @@ export const pathsSessoes = {
                         }
                     }
                 },
-                404: { description: "Session not found" }
+                404: { description: "Sessão não encontrada" }
             }
         }
     },
     "/sessions/{id}/{action}": {
         post: {
             tags: ["Sessions"],
-            summary: "Perform session action",
-            description: "Start, stop, restart, or logout a session",
+            summary: "Executar uma ação na sessão",
+            description: "Inicia, para, reinicia ou desconecta uma sessão",
             parameters: [
                 paramId,
                 { name: "action", in: "path", required: true, schema: { type: "string", enum: ["start", "stop", "restart", "logout"] } }
             ],
             responses: {
                 200: {
-                    description: "Action performed successfully",
+                    description: "Ação executada com sucesso",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
                         }
                     }
                 },
-                400: { description: "Invalid action" },
-                500: { description: "Action failed" }
+                400: { description: "Ação inválida" },
+                500: { description: "A ação falhou" }
             }
         }
     },
     "/sessions/{id}/settings": {
         patch: {
             tags: ["Sessions"],
-            summary: "Update session settings",
+            summary: "Atualizar as configurações da sessão",
             parameters: [paramId],
             requestBody: {
                 content: {
@@ -256,16 +256,16 @@ export const pathsSessoes = {
                     }
                 }
             },
-            responses: { 200: { description: "Settings updated" } }
+            responses: { 200: { description: "Configurações atualizadas" } }
         },
         delete: {
             tags: ["Sessions"],
-            summary: "Delete session and logout",
-            description: "Permanently deletes session and logs out from WhatsApp",
+            summary: "Excluir a sessão e desconectar",
+            description: "Exclui a sessão de forma permanente e desconecta do WhatsApp",
             parameters: [paramId],
             responses: {
                 200: {
-                    description: "Session deleted",
+                    description: "Sessão excluída",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
@@ -278,14 +278,14 @@ export const pathsSessoes = {
     "/sessions/{sessionId}/access": {
         get: {
             tags: ["Session Access"],
-            summary: "List users with shared access",
-            description: "Get all users who have been granted access to the specified session. Only the session owner or SUPERADMIN can use this endpoint.",
+            summary: "Listar usuários com acesso compartilhado",
+            description: "Lista todos os usuários com acesso à sessão informada. Só o dono da sessão ou um SUPERADMIN pode usar esta rota.",
             parameters: [
-                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "Session ID (slug or CUID)", example: "marketing-1" }
+                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "ID da sessão (slug ou CUID)", example: "marketing-1" }
             ],
             responses: {
                 200: {
-                    description: "Access list retrieved",
+                    description: "Lista de acessos obtida",
                     content: {
                         "application/json": {
                             schema: {
@@ -320,16 +320,16 @@ export const pathsSessoes = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                403: { description: "Forbidden - Only session owner can manage access" },
-                404: { description: "Session not found" }
+                403: { description: "Proibido: só o dono da sessão pode gerenciar acessos" },
+                404: { description: "Sessão não encontrada" }
             }
         },
         post: {
             tags: ["Session Access"],
-            summary: "Grant access to another user",
-            description: "Grant session access to another registered user by email. Only the session owner or SUPERADMIN can use this endpoint. Cannot grant access to the session owner or SUPERADMINs.",
+            summary: "Conceder acesso a outro usuário",
+            description: "Concede acesso à sessão a outro usuário cadastrado, pelo e-mail. Só o dono da sessão ou um SUPERADMIN pode usar esta rota. Não é possível conceder acesso ao dono da sessão nem a SUPERADMINs.",
             parameters: [
-                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "Session ID (slug or CUID)", example: "marketing-1" }
+                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "ID da sessão (slug ou CUID)", example: "marketing-1" }
             ],
             requestBody: {
                 required: true,
@@ -339,7 +339,7 @@ export const pathsSessoes = {
                             type: "object",
                             required: ["email"],
                             properties: {
-                                email: { type: "string", format: "email", description: "Email of the user to grant access", example: "staff@example.com" }
+                                email: { type: "string", format: "email", description: "E-mail do usuário que receberá o acesso", example: "staff@example.com" }
                             }
                         }
                     }
@@ -347,7 +347,7 @@ export const pathsSessoes = {
             },
             responses: {
                 201: {
-                    description: "Access granted successfully",
+                    description: "Acesso concedido com sucesso",
                     content: {
                         "application/json": {
                             schema: {
@@ -378,19 +378,19 @@ export const pathsSessoes = {
                         }
                     }
                 },
-                400: { description: "Validation error / Cannot grant to owner / SUPERADMIN already has access" },
+                400: { description: "Erro de validação, ou não é possível conceder ao dono, ou o SUPERADMIN já tem acesso" },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                403: { description: "Forbidden - Only session owner can manage access" },
-                404: { description: "Session or user not found" },
-                409: { description: "User already has access to this session" }
+                403: { description: "Proibido: só o dono da sessão pode gerenciar acessos" },
+                404: { description: "Sessão ou usuário não encontrado" },
+                409: { description: "O usuário já tem acesso a esta sessão" }
             }
         },
         delete: {
             tags: ["Session Access"],
-            summary: "Revoke user access",
-            description: "Remove shared access for a user from the specified session. Only the session owner or SUPERADMIN can use this endpoint.",
+            summary: "Revogar o acesso de um usuário",
+            description: "Remove o acesso compartilhado de um usuário à sessão informada. Só o dono da sessão ou um SUPERADMIN pode usar esta rota.",
             parameters: [
-                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "Session ID (slug or CUID)", example: "marketing-1" }
+                { name: "sessionId", in: "path", required: true, schema: { type: "string" }, description: "ID da sessão (slug ou CUID)", example: "marketing-1" }
             ],
             requestBody: {
                 required: true,
@@ -400,7 +400,7 @@ export const pathsSessoes = {
                             type: "object",
                             required: ["userId"],
                             properties: {
-                                userId: { type: "string", description: "CUID of the user to revoke access from", example: "clx456ghi" }
+                                userId: { type: "string", description: "CUID do usuário que perderá o acesso", example: "clx456ghi" }
                             }
                         }
                     }
@@ -408,17 +408,17 @@ export const pathsSessoes = {
             },
             responses: {
                 200: {
-                    description: "Access revoked successfully",
+                    description: "Acesso revogado com sucesso",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
                         }
                     }
                 },
-                400: { description: "Validation error" },
+                400: { description: "Erro de validação" },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                403: { description: "Forbidden - Only session owner can manage access" },
-                404: { description: "Session or access record not found" }
+                403: { description: "Proibido: só o dono da sessão pode gerenciar acessos" },
+                404: { description: "Sessão ou registro de acesso não encontrado" }
             }
         }
     },

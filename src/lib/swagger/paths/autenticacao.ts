@@ -4,8 +4,8 @@ export const pathsAutenticacao = {
             "tags": [
                 "Web Authentication"
             ],
-            "summary": "Register a new user",
-            "description": "Register a user via web.",
+            "summary": "Cadastrar um novo usuário",
+            "description": "Cadastra um usuário pela web.",
             "requestBody": {
                 "required": true,
                 "content": {
@@ -37,7 +37,7 @@ export const pathsAutenticacao = {
             },
             "responses": {
                 "200": {
-                    "description": "User registered"
+                    "description": "Usuário cadastrado"
                 }
             }
         }
@@ -45,11 +45,11 @@ export const pathsAutenticacao = {
     "/auth/session": {
         get: {
             tags: ["Web Authentication"],
-            summary: "Get current web session",
-            description: "Check if the user is authenticated in the web dashboard",
+            summary: "Obter a sessão web atual",
+            description: "Verifica se o usuário está autenticado no painel web",
             responses: {
                 200: {
-                    description: "Current session",
+                    description: "Sessão atual",
                     content: {
                         "application/json": {
                             schema: {
@@ -75,11 +75,11 @@ export const pathsAutenticacao = {
     "/auth/csrf": {
         get: {
             tags: ["Web Authentication"],
-            summary: "Get CSRF token",
-            description: "Retrieve CSRF token for form submissions",
+            summary: "Obter o token CSRF",
+            description: "Obtém o token CSRF para envio de formulários",
             responses: {
                 200: {
-                    description: "CSRF Token",
+                    description: "Token CSRF",
                     content: {
                         "application/json": {
                             schema: {

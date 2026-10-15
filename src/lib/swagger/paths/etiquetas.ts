@@ -6,7 +6,7 @@ export const pathsEtiquetas = {
             "tags": [
                 "Labels"
             ],
-            "summary": "Update all labels or bulk update",
+            "summary": "Atualizar todas as etiquetas (em massa)",
             "parameters": [
                 {
                     "name": "sessionId",
@@ -19,7 +19,7 @@ export const pathsEtiquetas = {
             ],
             "responses": {
                 "200": {
-                    "description": "Labels updated"
+                    "description": "Etiquetas atualizadas"
                 }
             }
         },
@@ -27,7 +27,7 @@ export const pathsEtiquetas = {
             "tags": [
                 "Labels"
             ],
-            "summary": "Delete labels",
+            "summary": "Apagar etiquetas",
             "parameters": [
                 {
                     "name": "sessionId",
@@ -40,20 +40,20 @@ export const pathsEtiquetas = {
             ],
             "responses": {
                 "200": {
-                    "description": "Labels deleted"
+                    "description": "Etiquetas apagadas"
                 }
             }
         },
         get: {
             tags: ["Labels"],
-            summary: "List labels",
-            description: "Get all labels with chat count",
+            summary: "Listar etiquetas",
+            description: "Obtém todas as etiquetas, com a quantidade de conversas",
             parameters: [
                 paramSessionId
             ],
             responses: {
                 200: {
-                    description: "List of labels",
+                    description: "Lista de etiquetas",
                     content: {
                         "application/json": {
                             schema: {
@@ -68,13 +68,13 @@ export const pathsEtiquetas = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                404: { description: "Session not found" }
+                404: { description: "Sessão não encontrada" }
             }
         },
         post: {
             tags: ["Labels"],
-            summary: "Create label",
-            description: "Create new label with color (0-19 index)",
+            summary: "Criar etiqueta",
+            description: "Cria uma nova etiqueta com cor (índice de 0 a 19)",
             parameters: [
                 paramSessionId
             ],
@@ -86,7 +86,7 @@ export const pathsEtiquetas = {
                             required: ["name"],
                             properties: {
                                 name: { type: "string", example: "Important" },
-                                color: { type: "integer", minimum: 0, maximum: 19, example: 0, description: "Color index (0-19)" }
+                                color: { type: "integer", minimum: 0, maximum: 19, example: 0, description: "Índice da cor (0 a 19)" }
                             }
                         }
                     }
@@ -94,7 +94,7 @@ export const pathsEtiquetas = {
             },
             responses: {
                 200: {
-                    description: "Label created",
+                    description: "Etiqueta criada",
                     content: {
                         "application/json": {
                             schema: {
@@ -109,14 +109,14 @@ export const pathsEtiquetas = {
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                500: { description: "Failed to create label" }
+                500: { description: "Falha ao criar a etiqueta" }
             }
         }
     },
     "/labels/{sessionId}/{labelId}": {
         put: {
             tags: ["Labels"],
-            summary: "Update label",
+            summary: "Atualizar etiqueta",
             parameters: [
                 paramSessionId,
                 paramLabelId
@@ -136,21 +136,21 @@ export const pathsEtiquetas = {
             },
             responses: {
                 200: {
-                    description: "Label updated",
+                    description: "Etiqueta atualizada",
                     content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, label: { $ref: "#/components/schemas/Label" } } } } }
                 }
             }
         },
         delete: {
             tags: ["Labels"],
-            summary: "Delete label",
+            summary: "Apagar etiqueta",
             parameters: [
                 paramSessionId,
                 paramLabelId
             ],
             responses: {
                 200: {
-                    description: "Label deleted",
+                    description: "Etiqueta apagada",
                     content: { "application/json": { schema: { $ref: "#/components/schemas/Success" } } }
                 }
             }
@@ -159,21 +159,21 @@ export const pathsEtiquetas = {
     "/labels/{sessionId}/chat/{jid}/labels": {
         get: {
             tags: ["Labels"],
-            summary: "Get chat labels",
+            summary: "Obter as etiquetas da conversa",
             parameters: [
                 paramSessionId,
                 paramJid
             ],
             responses: {
                 200: {
-                    description: "Chat labels",
+                    description: "Etiquetas da conversa",
                     content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean" }, labels: { type: "array", items: { $ref: "#/components/schemas/Label" } } } } } }
                 }
             }
         },
         put: {
             tags: ["Labels"],
-            summary: "Update chat labels",
+            summary: "Atualizar as etiquetas da conversa",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -194,7 +194,7 @@ export const pathsEtiquetas = {
             },
             responses: {
                 200: {
-                    description: "Chat labels updated",
+                    description: "Etiquetas da conversa atualizadas",
                     content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean" }, message: { type: "string" }, labels: { type: "array", items: { $ref: "#/components/schemas/Label" } } } } } }
                 }
             }

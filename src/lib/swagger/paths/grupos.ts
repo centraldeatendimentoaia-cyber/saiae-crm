@@ -6,7 +6,7 @@ export const pathsGrupos = {
             "tags": [
                 "Groups"
             ],
-            "summary": "Leave a group",
+            "summary": "Sair de um grupo",
             "parameters": [
                 {
                     "name": "sessionId",
@@ -27,7 +27,7 @@ export const pathsGrupos = {
             ],
             "responses": {
                 "200": {
-                    "description": "Left the group successfully"
+                    "description": "Saiu do grupo com sucesso"
                 }
             }
         }
@@ -35,25 +35,25 @@ export const pathsGrupos = {
     "/groups/{sessionId}": {
         get: {
             tags: ["Groups"],
-            summary: "List all groups",
-            description: "Get all groups associated with the session",
+            summary: "Listar todos os grupos",
+            description: "Obtém todos os grupos associados à sessão",
             parameters: [
                 paramSessionId
             ],
             responses: {
-                200: { description: "List of groups", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Group" } } } } },
+                200: { description: "Lista de grupos", content: { "application/json": { schema: { type: "array", items: { $ref: "#/components/schemas/Group" } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 404: { $ref: "#/components/responses/NotFound" },
-                500: { description: "Failed to fetch groups" }
+                500: { description: "Falha ao buscar os grupos" }
             }
         }
     },
     "/groups/{sessionId}/create": {
         post: {
             tags: ["Groups"],
-            summary: "Create new group",
-            description: "Create a new group with specified participants",
+            summary: "Criar um novo grupo",
+            description: "Cria um novo grupo com os participantes informados",
             parameters: [
                 paramSessionId
             ],
@@ -76,18 +76,18 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Group created", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, group: { $ref: "#/components/schemas/Group" } } } } } },
+                200: { description: "Grupo criado", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, group: { $ref: "#/components/schemas/Group" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to create group" }
+                500: { description: "Falha ao criar o grupo" }
             }
         }
     },
     "/groups/{sessionId}/{jid}/subject": {
         put: {
             tags: ["Groups"],
-            summary: "Update group subject",
+            summary: "Atualizar o assunto do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -106,21 +106,21 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Subject updated", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, subject: { type: "string" } } } } } },
+                200: { description: "Assunto atualizado", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, subject: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                400: { description: "Invalid subject" },
-                500: { description: "Failed to update subject" }
+                400: { description: "Assunto inválido" },
+                500: { description: "Falha ao atualizar o assunto" }
             }
         }
     },
     "/groups/{jid}/subject": {
         put: {
             tags: ["Groups"],
-            summary: "Update group name",
-            description: "Update group subject (max 100 characters, requires admin)",
+            summary: "Atualizar o nome do grupo",
+            description: "Atualiza o assunto do grupo (até 100 caracteres, exige ser administrador)",
             parameters: [
-                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "URL-encoded group JID" }
+                { name: "jid", in: "path", required: true, schema: { type: "string" }, description: "JID do grupo codificado para URL" }
             ],
             requestBody: {
                 content: {
@@ -138,7 +138,7 @@ export const pathsGrupos = {
             },
             responses: {
                 200: {
-                    description: "Subject updated",
+                    description: "Assunto atualizado",
                     content: {
                         "application/json": {
                             schema: {
@@ -152,18 +152,18 @@ export const pathsGrupos = {
                         }
                     }
                 },
-                400: { description: "Invalid request (missing fields or subject too long)" },
+                400: { description: "Requisição inválida (campos ausentes ou assunto longo demais)" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to update group subject" }
+                500: { description: "Falha ao atualizar o assunto do grupo" }
             }
         }
     },
     "/groups/{sessionId}/{jid}/members": {
         put: {
             tags: ["Groups"],
-            summary: "Manage group members",
+            summary: "Gerenciar os membros do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -183,69 +183,69 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Members updated", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, result: { type: "array", items: { type: "object" } } } } } } },
+                200: { description: "Membros atualizados", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, result: { type: "array", items: { type: "object" } } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                400: { description: "Invalid action" },
-                500: { description: "Failed to update members" }
+                400: { description: "Ação inválida" },
+                500: { description: "Falha ao atualizar os membros" }
             }
         }
     },
     "/groups/{sessionId}/{jid}/invite": {
         get: {
             tags: ["Groups"],
-            summary: "Get invite code",
+            summary: "Obter o código de convite",
             parameters: [
                 paramSessionId,
                 paramJid
             ],
             responses: {
-                200: { description: "Invite code", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, inviteCode: { type: "string" }, inviteUrl: { type: "string" } } } } } },
+                200: { description: "Código de convite", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, inviteCode: { type: "string" }, inviteUrl: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                500: { description: "Failed to get code" }
+                500: { description: "Falha ao obter o código" }
             }
         },
         put: {
             tags: ["Groups"],
-            summary: "Revoke invite code",
+            summary: "Revogar o código de convite",
             parameters: [
                 paramSessionId,
                 paramJid
             ],
             responses: {
-                200: { description: "Invite revoked", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, newInviteCode: { type: "string" }, inviteUrl: { type: "string" } } } } } },
+                200: { description: "Convite revogado", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, newInviteCode: { type: "string" }, inviteUrl: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                500: { description: "Failed to revoke code" }
+                500: { description: "Falha ao revogar o código" }
             }
         }
     },
     "/groups/{sessionId}/{jid}": {
         get: {
             tags: ["Groups"],
-            summary: "Get group details",
-            description: "Get detailed group information",
+            summary: "Obter os detalhes do grupo",
+            description: "Obtém informações detalhadas do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
             ],
             responses: {
                 200: {
-                    description: "Group details",
+                    description: "Detalhes do grupo",
                     content: { "application/json": { schema: { $ref: "#/components/schemas/GroupDetails" } } }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 404: { $ref: "#/components/responses/NotFound" },
-                500: { description: "Failed to fetch details" }
+                500: { description: "Falha ao buscar os detalhes" }
             }
         }
     },
     "/groups/{jid}/leave": {
         post: {
             tags: ["Groups"],
-            summary: "Leave group",
+            summary: "Sair do grupo",
             parameters: [
                 paramJid
             ],
@@ -262,14 +262,14 @@ export const pathsGrupos = {
                     }
                 }
             },
-            responses: { 200: { description: "Left group" } }
+            responses: { 200: { description: "Saiu do grupo" } }
         }
     },
     "/groups/{sessionId}/invite/accept": {
         post: {
             tags: ["Groups"],
-            summary: "Accept group invite",
-            description: "Join a group using an invite code",
+            summary: "Aceitar convite de grupo",
+            description: "Entra em um grupo usando um código de convite",
             parameters: [
                 paramSessionId
             ],
@@ -287,19 +287,19 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Group invite accepted", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, groupJid: { type: "string" } } } } } },
+                200: { description: "Convite de grupo aceito", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, message: { type: "string" }, groupJid: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                400: { description: "Invalid/Expired code" },
+                400: { description: "Código inválido ou expirado" },
                 503: { $ref: "#/components/responses/SessionNotReady" },
-                500: { description: "Failed to accept invite" }
+                500: { description: "Falha ao aceitar o convite" }
             }
         }
     },
     "/groups/{sessionId}/{jid}/picture": {
         put: {
             tags: ["Groups"],
-            summary: "Update group picture",
+            summary: "Atualizar a foto do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -317,22 +317,22 @@ export const pathsGrupos = {
                     }
                 }
             },
-            responses: { 200: { description: "Picture updated" } }
+            responses: { 200: { description: "Foto atualizada" } }
         },
         delete: {
             tags: ["Groups"],
-            summary: "Remove group picture",
+            summary: "Remover a foto do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
             ],
-            responses: { 200: { description: "Picture removed" } }
+            responses: { 200: { description: "Foto removida" } }
         }
     },
     "/groups/{sessionId}/{jid}/settings": {
         put: {
             tags: ["Groups"],
-            summary: "Update group settings",
+            summary: "Atualizar as configurações do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -347,21 +347,21 @@ export const pathsGrupos = {
                                 setting: {
                                     type: "string",
                                     enum: ["announcement", "not_announcement", "locked", "unlocked"],
-                                    description: "announcement (admins only send), not_announcement (all send), locked (admins only edit), unlocked (all edit)"
+                                    description: "announcement (só administradores enviam), not_announcement (todos enviam), locked (só administradores editam), unlocked (todos editam)"
                                 },
-                                value: { type: "boolean", description: "Ignored but required" }
+                                value: { type: "boolean", description: "Ignorado, mas obrigatório" }
                             }
                         }
                     }
                 }
             },
-            responses: { 200: { description: "Settings updated" } }
+            responses: { 200: { description: "Configurações atualizadas" } }
         }
     },
     "/groups/{sessionId}/{jid}/description": {
         put: {
             tags: ["Groups"],
-            summary: "Update group description",
+            summary: "Atualizar a descrição do grupo",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -379,18 +379,18 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Description updated", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, description: { type: "string" } } } } } },
+                200: { description: "Descrição atualizada", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, description: { type: "string" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                400: { description: "Invalid input" },
-                500: { description: "Failed to update" }
+                400: { description: "Dados inválidos" },
+                500: { description: "Falha ao atualizar" }
             }
         }
     },
     "/groups/{sessionId}/{jid}/ephemeral": {
         put: {
             tags: ["Groups"],
-            summary: "Toggle disappearing messages",
+            summary: "Ativar ou desativar mensagens temporárias",
             parameters: [
                 paramSessionId,
                 paramJid
@@ -409,11 +409,11 @@ export const pathsGrupos = {
                 }
             },
             responses: {
-                200: { description: "Ephemeral toggled", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, expiration: { type: "integer" } } } } } },
+                200: { description: "Mensagens temporárias alteradas", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean", example: true }, expiration: { type: "integer" } } } } } },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                400: { description: "Invalid expiration" },
-                500: { description: "Failed to toggle" }
+                400: { description: "Expiração inválida" },
+                500: { description: "Falha ao alterar" }
             }
         }
     },

@@ -78,7 +78,7 @@ export const schemas = {
             events: { 
                 type: "array", 
                 items: { type: "string" },
-                description: "Events to subscribe to: message.received, message.sent, message.status, connection.update, group.update, contact.update, status.update, group.participant, message.deleted, message.edited or '*'" 
+                description: "Eventos a assinar: message.received, message.sent, message.status, connection.update, group.update, contact.update, status.update, group.participant, message.deleted, message.edited ou '*'" 
             },
             secret: { type: "string" }
         }
@@ -108,8 +108,8 @@ export const schemas = {
             desc: { type: "string" },
             owner: { type: "string" },
             size: { type: "number" },
-            isCommunity: { type: "boolean", description: "Whether this group is a WhatsApp Community announcement group" },
-            linkedParentJid: { type: "string", nullable: true, description: "JID of the parent community if this is a sub-group" },
+            isCommunity: { type: "boolean", description: "Indica se este grupo é o grupo de avisos de uma Comunidade do WhatsApp" },
+            linkedParentJid: { type: "string", nullable: true, description: "JID da comunidade de origem, se este for um subgrupo" },
             participants: {
                 type: "array",
                 items: {

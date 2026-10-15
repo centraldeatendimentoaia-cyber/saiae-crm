@@ -6,7 +6,7 @@ export const pathsSistema = {
             "tags": [
                 "Media"
             ],
-            "summary": "Get uploaded media file",
+            "summary": "Obter um arquivo de mídia enviado",
             "parameters": [
                 {
                     "name": "filename",
@@ -19,7 +19,7 @@ export const pathsSistema = {
             ],
             "responses": {
                 "200": {
-                    "description": "File data"
+                    "description": "Dados do arquivo"
                 }
             }
         }
@@ -29,10 +29,10 @@ export const pathsSistema = {
             "tags": [
                 "Documentation"
             ],
-            "summary": "Get Swagger JSON specification",
+            "summary": "Obter a especificação Swagger em JSON",
             "responses": {
                 "200": {
-                    "description": "Swagger JSON spec"
+                    "description": "Especificação Swagger em JSON"
                 }
             }
         }
@@ -40,10 +40,10 @@ export const pathsSistema = {
     "/settings/system": {
         get: {
             tags: ["System"],
-            summary: "Get system settings",
+            summary: "Obter as configurações do sistema",
             responses: {
                 200: {
-                    description: "System settings",
+                    description: "Configurações do sistema",
                     content: {
                         "application/json": {
                             schema: {
@@ -62,8 +62,8 @@ export const pathsSistema = {
         },
         post: {
             tags: ["System"],
-            summary: "Update system settings",
-            description: "Update global system configuration (Superadmin/Owner only)",
+            summary: "Atualizar as configurações do sistema",
+            description: "Atualiza a configuração global do sistema (somente SUPERADMIN ou dono)",
             requestBody: {
                 content: {
                     "application/json": {
@@ -80,7 +80,7 @@ export const pathsSistema = {
             },
             responses: {
                 200: {
-                    description: "Settings updated",
+                    description: "Configurações atualizadas",
                     content: {
                         "application/json": {
                             schema: {
@@ -97,15 +97,15 @@ export const pathsSistema = {
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Failed to update settings" }
+                500: { description: "Falha ao atualizar as configurações" }
             }
         }
     },
     "/status/{sessionId}/update": {
         post: {
             tags: ["System"],
-            summary: "Update status",
-            description: "Post a status update (story) to WhatsApp. Supports text, image, and video.",
+            summary: "Publicar status",
+            description: "Publica um status (story) no WhatsApp. Aceita texto, imagem e vídeo.",
             parameters: [
                 paramSessionId
             ],
@@ -117,9 +117,9 @@ export const pathsSistema = {
                             type: "object",
                             required: ["content"],
                             properties: {
-                                content: { type: "string", description: "Status text or caption" },
+                                content: { type: "string", description: "Texto ou legenda do status" },
                                 type: { type: "string", enum: ["TEXT", "IMAGE", "VIDEO"], default: "TEXT" },
-                                mediaUrl: { type: "string", description: "Required for IMAGE and VIDEO" },
+                                mediaUrl: { type: "string", description: "Obrigatório para IMAGE e VIDEO" },
                                 backgroundColor: { type: "integer" },
                                 font: { type: "integer" },
                                 mentions: { type: "array", items: { type: "string" } }
@@ -129,8 +129,8 @@ export const pathsSistema = {
                 }
             },
             responses: {
-                200: { description: "Status posted", content: { "application/json": { schema: { $ref: "#/components/schemas/Success" } } } },
-                400: { description: "Missing required fields" },
+                200: { description: "Status publicado", content: { "application/json": { schema: { $ref: "#/components/schemas/Success" } } } },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
                 503: { $ref: "#/components/responses/SessionNotReady" }
@@ -140,8 +140,8 @@ export const pathsSistema = {
     "/status/update": {
         post: {
             tags: ["System"],
-            summary: "Update status",
-            description: "Post a status update (story) to WhatsApp. Supports text, image, and video.",
+            summary: "Publicar status",
+            description: "Publica um status (story) no WhatsApp. Aceita texto, imagem e vídeo.",
             requestBody: {
                 required: true,
                 content: {
@@ -151,21 +151,21 @@ export const pathsSistema = {
                             required: ["sessionId", "content"],
                             properties: {
                                 sessionId: { type: "string" },
-                                content: { type: "string", description: "Status text or caption" },
+                                content: { type: "string", description: "Texto ou legenda do status" },
                                 type: { type: "string", enum: ["TEXT", "IMAGE", "VIDEO"], default: "TEXT" },
-                                mediaUrl: { type: "string", description: "Required for IMAGE and VIDEO" },
-                                backgroundColor: { type: "integer", description: "ARGB color for TEXT status" },
-                                font: { type: "integer", description: "Font style for TEXT status" },
+                                mediaUrl: { type: "string", description: "Obrigatório para IMAGE e VIDEO" },
+                                backgroundColor: { type: "integer", description: "Cor ARGB do status de texto (TEXT)" },
+                                font: { type: "integer", description: "Estilo da fonte do status de texto (TEXT)" },
                                 mentions: {
                                     type: "array",
                                     items: { type: "string" },
-                                    description: "List of JIDs to mention/tag in the status"
+                                    description: "Lista de JIDs a mencionar no status"
                                 }
                             }
                         },
                         examples: {
                             simple: {
-                                summary: "Simple Text Status",
+                                summary: "Status de texto simples",
                                 value: {
                                     sessionId: "sales-01",
                                     content: "Hello World!",
@@ -174,7 +174,7 @@ export const pathsSistema = {
                                 }
                             },
                             withMention: {
-                                summary: "Status with Mention",
+                                summary: "Status com menção",
                                 value: {
                                     sessionId: "sales-01",
                                     content: "Check this out @628123456789",
@@ -184,7 +184,7 @@ export const pathsSistema = {
                                 }
                             },
                             image: {
-                                summary: "Image Status",
+                                summary: "Status com imagem",
                                 value: {
                                     sessionId: "sales-01",
                                     content: "Our new product!",
@@ -198,29 +198,29 @@ export const pathsSistema = {
             },
             responses: {
                 200: {
-                    description: "Status updated",
+                    description: "Recado atualizado",
                     content: {
                         "application/json": {
                             schema: { $ref: "#/components/schemas/Success" }
                         }
                     }
                 },
-                400: { description: "Missing required fields" },
+                400: { description: "Campos obrigatórios ausentes" },
                 401: { $ref: "#/components/responses/Unauthorized" },
                 403: { $ref: "#/components/responses/Forbidden" },
-                503: { description: "Session not ready" },
-                500: { description: "Failed to post status" }
+                503: { description: "Sessão não está pronta" },
+                500: { description: "Falha ao publicar o status" }
             }
         }
     },
     "/system/check-updates": {
         post: {
             tags: ["System"],
-            summary: "Check for updates",
-            description: "Checks for new releases on GitHub and creates a system notification if a newer version is available.",
+            summary: "Verificar atualizações",
+            description: "Verifica novas versões no GitHub e cria uma notificação do sistema se houver uma versão mais recente.",
             responses: {
                 200: {
-                    description: "Check results",
+                    description: "Resultado da verificação",
                     content: {
                         "application/json": {
                             schema: {
@@ -228,14 +228,14 @@ export const pathsSistema = {
                                 properties: {
                                     success: { type: "boolean" },
                                     message: { type: "string" },
-                                    version: { type: "string", description: "Latest version tag" }
+                                    version: { type: "string", description: "Tag da versão mais recente" }
                                 }
                             }
                         }
                     }
                 },
                 401: { $ref: "#/components/responses/Unauthorized" },
-                500: { description: "Error checking updates" }
+                500: { description: "Erro ao verificar atualizações" }
             }
         }
     },
