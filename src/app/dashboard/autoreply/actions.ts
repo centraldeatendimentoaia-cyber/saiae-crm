@@ -5,6 +5,15 @@ import { canAccessSession } from "@/lib/api-auth";
 import { getAuthenticatedUserForAction } from "@/lib/server-action-auth";
 import { Prisma } from "@prisma/client";
 
+const MATCH_TYPES = ["EXACT", "CONTAINS", "REGEX"];
+const TRIGGER_TYPES = ["ALL", "GROUP", "PRIVATE"];
+
+/** Mesmos valores aceitos pela API (/api/autoreplies): evita gravar tipos que o motor de respostas não reconhece. */
+function validarTipos(data: { matchType?: string; triggerType?: string }) {
+    if (data.matchType && !MATCH_TYPES.includes(data.matchType)) throw new Error("matchType inválido (use EXACT, CONTAINS ou REGEX)");
+    if (data.triggerType && !TRIGGER_TYPES.includes(data.triggerType)) throw new Error("triggerType inválido (use ALL, GROUP ou PRIVATE)");
+}
+
 // Fetch rules directly from DB without API call
 export async function getAutoReplies(sessionId: string) {
     const nextAuthSession = await getAuthenticatedUserForAction();
@@ -44,6 +53,7 @@ export async function createAutoReply(sessionId: string, data: { keyword: string
     if (!data.keyword || (!data.response && !data.mediaUrl)) {
         throw new Error("Keyword and either response or media are required");
     }
+    validarTipos(data);
 
     const canAccess = await canAccessSession(nextAuthSession.id, nextAuthSession.role, sessionId);
     if (!canAccess) {
@@ -111,6 +121,7 @@ export async function updateAutoReply(sessionId: string, ruleId: string, data: {
     if (!data.keyword || (!data.response && !data.mediaUrl)) {
         throw new Error("Keyword and either response or media are required");
     }
+    validarTipos(data);
 
     const rule = await prisma.autoReply.findUnique({
         where: { id: ruleId },
