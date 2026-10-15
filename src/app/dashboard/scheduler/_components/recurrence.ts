@@ -1,32 +1,41 @@
-export interface RecurrenceSetters {
-    setRecurring: (v: string) => void;
-    setType: (v: string) => void;
-    setMins: (v: number) => void;
-    setHrs: (v: number) => void;
-    setDays: (v: number[]) => void;
-    setCron: (v: string) => void;
+/** Campos do formulário que descrevem quando e com que repetição a mensagem sai. */
+export interface RecurrenceValues {
+    isRecurring: string; // "once" | "recurring"
+    recurrenceType: string; // "minutes" | "hours" | "days" | "cron"
+    recurringMinutes: number;
+    recurringHours: number;
+    recurringDays: number[];
+    customCron: string;
+    sendAt: string; // datetime-local, para envio único
+    sendTime: string; // HH:mm, para "dias da semana"
 }
 
-export const parseRecurrence = (ruleStr: string | undefined, cronExpr: string | undefined, s: RecurrenceSetters) => {
-    if (!cronExpr) {
-        s.setRecurring("once");
-        return;
+export const DEFAULT_RECURRENCE: RecurrenceValues = {
+    isRecurring: "once",
+    recurrenceType: "minutes",
+    recurringMinutes: 5,
+    recurringHours: 1,
+    recurringDays: [],
+    customCron: "",
+    sendAt: "",
+    sendTime: "",
+};
+
+/** Lê a regra guardada no agendamento (cron + JSON da regra) e devolve os campos do formulário que ela define. */
+export const parseRecurrence = (ruleStr: string | undefined, cronExpr: string | undefined): Partial<RecurrenceValues> => {
+    if (!cronExpr) return { isRecurring: "once" };
+    const out: Partial<RecurrenceValues> = { isRecurring: "recurring", customCron: cronExpr };
+    if (!ruleStr) return { ...out, recurrenceType: "cron" };
+    try {
+        const rule = JSON.parse(ruleStr);
+        out.recurrenceType = rule.type || "cron";
+        if (rule.type === "minutes") out.recurringMinutes = rule.value;
+        if (rule.type === "hours") out.recurringHours = rule.value;
+        if (rule.type === "days") out.recurringDays = rule.value;
+    } catch {
+        out.recurrenceType = "cron";
     }
-    s.setRecurring("recurring");
-    s.setCron(cronExpr);
-    if (ruleStr) {
-        try {
-            const rule = JSON.parse(ruleStr);
-            s.setType(rule.type || "cron");
-            if (rule.type === "minutes") s.setMins(rule.value);
-            if (rule.type === "hours") s.setHrs(rule.value);
-            if (rule.type === "days") s.setDays(rule.value);
-        } catch {
-            s.setType("cron");
-        }
-    } else {
-        s.setType("cron");
-    }
+    return out;
 };
 
 export const buildCronData = (isRec: string, type: string, mins: number, hrs: number, days: number[], custom: string, finalSendAt: string) => {

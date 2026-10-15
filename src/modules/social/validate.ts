@@ -22,18 +22,24 @@ export interface MediaContentInput {
     mediaIds: string[];
 }
 
+/** Corpo de requisição desconhecido como objeto simples; qualquer outra coisa vira {} (os campos são validados um a um). */
+export function asRecord(body: unknown): Record<string, unknown> {
+    return typeof body === "object" && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : {};
+}
+
 /** Valida tipo, imagens e legenda (compartilhado entre criar e editar). */
-export function parseContent(body: any, providers: Provider[]): { error: string } | { value: MediaContentInput } {
-    const type = body?.type;
+export function parseContent(body: unknown, providers: Provider[]): { error: string } | { value: MediaContentInput } {
+    const b = asRecord(body);
+    const type = b.type;
     if (type !== "FEED" && type !== "STORY") return { error: "Tipo inválido (use FEED ou STORY)." };
 
-    const mediaIds: string[] = Array.isArray(body?.mediaIds) ? body.mediaIds.filter((x: unknown) => typeof x === "string") : [];
+    const mediaIds: string[] = Array.isArray(b.mediaIds) ? b.mediaIds.filter((x): x is string => typeof x === "string") : [];
     if (mediaIds.length < 1) return { error: "Escolha pelo menos uma imagem." };
     if (new Set(mediaIds).size !== mediaIds.length) return { error: "A mesma imagem foi escolhida duas vezes." };
     if (type === "STORY" && mediaIds.length !== 1) return { error: "Story aceita exatamente 1 imagem." };
     if (mediaIds.length > 10) return { error: "No máximo 10 imagens por postagem." };
 
-    const caption = typeof body?.caption === "string" ? body.caption.trim() : "";
+    const caption = typeof b.caption === "string" ? b.caption.trim() : "";
     const limit = Math.min(...providers.map((p) => MAX_CAPTION[p]));
     if (type === "FEED" && caption.length > limit) return { error: `Legenda grande demais (máx. ${limit} caracteres).` };
 
@@ -52,18 +58,19 @@ export function parseDate(value: unknown, now = new Date()): { error: string } |
  * Corpo de POST /api/social/posts. Aceita o formato antigo (accountId + publishAt) e o novo
  * (accountIds[] + dates[] ou draft: true).
  */
-export function parseNewPost(body: any, providers: Provider[], now = new Date()): { error: string } | { value: NewPostInput } {
-    const accountIds: string[] = Array.isArray(body?.accountIds)
-        ? body.accountIds.filter((x: unknown) => typeof x === "string")
-        : typeof body?.accountId === "string" ? [body.accountId] : [];
+export function parseNewPost(body: unknown, providers: Provider[], now = new Date()): { error: string } | { value: NewPostInput } {
+    const b = asRecord(body);
+    const accountIds: string[] = Array.isArray(b.accountIds)
+        ? b.accountIds.filter((x): x is string => typeof x === "string")
+        : typeof b.accountId === "string" ? [b.accountId] : [];
     if (accountIds.length < 1) return { error: "Escolha pelo menos uma conta." };
     if (new Set(accountIds).size !== accountIds.length) return { error: "A mesma conta foi escolhida duas vezes." };
 
     const content = parseContent(body, providers);
     if ("error" in content) return content;
 
-    const draft = body?.draft === true;
-    const rawDates: unknown[] = Array.isArray(body?.dates) ? body.dates : body?.publishAt ? [body.publishAt] : [];
+    const draft = b.draft === true;
+    const rawDates: unknown[] = Array.isArray(b.dates) ? b.dates : b.publishAt ? [b.publishAt] : [];
     const dates: Date[] = [];
 
     if (!draft) {

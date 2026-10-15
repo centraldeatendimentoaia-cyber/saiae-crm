@@ -1,3 +1,4 @@
+import { mesSaoPaulo } from "@/modules/atendimento-comum/tempo";
 import { logger as defaultLogger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
@@ -5,7 +6,7 @@ import type { IaContextoAtivo } from "./comanda-contexto";
 import { diaSaoPaulo } from "./dono";
 import type { ConversaRef } from "./store";
 
-export { diaSaoPaulo };
+export { diaSaoPaulo, mesSaoPaulo };
 
 /**
  * Consumo mensal da IA: uma "conversa" = um cliente (telefone) numa loja, dentro de uma janela de 24 h, contada no mês de
@@ -24,14 +25,6 @@ export interface ConsumoStore {
     conversaNova(conversa: ConversaRef, agora: Date): Promise<boolean>;
     incrementar(lojaCodigo: string, mes: string): Promise<number>;
     ler(lojaCodigo: string, mes: string): Promise<number>;
-}
-
-/** "AAAA-MM" no fuso de São Paulo. */
-export function mesSaoPaulo(d: Date): string {
-    const partes = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit" }).formatToParts(d);
-    const ano = partes.find((p) => p.type === "year")?.value;
-    const mes = partes.find((p) => p.type === "month")?.value;
-    return `${ano}-${mes}`;
 }
 
 export const prismaConsumo: ConsumoStore = {

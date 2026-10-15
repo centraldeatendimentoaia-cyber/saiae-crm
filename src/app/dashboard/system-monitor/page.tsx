@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,9 +10,18 @@ import { Activity, Cpu, HardDrive, Network, Server, MemoryStick } from "lucide-r
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
+interface MonitorData {
+    cpu: { load: number; cores: number[] };
+    memory: { total: number; used: number; free: number; swapTotal: number; swapUsed: number };
+    disk: { fs: string; mount: string; size: number; used: number; usePercent: number }[];
+    network: { iface: string; rx_sec: number; tx_sec: number; state: string }[];
+    os: { platform: string; distro: string; release: string; uptime: number };
+    process: { uptime: number; heapTotal: number; heapUsed: number; rss: number };
+}
+
 export default function SystemMonitorPage() {
     const { data: session } = useSession();
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<MonitorData | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Fetch stats
@@ -22,10 +32,10 @@ export default function SystemMonitorPage() {
             if (result.status) {
                 setData(result.data);
             } else {
-                toast.error(result.message || "Failed to fetch metrics");
+                toast.error(result.message || "Falha ao carregar as métricas");
             }
         } catch (error) {
-            console.error("Monitor fetch error:", error);
+            logger.error("SystemMonitor", "Monitor fetch error:", error);
         } finally {
             setLoading(false);
         }
@@ -219,7 +229,7 @@ export default function SystemMonitorPage() {
                         <CardDescription>Sistemas de arquivos montados e uso de espaço atual.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        {data.disk.map((d: any, i: number) => (
+                        {data.disk.map((d, i) => (
                             <div key={i} className="space-y-2">
                                 <div className="flex items-center justify-between text-sm">
                                     <div className="flex items-center gap-2 font-medium">

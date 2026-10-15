@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -58,9 +59,7 @@ export default function SessionAccessPage() {
     // For revoke confirmation
     const [revokeTarget, setRevokeTarget] = useState<AccessEntry | null>(null);
 
-    // @ts-ignore
     const currentUserId = authSession?.user?.id;
-    // @ts-ignore
     const currentUserRole = authSession?.user?.role;
 
     // Fetch user's owned sessions — wait for authSession to be ready
@@ -87,7 +86,7 @@ export default function SessionAccessPage() {
                 }
             }
         } catch (error) {
-            console.error("Failed to fetch sessions", error);
+            logger.error("Access", "Failed to fetch sessions", error);
             toast.error("Falha ao carregar as sessões");
         } finally {
             setLoading(false);
@@ -109,7 +108,7 @@ export default function SessionAccessPage() {
                 setAccessList([]);
             }
         } catch (error) {
-            console.error("Failed to fetch access list", error);
+            logger.error("Access", "Failed to fetch access list", error);
             toast.error("Falha ao carregar a lista de acessos");
         } finally {
             setAccessLoading(false);
@@ -137,11 +136,11 @@ export default function SessionAccessPage() {
             const data = await res.json();
 
             if (res.ok) {
-                toast.success(data.message || "Access granted successfully");
+                toast.success(data.message || "Acesso concedido com sucesso");
                 setEmail("");
                 fetchAccessList();
             } else {
-                toast.error(data.message || "Failed to grant access");
+                toast.error(data.message || "Falha ao conceder o acesso");
             }
         } catch (error) {
             toast.error("Falha ao conceder o acesso");
@@ -166,7 +165,7 @@ export default function SessionAccessPage() {
                 toast.success("Acesso revogado com sucesso");
                 fetchAccessList();
             } else {
-                toast.error(data.message || "Failed to revoke access");
+                toast.error(data.message || "Falha ao revogar o acesso");
             }
         } catch (error) {
             toast.error("Falha ao revogar o acesso");

@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "@/components/dashboard/session-provider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
@@ -50,10 +51,10 @@ export default function ProfilePage() {
                 setNameForm(data.data.name || data.data.pushname || "");
                 setStatusForm(data.data.status || "");
             } else {
-                toast.error(data.message || "Failed to load profile");
+                toast.error(data.message || "Falha ao carregar o perfil");
             }
         } catch (error) {
-            console.error("Fetch profile error:", error);
+            logger.error("Profile", "Fetch profile error:", error);
             toast.error("Ocorreu um erro ao carregar o perfil");
         } finally {
             setLoading(false);
@@ -75,10 +76,10 @@ export default function ProfilePage() {
                 toast.success("Nome do perfil atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, name: nameForm } : null);
             } else {
-                toast.error(data.message || "Failed to update profile name");
+                toast.error(data.message || "Falha ao atualizar o nome do perfil");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao atualizar o nome do perfil");
         } finally {
             setUpdatingName(false);
@@ -100,10 +101,10 @@ export default function ProfilePage() {
                 toast.success("Recado/status atualizado com sucesso");
                 setProfile(prev => prev ? { ...prev, status: statusForm } : null);
             } else {
-                toast.error(data.message || "Failed to update status");
+                toast.error(data.message || "Falha ao atualizar o status");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao atualizar o status");
         } finally {
             setUpdatingStatus(false);
@@ -129,10 +130,10 @@ export default function ProfilePage() {
                 toast.success("Foto de perfil atualizada");
                 fetchProfile(); // Re-fetch to get the new picture URL
             } else {
-                toast.error(data.message || "Failed to upload picture");
+                toast.error(data.message || "Falha ao enviar a foto");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao enviar a foto");
         } finally {
             setUpdatingPic(false);
@@ -155,10 +156,10 @@ export default function ProfilePage() {
                 toast.success("Foto de perfil removida");
                 setProfile(prev => prev ? { ...prev, pictureUrl: "" } : null);
             } else {
-                toast.error(data.message || "Failed to remove picture");
+                toast.error(data.message || "Falha ao remover a foto");
             }
         } catch (error) {
-            console.error(error);
+            logger.error("Profile", "Erro", error);
             toast.error("Erro ao remover a foto");
         } finally {
             setUpdatingPic(false);

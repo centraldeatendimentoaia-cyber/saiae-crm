@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -17,7 +18,7 @@ export default function ErrorPage({
 
   useEffect(() => {
     setMounted(true);
-    console.error('Application runtime error boundary caught:', error);
+    logger.error("Error", 'Application runtime error boundary caught:', error);
   }, [error]);
 
   if (!mounted) {

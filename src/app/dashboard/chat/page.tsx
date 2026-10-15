@@ -7,7 +7,6 @@ import { SessionGuard } from "@/components/dashboard/session-guard";
 
 export default async function ChatPage() {
     const session = await auth();
-    console.log("ChatPage Session (Role debug):", session?.user?.role);
 
     if (!session?.user?.id) return <div>Não autorizado</div>;
 

@@ -1,6 +1,7 @@
+import { errorMessage as getErrorMessage } from "@/lib/errors";
 import { prisma } from "./prisma";
 import crypto from "crypto";
-import { normalizeMessageContent, downloadMediaMessage, WAMessage } from "@whiskeysockets/baileys";
+import { normalizeMessageContent, downloadMediaMessage, WAMessage, proto } from "@whiskeysockets/baileys";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import pino from "pino";
@@ -22,11 +23,17 @@ export type WebhookEventType =
     | "message.edited"
     | "test";
 
+/** Participante de grupo como guardado em Group.participants. */
+type ParticipantInfo = { id?: string; [campo: string]: unknown };
+
+/** Campos de mídia do Baileys que a gente lê para baixar o arquivo. */
+type MediaInfo = { mediaKey?: Uint8Array | string | null; directPath?: string | null; thumbnailDirectPath?: string | null; mimetype?: string | null };
+
 interface WebhookPayload {
     event: WebhookEventType;
     sessionId: string;
     timestamp: string;
-    data: any;
+    data: unknown;
 }
 
 /**
@@ -35,7 +42,7 @@ interface WebhookPayload {
 export async function dispatchWebhook(
     sessionId: string,
     event: WebhookEventType,
-    data: any
+    data: unknown
 ) {
     try {
         // Get the session to find the userId
@@ -82,7 +89,7 @@ export async function dispatchWebhook(
             event,
             sessionId,
             timestamp: new Date().toISOString(),
-            data: normalizePayloadData(event, data) // Normalize data before sending
+            data
         };
 
         // Dispatch to all matching webhooks
@@ -104,25 +111,9 @@ export async function dispatchWebhook(
 }
 
 /**
- * Normalize payload data to match API format and avoid Circular/BigInt errors
- */
-function normalizePayloadData(event: WebhookEventType, data: any): any {
-    if (event === "message.received" || event === "message.sent") {
-        // If data is already simplified, return it
-        if (data.type && data.content) return data;
-
-        // If data is raw Baileys message (which we shouldn't be passing raw anymore, but just in case)
-        // Ideally the caller (onMessageReceived) should have already simplified it.
-        // But let's handle the specific fields passed by onMessageReceived below.
-        return data;
-    }
-    return data;
-}
-
-/**
  * JSON Replacer to handle BigInt
  */
-function jsonReplacer(key: string, value: any) {
+function jsonReplacer(_key: string, value: unknown) {
     if (typeof value === 'bigint') {
         return value.toString();
     }
@@ -171,8 +162,8 @@ async function sendWebhookRequest(url: string, payload: WebhookPayload, secret?:
         if (!response.ok) {
             errorMessage = `Webhook returned ${response.status}: ${response.statusText}`;
         }
-    } catch (err: any) {
-        errorMessage = err.message || "Webhook request failed";
+    } catch (err) {
+        errorMessage = getErrorMessage(err, "Webhook request failed");
         response = null as unknown as Response;
     }
 
@@ -210,8 +201,8 @@ async function recordWebhookLog(data: {
     event: string;
     status: string;
     requestUrl: string;
-    requestHeaders?: any;
-    requestBody?: any;
+    requestHeaders?: unknown;
+    requestBody?: unknown;
     responseStatusCode?: number | null;
     responseBody?: string | null;
     responseTimeMs?: number | null;
@@ -341,9 +332,9 @@ export async function testWebhook(webhookId: string, url: string, secret?: strin
             responseBody,
             responseTimeMs
         };
-    } catch (err: any) {
+    } catch (err) {
         const responseTimeMs = Date.now() - startedAt;
-        const errorMsg = err.message || "Request failed";
+        const errorMsg = getErrorMessage(err, "Request failed");
 
         // Record failed test log
         await recordWebhookLog({
@@ -388,7 +379,7 @@ export async function downloadAndSaveMedia(message: WAMessage, sessionId: string
         logger.info("Media", `Attempting to download ${messageType}...`);
 
         let buffer: Buffer | null = null;
-        const mediaObj = (messageContent as any)[messageType];
+        const mediaObj = (messageContent as Record<string, MediaInfo>)[messageType];
 
         // Newsletter media is NOT encrypted — no mediaKey present
         const isNewsletterMedia = !mediaObj.mediaKey && (mediaObj.directPath || mediaObj.thumbnailDirectPath);
@@ -396,7 +387,7 @@ export async function downloadAndSaveMedia(message: WAMessage, sessionId: string
         if (isNewsletterMedia) {
             logger.info("Media", "Downloading unencrypted media (newsletter) via direct fetch...");
 
-            const dp = mediaObj.directPath || mediaObj.thumbnailDirectPath;
+            const dp = (mediaObj.directPath || mediaObj.thumbnailDirectPath) as string; // garantido por isNewsletterMedia
             const downloadUrl = dp.startsWith('http') ? dp : `https://mmg.whatsapp.net${dp}`;
 
             try {
@@ -449,7 +440,7 @@ export async function downloadAndSaveMedia(message: WAMessage, sessionId: string
         let ext = extMap[messageType] || 'bin';
 
         // Try to get extension from mimetype if available
-        const mime = (messageContent as any)[messageType]?.mimetype;
+        const mime = (messageContent as Record<string, MediaInfo | undefined>)[messageType]?.mimetype;
         if (mime) {
             const mimeExt = mime.split('/')[1]?.split(';')[0];
             if (mimeExt) ext = mimeExt;
@@ -490,7 +481,7 @@ function getOwnJid(sessionId: string): string | null {
     }
 }
 
-export async function onMessageReceived(sessionId: string, message: any, existingFileUrl?: string | null) {
+export async function onMessageReceived(sessionId: string, message: Partial<WAMessage>, existingFileUrl?: string | null) {
     // Re-calculate fields to match store logic EXACTLY
     const remoteJid = message.key?.remoteJid || "";
     const fromMe = message.key?.fromMe || false;
@@ -507,10 +498,10 @@ export async function onMessageReceived(sessionId: string, message: any, existin
     // "sender" is who sent it. In DM: remoteJid. In Group: participant.
     const senderJid: string = isGroup ? (participant || "") : remoteJid;
     const normalizedSender = await resolveToPhoneJid(senderJid, sessionId);
-    let sender: any = normalizedSender;
+    let sender: string | ParticipantInfo = normalizedSender;
 
     // Enrich Participant Data if Group
-    let participantDetail: any = await resolveToPhoneJid(participant || "", sessionId);
+    let participantDetail: string | ParticipantInfo = await resolveToPhoneJid(participant || "", sessionId);
 
     if (isGroup && typeof sender === 'string') {
         try {
@@ -531,7 +522,7 @@ export async function onMessageReceived(sessionId: string, message: any, existin
                 });
 
                 if (group && group.participants) {
-                    const parts = group.participants as any[];
+                    const parts = group.participants as unknown as ParticipantInfo[];
                     const found = parts.find(p => p.id === senderJid || p.id === participant || p.id === normalizedSender);
                     if (found) {
                         sender = found;
@@ -548,7 +539,7 @@ export async function onMessageReceived(sessionId: string, message: any, existin
     let fileUrl: string | null = existingFileUrl || null;
     if (!fileUrl) {
         try {
-            fileUrl = await downloadAndSaveMedia(message, sessionId);
+            fileUrl = await downloadAndSaveMedia(message as WAMessage, sessionId);
         } catch (e) {
             logger.error("Media", "Error handling media download", e);
         }
@@ -587,7 +578,7 @@ export async function onMessageReceived(sessionId: string, message: any, existin
 /**
  * Helper to dispatch message sent event
  */
-export async function onMessageSent(sessionId: string, message: any, existingFileUrl?: string | null) {
+export async function onMessageSent(sessionId: string, message: Partial<WAMessage>, existingFileUrl?: string | null) {
     const normalized = extractMessageContent(message);
     const quoted = await extractQuotedMessageAsync(message, sessionId);
     const remoteJid = message.key?.remoteJid || "";
@@ -598,7 +589,7 @@ export async function onMessageSent(sessionId: string, message: any, existingFil
     let fileUrl: string | null = existingFileUrl || null;
     if (!fileUrl) {
         try {
-            fileUrl = await downloadAndSaveMedia(message, sessionId);
+            fileUrl = await downloadAndSaveMedia(message as WAMessage, sessionId);
         } catch (e) { /* ignore */ }
     }
 
@@ -643,12 +634,12 @@ export async function fireSentWebhook(
     sessionId: string,
     jid: string,
     payload: { type?: string; text?: string; caption?: string; fileName?: string; mimetype?: string; ptt?: boolean },
-    sendResult: any
+    sendResult: { key?: WAMessage["key"]; id?: string; remoteJid?: string } | null | undefined
 ) {
     try {
         // Handle WAMessage vs MessageKey — Baileys can return either
-        const key = sendResult?.key || sendResult || {};
-        const webhookMsg: any = {
+        const key: { id?: string | null; remoteJid?: string | null } = sendResult?.key || sendResult || {};
+        const webhookMsg: Partial<WAMessage> = {
             key: {
                 id: key.id || sendResult?.id,
                 remoteJid: key.remoteJid || sendResult?.remoteJid || jid,
@@ -703,7 +694,7 @@ export function onConnectionUpdate(sessionId: string, status: string, qr?: strin
 /**
  * Extract content and type from Baileys message
  */
-function extractMessageContent(msg: any): { type: string, content: string, caption?: string } {
+function extractMessageContent(msg: { message?: proto.IMessage | null }): { type: string, content: string, caption?: string } {
     const messageContent = normalizeMessageContent(msg.message);
     let text = "";
     let caption = undefined;
@@ -747,12 +738,12 @@ function extractMessageContent(msg: any): { type: string, content: string, capti
 /**
  * Extract Quoted Message recursively (Async to Lookup DB)
  */
-async function extractQuotedMessageAsync(msg: any, sessionId: string): Promise<any> {
+async function extractQuotedMessageAsync(msg: { message?: proto.IMessage | null }, sessionId: string) {
     const messageContent = normalizeMessageContent(msg.message);
     if (!messageContent) return null;
 
     // Check for contextInfo in common message types
-    let contextInfo: any = null;
+    let contextInfo: proto.IContextInfo | null | undefined = null;
 
     if (messageContent.extendedTextMessage) {
         contextInfo = messageContent.extendedTextMessage.contextInfo;

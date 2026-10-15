@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { iaPausada, dadosPausar, dadosRetomar, ESTADO_HUMANO, ESTADO_IA } from "./pausa";
-import { diaSaoPaulo, diaEHora } from "./tempo";
+import { diaSaoPaulo, diaEHora, mesSaoPaulo, agoraSaoPaulo } from "./tempo";
 
 const agora = new Date("2026-03-10T15:00:00Z");
 const depois = new Date("2026-03-10T16:00:00Z");
@@ -39,5 +39,14 @@ describe("fuso de Sao Paulo", () => {
     it("diaEHora devolve dia da semana (0 = domingo) e hora em Brasilia", () => {
         expect(diaEHora(new Date("2026-03-10T15:00:00Z"))).toEqual({ dia: 2, hora: 12 }); // terca, 12h
         expect(diaEHora(new Date("2026-03-08T12:00:00Z"))).toEqual({ dia: 0, hora: 9 }); // domingo, 9h
+    });
+
+    it("mesSaoPaulo usa o mes local (virada de mes a noite em UTC)", () => {
+        expect(mesSaoPaulo(new Date("2026-04-01T01:00:00Z"))).toBe("2026-03"); // 22h de 31/03 em SP
+        expect(mesSaoPaulo(new Date("2026-04-01T04:00:00Z"))).toBe("2026-04");
+    });
+
+    it("agoraSaoPaulo escreve dia da semana e hora locais", () => {
+        expect(agoraSaoPaulo(new Date("2026-03-10T15:35:00Z"))).toBe("terça-feira, 12:35");
     });
 });

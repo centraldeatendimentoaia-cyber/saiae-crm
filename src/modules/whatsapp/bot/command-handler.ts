@@ -1,3 +1,4 @@
+import { errorMessage } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import type { WASocket, WAMessage } from "@whiskeysockets/baileys";
 import { downloadMediaMessage } from "@whiskeysockets/baileys";
@@ -21,6 +22,7 @@ const DEFAULT_CONFIG = {
     enabled: true,
     botMode: 'OWNER',
     botAllowedJids: [] as string[],
+    botBlockedJids: [] as string[],
     autoReplyMode: 'ALL',
     autoReplyAllowedJids: [] as string[],
     enableSticker: true,
@@ -76,8 +78,7 @@ export async function handleBotCommand(
     if (!session) return;
 
     // Fetch BotConfig separately
-    // @ts-ignore - Prisma Client types might lag in IDE
-    const botConfig = await (prisma as any).botConfig.findUnique({
+    const botConfig = await prisma.botConfig.findUnique({
         where: { sessionId: session.id }
     });
 
@@ -86,11 +87,11 @@ export async function handleBotCommand(
     if (!config.enabled) return;
 
     // Now check prefix with loaded config
-    const prefix = (config as any).prefix || "#";
+    const prefix = config.prefix || "#";
     if (!text.startsWith(prefix)) return;
 
     // Verify Access Permissions
-    const botMode = (config as any).botMode || 'OWNER'; // Default to OWNER if missing
+    const botMode = config.botMode || 'OWNER'; // Default to OWNER if missing
 
     // Check Permission
     let canExecute = false;
@@ -101,7 +102,7 @@ export async function handleBotCommand(
         if (botMode === 'ALL') {
             canExecute = true;
         } else if (botMode === 'SPECIFIC') {
-            const allowedJids = (config as any).botAllowedJids || [];
+            const allowedJids = config.botAllowedJids || [];
             // Standardized Sender Logic (matches webhook & store)
             const isGroup = msg.key.remoteJid?.endsWith("@g.us") || false;
             const remoteJidAlt = msg.key.remoteJidAlt;
@@ -112,10 +113,10 @@ export async function handleBotCommand(
             }
 
             if (Array.isArray(allowedJids)) {
-                canExecute = allowedJids.some(jid => senderJid.includes(jid));
+                canExecute = allowedJids.some(jid => typeof jid === "string" && senderJid.includes(jid));
             }
         } else if (botMode === 'BLACKLIST') {
-            const blockedJids = (config as any).botBlockedJids || [];
+            const blockedJids = config.botBlockedJids || [];
             const isGroup = msg.key.remoteJid?.endsWith("@g.us") || false;
             const remoteJidAlt = msg.key.remoteJidAlt;
             let senderJid = (isGroup ? (msg.key.participant || msg.participant) : msg.key.remoteJid) || "";
@@ -127,7 +128,7 @@ export async function handleBotCommand(
             // If blacklist, allowed by default UNLESS in blocked list
             canExecute = true;
             if (Array.isArray(blockedJids)) {
-                const isBlocked = blockedJids.some(jid => senderJid.includes(jid));
+                const isBlocked = blockedJids.some(jid => typeof jid === "string" && senderJid.includes(jid));
                 if (isBlocked) canExecute = false;
             }
         }
@@ -204,13 +205,13 @@ export async function handleBotCommand(
 
                 // Handle Video Limits
                 if (isVideo) {
-                    if (!(config as any).enableVideoSticker) {
+                    if (!config.enableVideoSticker) {
                         await sock.sendMessage(remoteJid, { text: "❌ Video stickers are disabled in bot settings." }, { quoted: msg });
                         return;
                     }
 
                     const seconds = msgContent?.videoMessage?.seconds || 0;
-                    const maxDuration = (config as any).maxStickerDuration || 10;
+                    const maxDuration = config.maxStickerDuration || 10;
 
                     if (seconds > maxDuration) {
                         await sock.sendMessage(remoteJid, { text: `❌ Video too long! Max duration is ${maxDuration} seconds.` }, { quoted: msg });
@@ -227,7 +228,7 @@ export async function handleBotCommand(
                         "buffer",
                         {},
                         {
-                            logger: console as any,
+                            logger: undefined as never,
                             reuploadRequest: sock.updateMediaMessage
                         }
                     ) as Buffer;
@@ -293,11 +294,11 @@ export async function handleBotCommand(
                                 buffer = Buffer.from(arrayBuffer);
                             } else {
                                 const err = await res.json();
-                                throw new Error(`RemoveBG Error: ${(err as any).errors?.[0]?.title || res.statusText}`);
+                                throw new Error(`RemoveBG Error: ${(err as { errors?: { title?: string }[] }).errors?.[0]?.title || res.statusText}`);
                             }
                         } catch (bgError) {
                             logger.error("Bot", "RemoveBG Failed:", bgError);
-                            await sock.sendMessage(remoteJid, { text: `⚠️ Remove BG failed: ${(bgError as any).message}. Sending normal sticker...` }, { quoted: msg });
+                            await sock.sendMessage(remoteJid, { text: `⚠️ Remove BG failed: ${errorMessage(bgError)}. Sending normal sticker...` }, { quoted: msg });
                         }
                     } else if (isImage && isRemoveBg && !config.removeBgApiKey) {
                         await sock.sendMessage(remoteJid, { text: `⚠️ Remove BG API Key not configured in dashboard. Sending normal sticker...` }, { quoted: msg });
@@ -306,8 +307,8 @@ export async function handleBotCommand(
 
                     // Convert
                     const sticker = new Sticker(buffer as Buffer, {
-                        pack: (config as any).botName || "Saiaê Bot",
-                        author: "By " + ((config as any).botName || "Saiaê Bot"),
+                        pack: config.botName || "Saiaê Bot",
+                        author: "By " + (config.botName || "Saiaê Bot"),
                         type: "full", // full, crop, circle
                         quality: 15 // Extreme quality reduction for size
                     });
@@ -320,20 +321,20 @@ export async function handleBotCommand(
 
                 } catch (e) {
                     logger.error("Bot", "Sticker generation failed", e);
-                    await sock.sendMessage(remoteJid, { text: "❌ Failed to create sticker. Error: " + (e as any).message }, { quoted: msg });
+                    await sock.sendMessage(remoteJid, { text: "❌ Failed to create sticker. Error: " + errorMessage(e) }, { quoted: msg });
                 }
                 break;
             }
 
             case "menu":
             case "help": {
-                const botName = (config as any).botName || "Saiaê Bot";
+                const botName = config.botName || "Saiaê Bot";
                 const menu = `
 🤖 *${botName} Menu* 🤖
 
 📌 *Commands:*
 • *${prefix}sticker* / *${prefix}s*: Convert Image/Video to Sticker
-  - Supports Images, GIFs, and Videos (max ${(config as any).maxStickerDuration || 10}s)
+  - Supports Images, GIFs, and Videos (max ${config.maxStickerDuration || 10}s)
   - Use *${prefix}sticker nobg* to remove background (Images only)
 • *${prefix}ping*: Check Bot Status
 • *${prefix}uptime*: Check Session Uptime

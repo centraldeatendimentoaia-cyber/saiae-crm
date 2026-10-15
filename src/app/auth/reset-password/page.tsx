@@ -1,5 +1,6 @@
 "use client";
 
+import { errorMessage } from "@/lib/errors";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,8 +35,8 @@ function ResetForm() {
             if (!res.ok || !data.status) throw new Error(data.message || "Falha ao alterar a senha");
             setDone(true);
             setTimeout(() => router.push("/auth/login"), 2500);
-        } catch (err: any) {
-            setError(err.message || "Falha ao alterar a senha");
+        } catch (err) {
+            setError(errorMessage(err, "Falha ao alterar a senha"));
         } finally {
             setLoading(false);
         }

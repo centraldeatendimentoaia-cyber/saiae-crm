@@ -16,7 +16,6 @@ export default async function DashboardLayout({
     children: React.ReactNode;
 }) {
     const session = await auth();
-    // @ts-ignore
     const systemConfig = await prisma.systemConfig.findUnique({ where: { id: "default" } });
     const appName = systemConfig?.appName || "Saiaê";
     const registrationEnabled = systemConfig?.enableRegistration ?? true;

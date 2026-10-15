@@ -1,3 +1,4 @@
+import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -12,7 +13,7 @@ import { prisma } from "@/lib/prisma";
  * Não há limite diário: quem quer enviar mais assume o risco (a tela avisa).
  */
 
-const TZ = "America/Sao_Paulo";
+const TZ = TZ_SAO_PAULO;
 
 /** Taxa máxima de números sem WhatsApp antes de a campanha parar sozinha (a partir de MIN_CHECKED). */
 export const MAX_INVALID_RATE = 0.15;

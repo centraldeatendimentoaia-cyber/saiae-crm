@@ -17,3 +17,18 @@ export function diaEHora(d: Date): { dia: number; hora: number } {
     const dias = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     return { dia: dias.indexOf(o.weekday), hora: Number(o.hour) };
 }
+
+/** "AAAA-MM" no fuso de São Paulo. */
+export function mesSaoPaulo(d: Date): string {
+    const partes = new Intl.DateTimeFormat("en-US", { timeZone: TZ_SAO_PAULO, year: "numeric", month: "2-digit" }).formatToParts(d);
+    const ano = partes.find((p) => p.type === "year")?.value;
+    const mes = partes.find((p) => p.type === "month")?.value;
+    return `${ano}-${mes}`;
+}
+
+/** "segunda-feira, 14:35" no fuso de São Paulo (a IA não tem relógio: sem isso ela chuta o dia e a hora). */
+export function agoraSaoPaulo(d: Date): string {
+    const dia = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ_SAO_PAULO, weekday: "long" }).format(d);
+    const hora = new Intl.DateTimeFormat("pt-BR", { timeZone: TZ_SAO_PAULO, hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    return `${dia}, ${hora}`;
+}

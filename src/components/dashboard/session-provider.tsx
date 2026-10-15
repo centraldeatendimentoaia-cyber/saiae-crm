@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { getCookie, setCookie } from "@/lib/client-cookie";
 import { useRouter } from "next/navigation";
@@ -53,7 +54,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
                 }
             }
         } catch (error) {
-            console.error(error);
+            logger.error("SessionProvider", "Erro", error);
             toast.error("Falha ao carregar as sessões");
         } finally {
             setLoading(false);

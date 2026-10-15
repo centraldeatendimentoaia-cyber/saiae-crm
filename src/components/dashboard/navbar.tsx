@@ -1,5 +1,6 @@
 "use client";
 
+import { logger } from "@/lib/logger";
 import { useState, useEffect } from "react";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { SessionSelector } from "@/components/dashboard/session-selector";
@@ -45,7 +46,7 @@ export function Navbar({ appName }: NavbarProps) {
                 setUnreadCount(items.filter((n: Notification) => !n.read).length);
             }
         } catch (e) {
-            console.error("Failed to fetch notifications");
+            logger.error("Navbar", "Failed to fetch notifications");
         }
     };
 
@@ -60,13 +61,13 @@ export function Navbar({ appName }: NavbarProps) {
             });
 
             socketInstance.on("connect", () => {
-                console.log("Socket connected for notifications");
+                logger.info("Navbar", "Socket connected for notifications");
                 // Join user-specific room
                 socketInstance.emit("join-user-room", session.user.id);
             });
 
             socketInstance.on("notification:new", (notification: Notification) => {
-                console.log("New notification received:", notification);
+                logger.info("Navbar", "New notification received:", notification);
 
                 // Add to notifications list
                 setNotifications(prev => [notification, ...prev]);
@@ -108,7 +109,7 @@ export function Navbar({ appName }: NavbarProps) {
                 }
             }
         } catch (e) {
-            console.error("Failed to mark read");
+            logger.error("Navbar", "Failed to mark read");
         }
     };
 
@@ -126,7 +127,7 @@ export function Navbar({ appName }: NavbarProps) {
                 toast.success("Notificação excluída");
             }
         } catch (e) {
-            console.error("Failed to delete notification");
+            logger.error("Navbar", "Failed to delete notification");
             toast.error("Falha ao excluir a notificação");
         }
     };

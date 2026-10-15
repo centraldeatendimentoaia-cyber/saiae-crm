@@ -59,8 +59,8 @@ export class WhatsAppManager {
     }
 
     async createSession(userId: string, name: string, customSessionId?: string) {
-        if (!this.io && (global as any).io) {
-            this.io = (global as any).io;
+        if (!this.io && global.io) {
+            this.io = global.io;
         }
 
         if (!this.io) {
@@ -136,7 +136,7 @@ export class WhatsAppManager {
         }
 
         const session = await prisma.session.findUnique({ where: { sessionId } });
-        if (!session) throw new Error("Session not found");
+        if (!session) throw new Error("Sessão não encontrada");
 
         // Create fresh instance
         let instance = this.sessions.get(sessionId);
@@ -160,7 +160,7 @@ export class WhatsAppManager {
 
     async requestPairingCode(sessionId: string, phoneNumber: string) {
         const instance = this.sessions.get(sessionId);
-        if (!instance) throw new Error("Instance not found or not running");
+        if (!instance) throw new Error("Sessão não encontrada ou parada");
         return await instance.requestPairingCode(phoneNumber);
     }
 }

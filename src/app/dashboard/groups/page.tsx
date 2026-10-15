@@ -17,7 +17,7 @@ interface Group {
     id: string;
     subject: string;
     jid: string;
-    participants?: any[];
+    participants?: unknown[];
 }
 
 export default function GroupsPage() {

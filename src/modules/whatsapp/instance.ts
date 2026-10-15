@@ -1,3 +1,7 @@
+import { errorCode, errorMessage } from "@/lib/errors";
+import type { Boom } from "@hapi/boom";
+import type { AnyMessageContent, MiscMessageGenerationOptions } from "@whiskeysockets/baileys";
+import type { ILogger } from "@whiskeysockets/baileys/lib/Utils/logger";
 import makeWASocket, {
     DisconnectReason,
     fetchLatestBaileysVersion,
@@ -32,7 +36,7 @@ export class WhatsAppInstance {
     sessionId: string;
     userId: string;
     io: Server;
-    config: any = {};
+    config: Record<string, unknown> = {};
     startTime: Date | null = null;
     pairingCode: string | null = null;
 
@@ -56,19 +60,22 @@ export class WhatsAppInstance {
             logger.warn("Instance", `Session ${this.sessionId} not found in DB, aborting init`);
             return;
         }
-        this.config = sessionData?.config || {};
-        const botConfig = (sessionData as any)?.botConfig;
+        this.config = (sessionData.config as Record<string, unknown> | null) || {};
+        const botConfig = sessionData.botConfig;
 
         const { state, saveCreds } = await usePrismaAuthState(this.sessionId);
         const { version } = await fetchLatestBaileysVersion();
 
+        // o pino atende o que o Baileys usa do logger, mas os tipos não coincidem
+        const waLogger = pino({ level: process.env.BAILEYS_LOG_LEVEL || "error" }) as unknown as ILogger;
+
         this.socket = makeWASocket({
             version,
-            logger: pino({ level: process.env.BAILEYS_LOG_LEVEL || "error" }) as any,
+            logger: waLogger,
             printQRInTerminal: false,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: process.env.BAILEYS_LOG_LEVEL || "error" }) as any),
+                keys: makeCacheableSignalKeyStore(state.keys, waLogger),
             },
             browser: ["Ubuntu", "Chrome", "20.0.04"],
             markOnlineOnConnect: botConfig?.alwaysOnline ?? true,
@@ -79,13 +86,13 @@ export class WhatsAppInstance {
         // Apply Anti-Spam Wrapper to sendMessage
         const originalSendMessage = this.socket.sendMessage.bind(this.socket);
         const sessionId = this.sessionId;
-        this.socket.sendMessage = async function (jid: string, content: any, options?: any) {
+        this.socket.sendMessage = async function (jid: string, content: AnyMessageContent, options?: MiscMessageGenerationOptions) {
             await antispam.enqueue(sessionId, jid, content);
             // registra o ID: o agente do salão distingue o que o CRM enviou do que uma pessoa escreveu pelo celular
             const messageId = options?.messageId || generateMessageID();
             marcarEnviadaPeloCrm(messageId);
             return originalSendMessage(jid, content, { ...options, messageId });
-        } as any;
+        } as WASocket["sendMessage"];
 
         // Bind Store for DB Sync
         bindSessionStore(this.socket, this.sessionId, this.io);
@@ -97,7 +104,7 @@ export class WhatsAppInstance {
 
         // Sincroniza etiquetas do WhatsApp Business para o painel
         const LABEL_COLORS = ["#ff9485","#64c4ff","#ffd429","#dbf0d8","#ff9dff","#c3a5ff","#22c9a8","#ff6b6b","#7ec8e3","#f4a261","#8ac926","#e76f51","#6a4c93","#1982c4","#ffca3a","#ff595e","#8ac6d1","#b5838d","#a7c957","#9a8c98"];
-        this.socket.ev.on("labels.edit" as any, async (label: any) => {
+        this.socket.ev.on("labels.edit", async (label) => {
             try {
                 const id = `${this.sessionId}:${label.id}`;
                 if (label.deleted) {
@@ -111,7 +118,7 @@ export class WhatsAppInstance {
                 logger.error("Instance", "Label sync failed:", e);
             }
         });
-        this.socket.ev.on("labels.association" as any, async (ev: any) => {
+        this.socket.ev.on("labels.association", async (ev) => {
             try {
                 const assoc = ev?.association;
                 if (!assoc || assoc.type !== "label_jid") return; // etiqueta em conversa (o Baileys usa "label_jid")
@@ -160,7 +167,7 @@ export class WhatsAppInstance {
             }
 
             if (connection === "close") {
-                const code = (lastDisconnect?.error as any)?.output?.statusCode;
+                const code = (lastDisconnect?.error as Boom | undefined)?.output?.statusCode;
                 const isLoggedOut = code === DisconnectReason.loggedOut;
 
                 if (isLoggedOut) {
@@ -259,8 +266,8 @@ export class WhatsAppInstance {
 
                 // Força a ressincronização do estado do app para trazer as etiquetas
                 setTimeout(() => {
-                    (this.socket as any)?.resyncAppState?.(["regular", "regular_low", "regular_high"], true)
-                        .catch((e: any) => logger.error("Instance", "Label resync failed:", e?.message || e));
+                    this.socket?.resyncAppState(["regular", "regular_low", "regular_high"], true)
+                        .catch((e: unknown) => logger.error("Instance", "Label resync failed:", errorMessage(e)));
                 }, 8000);
 
                 try {
@@ -288,8 +295,8 @@ export class WhatsAppInstance {
 
                 logger.success("Instance", `Session ${this.sessionId} connected and synced successfully`);
             }
-        } catch (error: any) {
-            if (error.code === 'P2025') {
+        } catch (error) {
+            if (errorCode(error) === 'P2025') {
                 logger.warn("Instance", `Session ${this.sessionId} record not found during update. Stopping.`);
                 this.socket?.end(undefined);
                 this.socket = null;
@@ -301,12 +308,12 @@ export class WhatsAppInstance {
 
     async requestPairingCode(phoneNumber: string) {
         if (!this.socket) {
-            throw new Error("Socket not initialized");
+            throw new Error("O WhatsApp ainda não foi iniciado nesta sessão");
         }
 
         try {
             const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-            if (!cleanNumber) throw new Error("Invalid phone number");
+            if (!cleanNumber) throw new Error("Número de telefone inválido");
 
             const code = await this.socket.requestPairingCode(cleanNumber);
             this.pairingCode = code;

@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 /**
  * Envio de e-mails transacionais pelo Resend (https://resend.com).
  *
@@ -19,7 +20,7 @@ export async function sendMail(mail: Mail): Promise<boolean> {
     const from = process.env.EMAIL_FROM || "Sai aê <nao-responda@saiae.com.br>";
 
     if (!key) {
-        console.warn(`[mailer] RESEND_API_KEY não definida. E-mail NÃO enviado.\nPara: ${mail.to}\nAssunto: ${mail.subject}\n${mail.text}`);
+        logger.warn("Mailer", `RESEND_API_KEY não definida. E-mail NÃO enviado.\nPara: ${mail.to}\nAssunto: ${mail.subject}\n${mail.text}`);
         return false;
     }
 
@@ -31,12 +32,12 @@ export async function sendMail(mail: Mail): Promise<boolean> {
             signal: AbortSignal.timeout(15000),
         });
         if (!res.ok) {
-            console.error("[mailer] Resend recusou o envio:", res.status, (await res.text()).slice(0, 300));
+            logger.error("Mailer", "Resend recusou o envio:", res.status, (await res.text()).slice(0, 300));
             return false;
         }
         return true;
     } catch (e) {
-        console.error("[mailer] Falha ao enviar e-mail:", e);
+        logger.error("Mailer", "Falha ao enviar e-mail:", e);
         return false;
     }
 }
