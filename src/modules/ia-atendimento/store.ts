@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import type { WindowStore } from "@/modules/whatsapp/cloud/window";
 
 /**
@@ -91,15 +92,15 @@ export const prismaStore: IaStore = {
     },
 
     async pausar(conversaId, ate) {
-        await prisma.iaConversa.update({ where: { id: conversaId }, data: { estado: "humano", pausadaAte: ate } });
+        await prisma.iaConversa.update({ where: { id: conversaId }, data: dadosPausar(ate) });
     },
 
     async retomar(conversaId) {
-        await prisma.iaConversa.update({ where: { id: conversaId }, data: { estado: "ia", pausadaAte: null } });
+        await prisma.iaConversa.update({ where: { id: conversaId }, data: dadosRetomar() });
     },
 
     async retomarLoja(lojaCodigo) {
-        const r = await prisma.iaConversa.updateMany({ where: { lojaCodigo, estado: "humano" }, data: { estado: "ia", pausadaAte: null } });
+        const r = await prisma.iaConversa.updateMany({ where: { lojaCodigo, estado: "humano" }, data: dadosRetomar() });
         return r.count;
     },
 };

@@ -12,20 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, CalendarClock, RefreshCw, Pencil, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, CalendarClock, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import moment from "moment-timezone";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
     Dialog,
     DialogContent,
@@ -37,18 +26,9 @@ import {
 import { SearchFilter } from "@/components/dashboard/search-filter";
 import { useSession } from "@/components/dashboard/session-provider";
 import { SessionGuard } from "@/components/dashboard/session-guard";
-
-interface ScheduledMessage {
-    id: string;
-    jid: string;
-    content: string | null;
-    sendAt: string;
-    status: string;
-    mediaUrl?: string;
-    mediaType?: string;
-    cronExpression?: string;
-    recurrenceRule?: string;
-}
+import { parseRecurrence, buildCronData } from "./_components/recurrence";
+import { RecurrenceForm } from "./_components/recurrence-form";
+import { PendingList, HistoryList, DeleteDialog, type ScheduledMessage } from "./_components/message-list";
 
 export default function SchedulerPage() {
     const { sessionId: selectedSessionId } = useSession();
@@ -134,28 +114,6 @@ export default function SchedulerPage() {
         }
     };
 
-    const parseRecurrence = (ruleStr: string | undefined, cronExpr: string | undefined, setRecurring: any, setType: any, setMins: any, setHrs: any, setDays: any, setCron: any) => {
-        if (!cronExpr) {
-            setRecurring("once");
-            return;
-        }
-        setRecurring("recurring");
-        setCron(cronExpr);
-        if (ruleStr) {
-            try {
-                const rule = JSON.parse(ruleStr);
-                setType(rule.type || "cron");
-                if (rule.type === "minutes") setMins(rule.value);
-                if (rule.type === "hours") setHrs(rule.value);
-                if (rule.type === "days") setDays(rule.value);
-            } catch(e) {
-                setType("cron");
-            }
-        } else {
-            setType("cron");
-        }
-    };
-
     const handleEdit = (msg: ScheduledMessage) => {
         setEditId(msg.id);
         const isGroup = msg.jid.includes("@g.us");
@@ -173,38 +131,12 @@ export default function SchedulerPage() {
         const localTime = moment.tz(msg.sendAt, systemTimezone).format('HH:mm');
         setEditSendTime(localTime);
         
-        parseRecurrence(msg.recurrenceRule, msg.cronExpression, setEditIsRecurring, setEditRecurrenceType, setEditRecurringMinutes, setEditRecurringHours, setEditRecurringDays, setEditCustomCron);
+        parseRecurrence(msg.recurrenceRule, msg.cronExpression, {
+            setRecurring: setEditIsRecurring, setType: setEditRecurrenceType, setMins: setEditRecurringMinutes,
+            setHrs: setEditRecurringHours, setDays: setEditRecurringDays, setCron: setEditCustomCron,
+        });
 
         setIsEditOpen(true);
-    };
-
-    const buildCronData = (isRec: string, type: string, mins: number, hrs: number, days: number[], custom: string, finalSendAt: string) => {
-        if (isRec === "once") return { cronExpression: null, recurrenceRule: null };
-        
-        let cron = "";
-        const rule: any = { type };
-        
-        if (type === "minutes") {
-            cron = `*/${mins} * * * *`;
-            rule.value = mins;
-        } else if (type === "hours") {
-            cron = `0 */${hrs} * * *`;
-            rule.value = hrs;
-        } else if (type === "days") {
-            // Because finalSendAt for days is constructed as YYYY-MM-DDT14:30:00, 
-            // parsing it via Date locally gives correct local hours and minutes.
-            const date = new Date(finalSendAt);
-            const m = date.getMinutes();
-            const h = date.getHours();
-            const dStr = days.length > 0 ? days.join(',') : '*';
-            cron = `${m} ${h} * * ${dStr}`;
-            rule.value = days;
-        } else {
-            cron = custom;
-            rule.value = custom;
-        }
-        
-        return { cronExpression: cron, recurrenceRule: JSON.stringify(rule) };
     };
 
     const handleSaveSchedule = async () => {
@@ -362,113 +294,6 @@ export default function SchedulerPage() {
         m.jid.includes(searchTerm)
     );
 
-    const renderRecurrenceForm = (
-        isRec: string, setRec: any, 
-        type: string, setType: any, 
-        mins: number, setMins: any, 
-        hrs: number, setHrs: any, 
-        days: number[], setDays: any, 
-        cron: string, setCron: any,
-        sendAtStr: string, setSendAtStr: any,
-        sendTimeStr: string, setSendTimeStr: any
-    ) => (
-        <div className="space-y-4 border p-4 rounded-md bg-zinc-50 mt-4">
-            <Label className="font-semibold text-base">Tipo de agendamento</Label>
-            <RadioGroup value={isRec} onValueChange={setRec} className="flex gap-4">
-                <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="once" id={`r-once-${type}`} />
-                    <Label htmlFor={`r-once-${type}`}>Único</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="recurring" id={`r-rec-${type}`} />
-                    <Label htmlFor={`r-rec-${type}`}>Recorrente</Label>
-                </div>
-            </RadioGroup>
-
-            {isRec === "once" && (
-                <div className="space-y-2 mt-4 pt-4 border-t border-zinc-200">
-                    <Label>Enviar em (data e hora)</Label>
-                    <Input type="datetime-local" value={sendAtStr} onChange={e => setSendAtStr(e.target.value)} />
-                    <p className="text-xs text-muted-foreground">A data e hora exatas em que esta mensagem será enviada.</p>
-                </div>
-            )}
-
-            {isRec === "recurring" && (
-                <div className="space-y-4 pt-4 mt-2 border-t border-zinc-200">
-                    <Label className="font-medium">Intervalo de repetição</Label>
-                    <Select value={type} onValueChange={setType}>
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="minutes">A cada X minutos</SelectItem>
-                            <SelectItem value="hours">A cada X horas</SelectItem>
-                            <SelectItem value="days">Dias específicos da semana</SelectItem>
-                            <SelectItem value="cron">Cron personalizado</SelectItem>
-                        </SelectContent>
-                    </Select>
-
-                    {type === "minutes" && (
-                        <div className="flex items-center gap-2">
-                            <Label>A cada</Label>
-                            <Input type="number" min={1} value={mins} onChange={e => setMins(parseInt(e.target.value) || 1)} className="w-20" />
-                            <Label>Minutos</Label>
-                        </div>
-                    )}
-
-                    {type === "hours" && (
-                        <div className="flex items-center gap-2">
-                            <Label>A cada</Label>
-                            <Input type="number" min={1} value={hrs} onChange={e => setHrs(parseInt(e.target.value) || 1)} className="w-20" />
-                            <Label>Horas</Label>
-                        </div>
-                    )}
-
-                    {type === "days" && (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Selecione os dias</Label>
-                                <div className="flex flex-wrap gap-4">
-                                    {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
-                                        <div key={d} className="flex items-center space-x-2">
-                                            <Checkbox 
-                                                id={`d-${d}-${type}`} 
-                                                checked={days.includes(i)}
-                                                onCheckedChange={(c) => {
-                                                    if (c) setDays([...days, i]);
-                                                    else setDays(days.filter(x => x !== i));
-                                                }}
-                                            />
-                                            <Label htmlFor={`d-${d}-${type}`}>{d}</Label>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="space-y-2 pt-2 border-t border-zinc-200">
-                                <Label>Horário do dia</Label>
-                                <Input type="time" value={sendTimeStr} onChange={e => setSendTimeStr(e.target.value)} className="w-32" />
-                            </div>
-                        </div>
-                    )}
-
-                    {type === "cron" && (
-                        <div className="space-y-2">
-                            <Label>Expressão cron</Label>
-                            <Input value={cron} onChange={e => setCron(e.target.value)} placeholder="0 12 * * *" />
-                        </div>
-                    )}
-                    
-                    {type !== "days" && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                            
-                            O agendamento será avaliado a partir do horário atual.
-                        </p>
-                    )}
-                </div>
-            )}
-        </div>
-    );
-
     return (
         <SessionGuard>
             <div className="space-y-6">
@@ -541,16 +366,16 @@ export default function SchedulerPage() {
                                 )}
                             </div>
                             
-                            {renderRecurrenceForm(
-                                isRecurring, setIsRecurring, 
-                                recurrenceType, setRecurrenceType, 
-                                recurringMinutes, setRecurringMinutes, 
-                                recurringHours, setRecurringHours, 
-                                recurringDays, setRecurringDays, 
-                                customCron, setCustomCron,
-                                newSendAt, setNewSendAt,
-                                newSendTime, setNewSendTime
-                            )}
+                            <RecurrenceForm
+                                isRec={isRecurring} setRec={setIsRecurring}
+                                type={recurrenceType} setType={setRecurrenceType}
+                                mins={recurringMinutes} setMins={setRecurringMinutes}
+                                hrs={recurringHours} setHrs={setRecurringHours}
+                                days={recurringDays} setDays={setRecurringDays}
+                                cron={customCron} setCron={setCustomCron}
+                                sendAtStr={newSendAt} setSendAtStr={setNewSendAt}
+                                sendTimeStr={newSendTime} setSendTimeStr={setNewSendTime}
+                            />
 
                             <div className="space-y-2 mt-4">
                                 <Label>Mensagem (opcional)</Label>
@@ -593,71 +418,14 @@ export default function SchedulerPage() {
                         <TabsTrigger value="history">Histórico</TabsTrigger>
                     </TabsList>
                     <TabsContent value="pending" className="mt-0">
-                        {loading ? <div className="text-center p-8">Carregando...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-zinc-50">Nenhuma mensagem pendente.</div> : (
-                            <div className="grid gap-4">
-                                {filteredMessages.map(msg => (
-                                    <Card key={msg.id}>
-                                        <CardContent className="flex flex-col sm:flex-row justify-between p-4 gap-4">
-                                            <div>
-                                                <div className="font-bold flex items-center gap-2">
-                                                    {msg.jid.split('@')[0]}
-                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Grupo</span> : null}
-                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Canal</span> : null}
-                                                    <span className="text-xs px-2 py-0.5 rounded font-normal bg-yellow-100 text-yellow-800">{msg.status}</span>
-                                                    {msg.cronExpression && <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Recorrente</span>}
-                                                </div>
-                                                <div className="text-sm font-medium mt-1">{msg.content || "[Somente mídia]"}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">Próxima execução: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button variant="ghost" size="sm" onClick={() => handleEdit(msg)}>Editar</Button>
-                                                <Button variant="ghost" size="icon" onClick={() => setDeleteId(msg.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
+                        <PendingList messages={filteredMessages} loading={loading} timezone={systemTimezone} onEdit={handleEdit} onDelete={setDeleteId} />
                     </TabsContent>
                     <TabsContent value="history" className="mt-0">
-                        {loading ? <div className="text-center p-8">Carregando...</div> : filteredMessages.length === 0 ? <div className="text-center p-8 text-muted-foreground border rounded bg-zinc-50">Nenhum histórico encontrado.</div> : (
-                            <div className="grid gap-4">
-                                {filteredMessages.map(msg => (
-                                    <Card key={msg.id} className="opacity-80">
-                                        <CardContent className="flex flex-col sm:flex-row justify-between p-4 gap-4">
-                                            <div>
-                                                <div className="font-bold flex items-center gap-2">
-                                                    {msg.jid.split('@')[0]}
-                                                    {msg.jid.includes("@g.us") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-zinc-100 text-zinc-800">Grupo</span> : null}
-                                                    {msg.jid.includes("@newsletter") ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-orange-100 text-orange-800">Canal</span> : null}
-                                                    {msg.status === 'SENT' ? <span className="text-xs px-2 py-0.5 rounded font-normal bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/>  Enviadas</span> : <span className="text-xs px-2 py-0.5 rounded font-normal bg-red-100 text-red-800 flex items-center gap-1"><XCircle className="w-3 h-3"/>  Falhas</span>}
-                                                </div>
-                                                <div className="text-sm font-medium mt-1">{msg.content || "[Somente mídia]"}</div>
-                                                <div className="text-xs text-muted-foreground mt-1">Processado em: {moment(msg.sendAt).tz(systemTimezone).format('YYYY-MM-DD HH:mm:ss')}</div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Button variant="ghost" size="icon" onClick={() => setDeleteId(msg.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
+                        <HistoryList messages={filteredMessages} loading={loading} timezone={systemTimezone} onDelete={setDeleteId} />
                     </TabsContent>
                 </Tabs>
 
-                <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Excluir registro?</AlertDialogTitle>
-                            <AlertDialogDescription>Tem certeza de que deseja excluir este registro de agendamento?</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmDelete} className="bg-red-600">Excluir</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                <DeleteDialog open={!!deleteId} onCancel={() => setDeleteId(null)} onConfirm={confirmDelete} />
 
                 <Dialog open={isEditOpen} onOpenChange={o => !o && setIsEditOpen(false)}>
                     <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -686,16 +454,16 @@ export default function SchedulerPage() {
                                 <Input value={editJid} onChange={e => setEditJid(e.target.value)} placeholder={editJidType === 'group' ? "120363... (ID do grupo)" : editJidType === 'newsletter' ? "120363... (ID do canal)" : "62812345678"} />
                             </div>
                             
-                            {renderRecurrenceForm(
-                                editIsRecurring, setEditIsRecurring, 
-                                editRecurrenceType, setEditRecurrenceType, 
-                                editRecurringMinutes, setEditRecurringMinutes, 
-                                editRecurringHours, setEditRecurringHours, 
-                                editRecurringDays, setEditRecurringDays, 
-                                editCustomCron, setEditCustomCron,
-                                editSendAt, setEditSendAt,
-                                editSendTime, setEditSendTime
-                            )}
+                            <RecurrenceForm
+                                isRec={editIsRecurring} setRec={setEditIsRecurring}
+                                type={editRecurrenceType} setType={setEditRecurrenceType}
+                                mins={editRecurringMinutes} setMins={setEditRecurringMinutes}
+                                hrs={editRecurringHours} setHrs={setEditRecurringHours}
+                                days={editRecurringDays} setDays={setEditRecurringDays}
+                                cron={editCustomCron} setCron={setEditCustomCron}
+                                sendAtStr={editSendAt} setSendAtStr={setEditSendAt}
+                                sendTimeStr={editSendTime} setSendTimeStr={setEditSendTime}
+                            />
 
                             <div className="space-y-2 mt-4">
                                 <Label>Mensagem (opcional)</Label>

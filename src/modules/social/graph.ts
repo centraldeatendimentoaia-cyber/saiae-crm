@@ -18,14 +18,29 @@ export class GraphError extends Error {
 
 type Params = Record<string, string | number | boolean | undefined>;
 
-async function call<T = any>(method: "GET" | "POST", path: string, token: string, params: Params = {}): Promise<T> {
+// Formas (parciais) das respostas da Graph API usadas aqui; todo campo é opcional porque a Meta pode omiti-lo.
+interface GraphIgAccount { id?: string; username?: string; name?: string; profile_picture_url?: string }
+interface GraphPage {
+    id?: string;
+    name?: string;
+    access_token?: string;
+    picture?: { data?: { url?: string } };
+    instagram_business_account?: GraphIgAccount;
+    connected_instagram_account?: GraphIgAccount;
+}
+interface GraphList<T> { data?: T[]; paging?: { cursors?: { after?: string }; next?: string } }
+interface GraphId { id: string }
+interface GraphPostId { id?: string; post_id?: string }
+interface GraphErrorBody { error?: { error_user_msg?: string; message?: string; code?: number; error_subcode?: number } }
+
+async function call<T = unknown>(method: "GET" | "POST", path: string, token: string, params: Params = {}): Promise<T> {
     const body = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined) body.set(k, String(v));
     body.set("access_token", token);
 
     const url = method === "GET" ? `${BASE}${path}?${body}` : `${BASE}${path}`;
     const res = await fetch(url, method === "GET" ? undefined : { method, body });
-    const json: any = await res.json().catch(() => ({}));
+    const json = (await res.json().catch(() => ({}))) as GraphErrorBody;
     if (!res.ok || json?.error) {
         const e = json?.error || {};
         throw new GraphError(e.error_user_msg || e.message || `Erro ${res.status} da Meta`, e.code, e.error_subcode);
@@ -57,9 +72,9 @@ export interface DiscoveredAccount {
 const IG_FIELDS = "id,username,name,profile_picture_url";
 
 /** Plano B: quando o campo da Página vem vazio, pergunta direto pelas contas do Instagram ligadas a ela. */
-async function instagramViaPage(pageId: string, pageToken: string): Promise<any | undefined> {
+async function instagramViaPage(pageId: string, pageToken: string): Promise<GraphIgAccount | undefined> {
     try {
-        const r: any = await call("GET", `/${pageId}/instagram_accounts`, pageToken, { fields: IG_FIELDS, limit: 1 });
+        const r = await call<GraphList<GraphIgAccount>>("GET", `/${pageId}/instagram_accounts`, pageToken, { fields: IG_FIELDS, limit: 1 });
         return r?.data?.[0];
     } catch {
         return undefined;
@@ -71,14 +86,14 @@ export const pagesWithoutInstagram = (found: DiscoveredAccount[]) =>
     found.filter((a) => a.provider === "facebook" && !found.some((b) => b.provider === "instagram" && b.pageId === a.pageId)).map((a) => a.name);
 
 /** Registra a Página (e o Instagram ligado a ela) em `out`, sem repetir Páginas já vistas. */
-async function addPage(out: DiscoveredAccount[], seen: Set<string>, p: any, pageToken: string) {
+async function addPage(out: DiscoveredAccount[], seen: Set<string>, p: GraphPage, pageToken: string) {
     if (!p?.id || !pageToken || seen.has(p.id)) return;
     seen.add(p.id);
-    out.push({ provider: "facebook", externalId: p.id, pageId: p.id, name: p.name, picture: p.picture?.data?.url, accessToken: pageToken });
+    out.push({ provider: "facebook", externalId: p.id, pageId: p.id, name: p.name ?? "", picture: p.picture?.data?.url, accessToken: pageToken });
     let ig = p.instagram_business_account || p.connected_instagram_account;
     if (!ig?.id) ig = await instagramViaPage(p.id, pageToken); // vínculo feito pelo Gerenciador de Negócios
     if (ig?.id) {
-        out.push({ provider: "instagram", externalId: ig.id, pageId: p.id, name: ig.name || p.name, username: ig.username, picture: ig.profile_picture_url, accessToken: pageToken });
+        out.push({ provider: "instagram", externalId: ig.id, pageId: p.id, name: ig.name || p.name || "", username: ig.username, picture: ig.profile_picture_url, accessToken: pageToken });
     }
 }
 
@@ -89,26 +104,26 @@ const PAGE_FIELDS = `id,name,picture.type(large){url},instagram_business_account
  * Precisa da permissão business_management; sem ela, ou sem portfólios, simplesmente não acrescenta nada.
  */
 async function addBusinessPages(out: DiscoveredAccount[], seen: Set<string>, userToken: string) {
-    let businesses: any[] = [];
+    let businesses: { id?: string }[] = [];
     try {
-        businesses = ((await call("GET", "/me/businesses", userToken, { fields: "id,name", limit: 100 })) as any).data || [];
+        businesses = (await call<GraphList<{ id?: string }>>("GET", "/me/businesses", userToken, { fields: "id,name", limit: 100 })).data || [];
     } catch {
         return;
     }
     for (const b of businesses) {
         for (const edge of ["owned_pages", "client_pages"]) {
-            let pages: any[] = [];
+            let pages: GraphPage[] = [];
             try {
-                pages = ((await call("GET", `/${b.id}/${edge}`, userToken, { fields: PAGE_FIELDS, limit: 100 })) as any).data || [];
+                pages = (await call<GraphList<GraphPage>>("GET", `/${b.id}/${edge}`, userToken, { fields: PAGE_FIELDS, limit: 100 })).data || [];
             } catch {
                 continue;
             }
             for (const p of pages) {
-                if (seen.has(p.id)) continue;
+                if (!p.id || seen.has(p.id)) continue;
                 try {
                     // o token da Página sai do próprio usuário (precisa de função/tarefa na Página dentro do portfólio)
-                    const t: any = await call("GET", `/${p.id}`, userToken, { fields: "access_token" });
-                    await addPage(out, seen, p, t.access_token);
+                    const t = await call<{ access_token?: string }>("GET", `/${p.id}`, userToken, { fields: "access_token" });
+                    await addPage(out, seen, p, t.access_token ?? "");
                 } catch {
                     /* sem acesso a esta Página */
                 }
@@ -125,8 +140,8 @@ export async function discoverAccounts(userToken: string): Promise<DiscoveredAcc
     let params: Params = { fields: `${PAGE_FIELDS},access_token`, limit: 100 };
     // paginação simples por cursor
     for (let i = 0; i < 10 && path; i++) {
-        const page: any = await call("GET", path, userToken, params);
-        for (const p of page.data || []) await addPage(out, seen, p, p.access_token);
+        const page = await call<GraphList<GraphPage>>("GET", path, userToken, params);
+        for (const p of page.data || []) await addPage(out, seen, p, p.access_token ?? "");
         const after = page.paging?.cursors?.after;
         if (page.paging?.next && after) params = { ...params, after };
         else path = undefined;
@@ -140,7 +155,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Espera o container do Instagram ficar FINISHED (imagens costumam levar poucos segundos). */
 async function waitContainer(id: string, token: string, tries = 20, everyMs = 3000) {
     for (let i = 0; i < tries; i++) {
-        const r: any = await call("GET", `/${id}`, token, { fields: "status_code,status" });
+        const r = await call<{ status_code?: string; status?: string }>("GET", `/${id}`, token, { fields: "status_code,status" });
         if (r.status_code === "FINISHED") return;
         if (r.status_code === "ERROR" || r.status_code === "EXPIRED") throw new GraphError(`Instagram recusou a mídia (${r.status || r.status_code}).`);
         await sleep(everyMs);
@@ -165,27 +180,27 @@ export async function publishInstagram(opts: {
     let creation: string;
 
     if (type === "STORY") {
-        const c: any = await call("POST", `/${igId}/media`, token, { image_url: imageUrls[0], media_type: "STORIES" });
+        const c = await call<GraphId>("POST", `/${igId}/media`, token, { image_url: imageUrls[0], media_type: "STORIES" });
         creation = c.id;
     } else if (imageUrls.length === 1) {
-        const c: any = await call("POST", `/${igId}/media`, token, { image_url: imageUrls[0], caption });
+        const c = await call<GraphId>("POST", `/${igId}/media`, token, { image_url: imageUrls[0], caption });
         creation = c.id;
     } else {
         const children: string[] = [];
         for (const u of imageUrls) {
-            const c: any = await call("POST", `/${igId}/media`, token, { image_url: u, is_carousel_item: true });
+            const c = await call<GraphId>("POST", `/${igId}/media`, token, { image_url: u, is_carousel_item: true });
             children.push(c.id);
         }
         for (const id of children) await waitContainer(id, token);
-        const c: any = await call("POST", `/${igId}/media`, token, { media_type: "CAROUSEL", children: children.join(","), caption });
+        const c = await call<GraphId>("POST", `/${igId}/media`, token, { media_type: "CAROUSEL", children: children.join(","), caption });
         creation = c.id;
     }
 
     await waitContainer(creation, token);
-    const pub: any = await call("POST", `/${igId}/media_publish`, token, { creation_id: creation });
+    const pub = await call<GraphId>("POST", `/${igId}/media_publish`, token, { creation_id: creation });
     let url: string | undefined;
     try {
-        const m: any = await call("GET", `/${pub.id}`, token, { fields: "permalink" });
+        const m = await call<{ permalink?: string }>("GET", `/${pub.id}`, token, { fields: "permalink" });
         url = m.permalink;
     } catch {
         /* o link é só conveniência */
@@ -204,24 +219,24 @@ export async function publishFacebook(opts: {
     const { pageId, token, type, imageUrls, caption } = opts;
 
     if (type === "STORY") {
-        const photo: any = await call("POST", `/${pageId}/photos`, token, { url: imageUrls[0], published: false });
-        const story: any = await call("POST", `/${pageId}/photo_stories`, token, { photo_id: photo.id });
+        const photo = await call<GraphId>("POST", `/${pageId}/photos`, token, { url: imageUrls[0], published: false });
+        const story = await call<GraphPostId>("POST", `/${pageId}/photo_stories`, token, { photo_id: photo.id });
         return { id: String(story.post_id || story.id || photo.id) };
     }
 
     if (imageUrls.length === 1) {
-        const r: any = await call("POST", `/${pageId}/photos`, token, { url: imageUrls[0], caption });
+        const r = await call<GraphPostId>("POST", `/${pageId}/photos`, token, { url: imageUrls[0], caption });
         const id = String(r.post_id || r.id);
         return { id, url: `https://www.facebook.com/${id}` };
     }
 
     const photoIds: string[] = [];
     for (const u of imageUrls) {
-        const p: any = await call("POST", `/${pageId}/photos`, token, { url: u, published: false });
+        const p = await call<GraphId>("POST", `/${pageId}/photos`, token, { url: u, published: false });
         photoIds.push(p.id);
     }
     const attached: Params = { message: caption };
     photoIds.forEach((id, i) => (attached[`attached_media[${i}]`] = JSON.stringify({ media_fbid: id })));
-    const r: any = await call("POST", `/${pageId}/feed`, token, attached);
+    const r = await call<GraphId>("POST", `/${pageId}/feed`, token, attached);
     return { id: r.id, url: `https://www.facebook.com/${r.id}` };
 }

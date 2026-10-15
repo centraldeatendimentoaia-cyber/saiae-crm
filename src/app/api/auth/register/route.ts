@@ -19,7 +19,7 @@ export async function POST(req: Request) {
         // @ts-ignore
         if (systemConfig && systemConfig.enableRegistration === false) {
             return NextResponse.json(
-                { error: "Registration is currently disabled by the administrator" },
+                { error: "O cadastro está desativado no momento pelo administrador" },
                 { status: 403 }
             );
         }
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 
         if (existingUser) {
             return NextResponse.json(
-                { error: "User with this email already exists" },
+                { error: "Já existe um usuário com este e-mail" },
                 { status: 400 }
             );
         }
@@ -52,20 +52,20 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             success: true,
-            message: "User registered successfully",
+            message: "Usuário cadastrado com sucesso",
             user: { id: newUser.id, name: newUser.name, email: newUser.email },
         });
     } catch (error: any) {
         if (error instanceof z.ZodError) {
             return NextResponse.json(
-                { error: "Invalid registration data provided" },
+                { error: "Dados de cadastro inválidos" },
                 { status: 400 }
             );
         }
 
         console.error("Registration error:", error);
         return NextResponse.json(
-            { error: "Internal server error during registration" },
+            { error: "Erro interno ao realizar o cadastro" },
             { status: 500 }
         );
     }
