@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const h = vi.hoisted(() => ({
-    prisma: { user: { findUnique: vi.fn(), update: vi.fn() } },
+    prisma: { user: { findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() } },
 }));
 vi.mock("./prisma", () => ({ prisma: h.prisma }));
 vi.mock("./auth", () => ({ auth: vi.fn() }));
@@ -33,17 +33,17 @@ describe("api-key helpers", () => {
 describe("validateApiKey", () => {
     it("sem cabeçalho retorna null sem consultar o banco", async () => {
         expect(await validateApiKey(req())).toBeNull();
-        expect(h.prisma.user.findUnique).not.toHaveBeenCalled();
+        expect(h.prisma.user.findFirst).not.toHaveBeenCalled();
     });
     it("chave com hash no banco autentica sem tocar no legado", async () => {
-        h.prisma.user.findUnique.mockResolvedValueOnce(USER);
+        h.prisma.user.findFirst.mockResolvedValueOnce(USER);
         expect(await validateApiKey(req("wag_x"))).toEqual(USER);
-        expect(h.prisma.user.findUnique).toHaveBeenCalledTimes(1);
-        expect(h.prisma.user.findUnique.mock.calls[0][0].where).toEqual({ apiKeyHash: hashApiKey("wag_x") });
+        expect(h.prisma.user.findFirst).toHaveBeenCalledTimes(1);
+        expect(h.prisma.user.findFirst.mock.calls[0][0].where).toEqual({ apiKeyHash: hashApiKey("wag_x") });
         expect(h.prisma.user.update).not.toHaveBeenCalled();
     });
     it("chave legada em texto puro autentica e migra para hash, apagando o texto puro", async () => {
-        h.prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(USER);
+        h.prisma.user.findFirst.mockResolvedValueOnce(null); h.prisma.user.findUnique.mockResolvedValueOnce(USER);
         expect(await validateApiKey(req("wag_old"))).toEqual(USER);
         expect(h.prisma.user.update).toHaveBeenCalledWith({
             where: { id: "u1" },
@@ -51,7 +51,7 @@ describe("validateApiKey", () => {
         });
     });
     it("chave desconhecida retorna null", async () => {
-        h.prisma.user.findUnique.mockResolvedValue(null);
+        h.prisma.user.findFirst.mockResolvedValue(null); h.prisma.user.findUnique.mockResolvedValue(null);
         expect(await validateApiKey(req("wag_nope"))).toBeNull();
         expect(h.prisma.user.update).not.toHaveBeenCalled();
     });
