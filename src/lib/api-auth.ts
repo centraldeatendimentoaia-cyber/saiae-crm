@@ -27,7 +27,7 @@ export async function validateApiKey(request: NextRequest) {
 
     try {
         const select = { id: true, email: true, name: true, role: true } as const;
-        const hashed = await prisma.user.findUnique({ where: { apiKeyHash: hashApiKey(apiKey) }, select });
+        const hashed = await prisma.user.findFirst({ where: { apiKeyHash: hashApiKey(apiKey) }, select });
         if (hashed) return hashed;
 
         // Legado: chave ainda em texto puro. Valida e migra para hash no primeiro uso.

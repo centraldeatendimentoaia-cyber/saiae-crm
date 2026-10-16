@@ -42,7 +42,7 @@ model User {
   password String
   role     Role    @default(OWNER)
   apiKey   String? @unique // LEGADO (texto puro): só existe até o primeiro uso da chave, quando migra para apiKeyHash
-  apiKeyHash String? @unique // SHA-256 da chave de API (a chave em si só é mostrada na criação)
+  apiKeyHash String? // SHA-256 da chave de API (a chave em si só é mostrada na criação)
   apiKeyHint String? // chave mascarada para exibição (prefixo + últimos 4 caracteres)
 
   // Assinatura (contas existentes ficam ILIMITADO)
@@ -65,6 +65,7 @@ model User {
   stripeSubscriptions StripeSubscription[]
 
   @@index([stripeCustomerId])
+  @@index([apiKeyHash])
 }
 
 model Session {
