@@ -42,19 +42,19 @@ function cenario(inicial: { vinculos?: Record<string, string>; instancias?: Reco
 
 describe("status", () => {
     it("barraca sem vínculo: sem_sessao", async () => {
-        expect(await executarAcaoConexao(pedido("status"), cenario().deps)).toEqual({ estado: "sem_sessao", qr: null, numero: null });
+        expect(await executarAcaoConexao(pedido("status"), cenario().deps)).toEqual({ estado: "sem_sessao", qr: null, numero: null, avisos: [] });
     });
     it("lendo o QR: aguardando_qr com o texto bruto", async () => {
         const c = cenario({ vinculos: { [A]: "sA" }, instancias: { sA: { status: "SCAN_QR", qr: "2@abc", socket: null } } });
-        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "aguardando_qr", qr: "2@abc", numero: null });
+        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "aguardando_qr", qr: "2@abc", numero: null, avisos: [] });
     });
     it("conectado: número só com dígitos, sem QR", async () => {
         const c = cenario({ vinculos: { [A]: "sA" }, instancias: { sA: { status: "CONNECTED", qr: "velho", socket: { user: { id: "5561999990001:12@s.whatsapp.net" }, logout: async () => {} } } } });
-        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "conectado", qr: null, numero: "5561999990001" });
+        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "conectado", qr: null, numero: "5561999990001", avisos: [] });
     });
     it("vinculado mas sem instância (parada ou caiu): desconectado", async () => {
         const c = cenario({ vinculos: { [A]: "sA" } });
-        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "desconectado", qr: null, numero: null });
+        expect(await executarAcaoConexao(pedido("status"), c.deps)).toEqual({ estado: "desconectado", qr: null, numero: null, avisos: [] });
     });
 });
 
@@ -62,7 +62,7 @@ describe("iniciar", () => {
     it("primeira vez: cria a conta técnica, a sessão e o vínculo, inicia e devolve o QR", async () => {
         const c = cenario();
         const r = await executarAcaoConexao(pedido("iniciar"), c.deps);
-        expect(r).toEqual({ estado: "aguardando_qr", qr: "2@qr-bruto", numero: null });
+        expect(r).toEqual({ estado: "aguardando_qr", qr: "2@qr-bruto", numero: null, avisos: [] });
         expect(c.usuarios).toHaveLength(1);
         expect(c.sessoesCriadas).toEqual([`saiae-${A}`]);
         expect(c.vinculos[A]).toBe(`saiae-${A}`);
@@ -130,8 +130,8 @@ describe("historico e isolamento", () => {
         expect(JSON.stringify(a)).not.toContain("qr-da-B");
         expect(a.estado).toBe("desconectado");
     });
-    it("status não traz o campo avisos", async () => {
+    it("status traz avisos vazio, como no contrato v1", async () => {
         const c = cenario({ vinculos: { [A]: "sA" } });
-        expect(await executarAcaoConexao(pedido("status"), c.deps)).not.toHaveProperty("avisos");
+        expect((await executarAcaoConexao(pedido("status"), c.deps)).avisos).toEqual([]);
     });
 });

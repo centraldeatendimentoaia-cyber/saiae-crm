@@ -200,13 +200,15 @@ async function historico(barracaId: string, deps: ConexaoDeps): Promise<Resposta
 /** Executa a ação sobre a sessão da barraca. Nunca toca outra barraca. */
 export async function executarAcaoConexao(pedido: PedidoConexao, over: Partial<ConexaoDeps> = {}): Promise<RespostaConexao> {
     const deps: ConexaoDeps = { ...depsPadrao(), ...over };
+    // Contrato v1: `avisos` vem sempre; só `historico` o preenche, nas outras ações é [].
+    const comAvisosVazios = async (r: Promise<RespostaConexao>): Promise<RespostaConexao> => ({ avisos: [], ...(await r) });
     switch (pedido.acao) {
         case "iniciar":
-            return iniciar(pedido.barraca_id, deps);
+            return comAvisosVazios(iniciar(pedido.barraca_id, deps));
         case "status":
-            return estadoAtual(pedido.barraca_id, deps);
+            return comAvisosVazios(estadoAtual(pedido.barraca_id, deps));
         case "desconectar":
-            return desconectar(pedido.barraca_id, deps);
+            return comAvisosVazios(desconectar(pedido.barraca_id, deps));
         case "historico":
             return historico(pedido.barraca_id, deps);
     }
