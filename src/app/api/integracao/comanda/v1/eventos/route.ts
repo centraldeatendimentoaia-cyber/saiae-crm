@@ -3,9 +3,11 @@ import { logger } from "@/lib/logger";
 import { loadSecrets } from "@/modules/integracao/comanda/secrets";
 import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/modules/integracao/comanda/signature";
 import { validateEvento } from "@/modules/integracao/comanda/schema";
-import { isStale, markSeen, recordSequence, sequenceKey, wasSeen } from "@/modules/integracao/comanda/state";
+import { isStale, markSeen, recordSequence, sequenceKey, unmarkSeen, wasSeen } from "@/modules/integracao/comanda/state";
 import { dispatchComandaEvent } from "@/modules/integracao/comanda/consumers";
 import { registerOrderNotifier } from "@/modules/integracao/comanda/order-notifier";
+import { registrarAvisoDoEvento } from "@/modules/integracao/comanda/aviso-registro";
+import { acordarWorkerAvisos, iniciarWorkerAvisos } from "@/modules/integracao/comanda/aviso-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +17,8 @@ const TAG = "ComandaEventos";
 
 // Avisos de pedido por template (SAI-013). Só envia com COMANDA_NOTIFY_TEMPLATES=on; registrado uma vez.
 registerOrderNotifier();
+// Avisos pelo WhatsApp (Baileys) da própria barraca: o worker envia o que a rota registrou em banco.
+iniciarWorkerAvisos();
 
 /**
  * Eventos Comanda → CRM (contrato SAI-001 v1, INTEGRACAO.md §2). Rota pública em src/proxy.ts (caminho
@@ -91,8 +95,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, ignored: "sequence_antiga" });
     }
 
+    // Marca como visto ANTES de qualquer await: duas entregas simultâneas do mesmo id não passam as duas.
     markSeen(event.id);
     if (seqKey) recordSequence(seqKey, event.sequence);
+
+    // Avisos pelo WhatsApp da barraca: grava como pendente ANTES do 2xx (o envio é do worker). Se o banco falhar, 503
+    // e o evento deixa de contar como visto: a Comanda reenvia e o registro é refeito (a chave única impede duplicata).
+    try {
+        if ((await registrarAvisoDoEvento(event)) === "registrado") acordarWorkerAvisos();
+    } catch {
+        unmarkSeen(event.id);
+        logger.error(TAG, "falha ao registrar o aviso do evento");
+        return NextResponse.json({ error: "Falha temporária" }, { status: 503 });
+    }
     logger.info(TAG, `${event.type} aceito`);
 
     // Sem esperar: a Comanda quer o 2xx rápido. Falha de consumidor nunca vira erro para ela.

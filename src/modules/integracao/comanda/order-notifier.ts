@@ -6,6 +6,8 @@ import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
 import { registerComandaEventConsumer, type ComandaEventConsumer } from "./consumers";
 import type { ComandaEvent } from "./schema";
 import { BoundedTtlMap } from "./state";
+import { barracaName, normalizeBrPhone } from "./contato";
+import { barracaTemSessao } from "./aviso-registro";
 
 /**
  * SAI-013, lado CRM: avisa o cliente do pedido por template da WhatsApp Cloud API.
@@ -49,38 +51,7 @@ export function templateFor(event: ComandaEvent): TemplateName | null {
     }
 }
 
-/**
- * Nome da barraca para o {{3}}. Ordem: `data.barraca_nome` do evento (campo aditivo do contrato, quando a Comanda
- * passar a enviar), depois o env COMANDA_BARRACA_NOMES='{"<barraca_id>":"Açaí do Didi"}' (reserva), depois "a loja".
- */
-export function barracaName(barracaId: string, env: Record<string, string | undefined> = process.env, fromEvent?: unknown): string {
-    const fromData = typeof fromEvent === "string" ? fromEvent.replace(/\s+/g, " ").trim() : "";
-    if (fromData) return fromData.slice(0, 60);
-    try {
-        const map = JSON.parse(env.COMANDA_BARRACA_NOMES ?? "{}") as Record<string, unknown>;
-        const name = map[barracaId];
-        if (typeof name === "string" && name.trim()) return name.trim().slice(0, 60);
-    } catch {
-        /* variável inválida: usa o padrão */
-    }
-    return "a loja";
-}
-
-/**
- * Telefone do contrato = NACIONAL (a Comanda manda sem o país, ex. 61999990001), com ou sem 55 e com ou sem
- * máscara. Devolve E.164 brasileiro só com dígitos (5561999990001), ou null se não der para ter certeza:
- *   10 ou 11 dígitos              → prefixa 55
- *   12 ou 13 dígitos começando 55 → mantém
- *   qualquer outro tamanho (ex. 9 dígitos, BSUID, número estrangeiro) → null (não envia)
- */
-export function normalizeBrPhone(raw: unknown): string | null {
-    if (typeof raw !== "string") return null;
-    if (/[A-Za-z]/.test(raw)) return null; // BSUID (ex.: BR.123...) e texto com letras não são telefone
-    const d = raw.replace(/\D/g, "");
-    if (d.length === 10 || d.length === 11) return "55" + d;
-    if ((d.length === 12 || d.length === 13) && d.startsWith("55")) return d;
-    return null;
-}
+export { barracaName, normalizeBrPhone } from "./contato";
 
 /** Parâmetro de template: sem quebra de linha nem espaços repetidos (a Meta recusa) e nunca vazio. */
 function param(value: unknown, fallback: string): string {
@@ -94,6 +65,8 @@ export interface NotifierDeps {
     env: Record<string, string | undefined>;
     logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void };
     sent: BoundedTtlMap<true>;
+    /** Barraca com WhatsApp próprio (Baileys): os avisos dela saem pelo worker, não por template da Cloud API. */
+    barracaTemSessao: (barracaId: string) => Promise<boolean>;
 }
 
 const TAG = "AvisoPedido";
@@ -108,6 +81,7 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
         env: process.env,
         logger: defaultLogger,
         sent: defaultSent,
+        barracaTemSessao,
         ...over,
     };
 
@@ -116,6 +90,7 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
 
         const template = templateFor(event);
         if (!template) return;
+        if (await deps.barracaTemSessao(event.barraca_id)) return; // o aviso desta barraca é do worker (aviso-worker.ts)
 
         const data = event.data as { pedido_id?: unknown; senha?: unknown; cliente?: { nome?: unknown; telefone?: unknown } | null };
         const phone = normalizeBrPhone(data.cliente?.telefone);

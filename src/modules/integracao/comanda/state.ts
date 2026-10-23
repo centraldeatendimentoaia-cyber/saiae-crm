@@ -36,6 +36,10 @@ export class BoundedTtlMap<V> {
         }
     }
 
+    delete(key: string): void {
+        this.map.delete(key);
+    }
+
     clear(): void {
         this.map.clear();
     }
@@ -62,6 +66,8 @@ const state: EventState = (g.__comandaEventState ||= {
 
 export const wasSeen = (id: string) => state.seenIds.has(id);
 export const markSeen = (id: string) => state.seenIds.set(id, true);
+/** Desfaz markSeen quando o processamento falhou antes de aceitar o evento (a Comanda vai reenviar). */
+export const unmarkSeen = (id: string) => state.seenIds.delete(id);
 
 /** Chave da ordem: por barraca e pedido. */
 export const sequenceKey = (barracaId: string, pedidoId: string) => `${barracaId}:${pedidoId}`;

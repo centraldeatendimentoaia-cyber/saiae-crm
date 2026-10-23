@@ -26,6 +26,7 @@ function setup(over: Partial<NotifierDeps> = {}) {
         isOptedOut: vi.fn().mockResolvedValue(false),
         logger,
         sent: new BoundedTtlMap<true>(100, 60_000),
+        barracaTemSessao: async () => false,
         ...over,
     };
     return { run: createOrderNotifier(deps), sendTemplate, logger, deps };
@@ -93,6 +94,12 @@ describe("envio", () => {
 });
 
 describe("quando NÃO envia", () => {
+    it("barraca com WhatsApp próprio (Baileys): o aviso é do worker, a Cloud API não envia", async () => {
+        const { run, sendTemplate } = setup({ barracaTemSessao: async () => true });
+        await run(ev("order.created"));
+        expect(sendTemplate).not.toHaveBeenCalled();
+    });
+
     it.each([
         ["sem cliente", { cliente: null }],
         ["cliente sem telefone", { cliente: { nome: "Maria" } }],

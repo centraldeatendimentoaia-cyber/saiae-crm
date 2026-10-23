@@ -9,6 +9,12 @@ vi.mock("@/lib/logger", () => ({ logger }));
 vi.mock("@/lib/auth", () => ({ auth }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
+vi.mock("@/modules/integracao/comanda/aviso-registro", () => ({
+    registrarAvisoDoEvento: vi.fn().mockResolvedValue("sem_sessao"),
+    barracaTemSessao: vi.fn().mockResolvedValue(false),
+    sessaoDaBarraca: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/modules/integracao/comanda/aviso-worker", () => ({ iniciarWorkerAvisos: vi.fn(), acordarWorkerAvisos: vi.fn() }));
 
 import { POST } from "./route";
 import { proxy } from "@/proxy";

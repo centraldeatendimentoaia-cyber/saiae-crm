@@ -9,6 +9,7 @@ import { Server } from "socket.io";
 import { setupSocket } from "./socket";
 import { waManager } from "../modules/whatsapp/manager";
 import { logger } from "../lib/logger";
+import { iniciarWorkerAvisos } from "../modules/integracao/comanda/aviso-worker";
 import pkg from "../../package.json";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -52,6 +53,8 @@ app.prepare().then(() => {
   // Initialize WhatsApp Manager
   waManager.setup(io);
   waManager.loadSessions();
+  // Envia os avisos de pedido que ficaram pendentes (inclusive de antes de um reinício)
+  iniciarWorkerAvisos();
 
   // Cloudflare 520 Fix: increase keep-alive timeout so Node doesn't kill idle connections that Cloudflare expects to reuse
   // See: https://github.com/vercel/next.js/issues/48962
