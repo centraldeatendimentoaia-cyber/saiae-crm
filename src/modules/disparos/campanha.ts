@@ -113,7 +113,8 @@ const depsPadrao = (): DisparoDeps => ({
     db: prisma as never,
     now: Date.now,
     estaConectada: (sessionId) => waManager.getInstance(sessionId)?.status === "CONNECTED",
-    acordar: () => {},
+    // import dinâmico: o worker puxa o provider do WhatsApp, que a rota e os testes não precisam carregar
+    acordar: () => void import("./worker").then((m) => m.acordarWorkerCampanhas()).catch(() => {}),
 });
 
 const ehDuplicata = (e: unknown) => (e as { code?: unknown } | null)?.code === "P2002";
