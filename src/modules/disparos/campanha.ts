@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -82,8 +83,16 @@ interface CampanhaLinha {
     criadoEm: Date;
 }
 
+/** O que a transação interativa usa. */
+export interface TxDisparo {
+    $queryRaw(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown>;
+    disparoCampanha: { count(a: unknown): Promise<number>; create(a: unknown): Promise<{ id: string }> };
+    disparoEnvio: { createMany(a: unknown): Promise<unknown> };
+}
+
 export interface DisparoDeps {
     db: {
+        $transaction<T>(fn: (tx: TxDisparo) => Promise<T>, opts?: { maxWait?: number; timeout?: number }): Promise<T>;
         barracaSessao: { findFirst(a: unknown): Promise<{ sessionId: string; createdAt: Date } | null> };
         disparoCampanha: {
             findUnique(a: unknown): Promise<CampanhaLinha | null>;
@@ -147,35 +156,44 @@ async function criar(p: Extract<PedidoDisparo, { acao: "criar" }>, deps: Disparo
     const vinculo = await sessaoDaBarraca(p.barraca_id, db);
     if (!vinculo || !deps.estaConectada(vinculo.sessionId)) return { ok: false, motivo: "whatsapp_desconectado" };
 
-    const agora = deps.now();
-    const criadasHoje = await db.disparoCampanha.count({ where: { barracaId: p.barraca_id, criadoEm: { gte: new Date(agora - DIA_MS) } } });
-    if (criadasHoje >= MAX_CAMPANHAS_DIA) return { ok: false, motivo: "limite_campanhas_dia" };
-    const emAndamento = await db.disparoCampanha.count({
-        where: { barracaId: p.barraca_id, estado: "em_andamento", criadoEm: { gte: new Date(agora - VALIDADE_CAMPANHA_MS) } },
-    });
-    if (emAndamento > 0) return { ok: false, motivo: "campanha_em_andamento" };
-
-    let campanhaId: string;
+    // Campanha e envios na MESMA transação (ou nada fica gravado). O bloqueio da linha do vínculo serializa as
+    // criações da mesma loja: duas chamadas ao mesmo tempo não passam juntas pelos tetos.
+    const campanhaId = crypto.randomUUID();
+    let recusa: MotivoRecusa | null;
     try {
-        const campanha = await db.disparoCampanha.create({
-            data: { barracaId: p.barraca_id, requestId: p.request_id, tipo: p.tipo, texto: p.texto.trim(), barracaNome: p.barraca_nome.trim(), total: unicos.size },
-            select: { id: true },
-        });
-        campanhaId = campanha.id;
+        recusa = await db.$transaction(
+            async (tx) => {
+                await tx.$queryRaw`SELECT id FROM BarracaSessao WHERE barracaId = ${p.barraca_id} FOR UPDATE`;
+                const agora = deps.now();
+                const criadasHoje = await tx.disparoCampanha.count({ where: { barracaId: p.barraca_id, criadoEm: { gte: new Date(agora - DIA_MS) } } });
+                if (criadasHoje >= MAX_CAMPANHAS_DIA) return "limite_campanhas_dia";
+                const emAndamento = await tx.disparoCampanha.count({
+                    where: { barracaId: p.barraca_id, estado: "em_andamento", criadoEm: { gte: new Date(agora - VALIDADE_CAMPANHA_MS) } },
+                });
+                if (emAndamento > 0) return "campanha_em_andamento";
+                await tx.disparoCampanha.create({
+                    data: { id: campanhaId, barracaId: p.barraca_id, requestId: p.request_id, tipo: p.tipo, texto: p.texto.trim(), barracaNome: p.barraca_nome.trim(), total: unicos.size },
+                    select: { id: true },
+                });
+                await tx.disparoEnvio.createMany({
+                    data: [...unicos].map(([telefone, nome]) => ({
+                        campanhaId,
+                        barracaId: p.barraca_id,
+                        chave: chaveDoCliente(p.barraca_id, telefone),
+                        payload: { telefone, nome },
+                    })),
+                });
+                return null;
+            },
+            { maxWait: 5_000, timeout: 20_000 }
+        );
     } catch (e) {
         if (!ehDuplicata(e)) throw e;
         const outra = await db.disparoCampanha.findUnique({ where: { requestId: p.request_id } });
         if (!outra) throw e;
         return repetida(outra, p.barraca_id);
     }
-    await db.disparoEnvio.createMany({
-        data: [...unicos].map(([telefone, nome]) => ({
-            campanhaId,
-            barracaId: p.barraca_id,
-            chave: chaveDoCliente(p.barraca_id, telefone),
-            payload: { telefone, nome },
-        })),
-    });
+    if (recusa) return { ok: false, motivo: recusa };
     logger.info(TAG, `campanha ${p.tipo} criada`);
     deps.acordar();
     return { ok: true, campanha_id: campanhaId, total: unicos.size, invalidos, repetido: false };
@@ -222,7 +240,8 @@ async function historico(barracaId: string, deps: DisparoDeps): Promise<Resposta
             total: c.total,
             enviados: soma(c.id, (e) => e === "enviado"),
             falhas: soma(c.id, (e) => e === "falhou"),
-            pulados: soma(c.id, (e) => e.startsWith("pulado_")),
+            // cancelados e expirados entram aqui para o "x de y" fechar
+            pulados: soma(c.id, (e) => e.startsWith("pulado_") || e === "cancelado" || e === "expirado"),
             na_fila: soma(c.id, (e) => e === "pendente"),
         })),
         avaliacoes: {

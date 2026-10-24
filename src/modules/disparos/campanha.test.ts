@@ -36,7 +36,26 @@ function cenario(opts: { sessoes?: Record<string, string>; conectadas?: string[]
             }
             return row[k] === v;
         });
+    let trava: Promise<unknown> = Promise.resolve();
     const db: DisparoDeps["db"] = {
+        // Transação de mentira: serializa (como o FOR UPDATE) e desfaz tudo se a função lançar.
+        $transaction: (async (fn: (tx: unknown) => Promise<unknown>) => {
+            const anterior = trava;
+            let solta!: () => void;
+            trava = new Promise<void>((r) => (solta = r));
+            await anterior;
+            const fotoC = [...campanhas];
+            const fotoE = [...envios];
+            try {
+                return await fn({ $queryRaw: async () => [], disparoCampanha: db.disparoCampanha, disparoEnvio: db.disparoEnvio });
+            } catch (e) {
+                campanhas.splice(0, campanhas.length, ...fotoC);
+                envios.splice(0, envios.length, ...fotoE);
+                throw e;
+            } finally {
+                solta();
+            }
+        }) as never,
         barracaSessao: { findFirst: async (a) => { const id = sessoes[(a as { where: { barracaId: string } }).where.barracaId]; return id ? { sessionId: id, createdAt: new Date(0) } : null; } },
         disparoCampanha: {
             findUnique: async (a) => campanhas.find((c) => c.requestId === (a as { where: { requestId: string } }).where.requestId) ?? null,
@@ -150,6 +169,24 @@ describe("criar campanha", () => {
         expect(await executarAcaoDisparo(criar(), antigas.deps)).toMatchObject({ ok: true });
     });
 
+    it("falha ao gravar os envios: a campanha também não fica gravada", async () => {
+        const c = cenario();
+        const original = c.deps.db!.disparoEnvio.createMany;
+        c.deps.db!.disparoEnvio.createMany = async () => { throw new Error("banco"); };
+        await expect(executarAcaoDisparo(criar(), c.deps)).rejects.toThrow();
+        expect(c.campanhas).toHaveLength(0);
+        c.deps.db!.disparoEnvio.createMany = original;
+        expect(await executarAcaoDisparo(criar(), c.deps)).toMatchObject({ ok: true, repetido: false });
+    });
+
+    it("duas criações ao mesmo tempo na mesma loja: só uma passa", async () => {
+        const c = cenario();
+        const [a, b] = await Promise.all([executarAcaoDisparo(criar({ request_id: req(11) }), c.deps), executarAcaoDisparo(criar({ request_id: req(12) }), c.deps)]);
+        expect([a, b].filter((r) => r.ok)).toHaveLength(1);
+        expect([a, b].find((r) => !r.ok)).toEqual({ ok: false, motivo: "campanha_em_andamento" });
+        expect(c.campanhas).toHaveLength(1);
+    });
+
     it("só inválidos: sem_destinatarios_validos", async () => {
         const c = cenario();
         expect(await executarAcaoDisparo(criar({ destinatarios: [{ telefone: "123456789", nome: null }] }), c.deps)).toEqual({ ok: false, motivo: "sem_destinatarios_validos" });
@@ -163,7 +200,7 @@ describe("histórico", () => {
             campanhas: [{ id: "c0", total: 6 }, { id: "c1", barracaId: B }],
             envios: [
                 { campanhaId: "c0", estado: "enviado" }, { campanhaId: "c0", estado: "enviado" }, { campanhaId: "c0", estado: "falhou" },
-                { campanhaId: "c0", estado: "pulado_optout" }, { campanhaId: "c0", estado: "pulado_limite_diario" }, { campanhaId: "c0", estado: "pendente" },
+                { campanhaId: "c0", estado: "pulado_optout" }, { campanhaId: "c0", estado: "pulado_limite_diario" }, { campanhaId: "c0", estado: "pendente" }, { campanhaId: "c0", estado: "cancelado" }, { campanhaId: "c0", estado: "expirado" },
                 { campanhaId: "c1", barracaId: B, estado: "enviado" },
             ],
             avaliacoes: [
@@ -175,7 +212,7 @@ describe("histórico", () => {
         });
         const r = (await executarAcaoDisparo({ barraca_id: A, request_id: req(2), acao: "historico" }, c.deps)) as Extract<Awaited<ReturnType<typeof executarAcaoDisparo>>, { campanhas: unknown }>;
         expect(r.campanhas).toHaveLength(1);
-        expect(r.campanhas[0]).toMatchObject({ id: "c0", enviados: 2, falhas: 1, pulados: 2, na_fila: 1, total: 6 });
+        expect(r.campanhas[0]).toMatchObject({ id: "c0", enviados: 2, falhas: 1, pulados: 4, na_fila: 1, total: 6 });
         expect(r.avaliacoes).toMatchObject({ media: 3.5, total: 2, enviadas_30d: 3 });
         expect(r.avaliacoes.itens.map((i) => i.pedido_id).sort()).toEqual(["p1", "p2"]);
     });
