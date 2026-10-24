@@ -9,6 +9,13 @@ vi.mock("@/lib/logger", () => ({ logger }));
 vi.mock("@/lib/auth", () => ({ auth }));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
+vi.mock("@/modules/integracao/comanda/aviso-registro", () => ({
+    registrarAvisoDoEvento: vi.fn().mockResolvedValue("sem_sessao"),
+    barracaTemSessao: vi.fn().mockResolvedValue(false),
+    sessaoDaBarraca: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/modules/integracao/comanda/aviso-worker", () => ({ iniciarWorkerAvisos: vi.fn(), acordarWorkerAvisos: vi.fn() }));
+vi.mock("@/modules/disparos/avaliacao", () => ({ agendarAvaliacaoDoEvento: vi.fn().mockResolvedValue(undefined), iniciarWorkerAvaliacoes: vi.fn() }));
 
 import { POST } from "./route";
 import { proxy } from "@/proxy";
@@ -127,6 +134,25 @@ describe("assinatura", () => {
         const res = await send(event({ barraca_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd" }));
         expect(res.status).toBe(401);
         expect(await res.json()).toEqual({ error: "Não autorizado" });
+    });
+    describe("segredo de plataforma (COMANDA_WHATSAPP_SEGREDO)", () => {
+        const PLATAFORMA = "segredo-de-plataforma-com-mais-de-16";
+        const SEM_SEGREDO_PROPRIO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        beforeEach(() => vi.stubEnv("COMANDA_WHATSAPP_SEGREDO", PLATAFORMA));
+
+        it("barraca sem segredo próprio assina com o de plataforma: 200", async () => {
+            expect((await send(event({ barraca_id: SEM_SEGREDO_PROPRIO }), { secret: PLATAFORMA })).status).toBe(200);
+        });
+        it("barraca sem segredo próprio com segredo errado: 401", async () => {
+            expect((await send(event({ barraca_id: SEM_SEGREDO_PROPRIO }), { secret: "outro-segredo-qualquer-longo" })).status).toBe(401);
+        });
+        it("barraca COM segredo próprio não aceita o de plataforma: 401", async () => {
+            expect((await send(event(), { secret: PLATAFORMA })).status).toBe(401);
+        });
+        it("sem COMANDA_WEBHOOK_SECRETS, só com o de plataforma: 200", async () => {
+            vi.stubEnv("COMANDA_WEBHOOK_SECRETS", "");
+            expect((await send(event(), { secret: PLATAFORMA })).status).toBe(200);
+        });
     });
     it("sem barraca_id no corpo: 401", async () => {
         const ev = event() as Record<string, unknown>;

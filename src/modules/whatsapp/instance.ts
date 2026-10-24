@@ -21,10 +21,12 @@ import { bindContactSync } from "./store/contacts";
 import { bindAutoReply } from "./store/autoreply";
 import { bindOptOut } from "./store/optout";
 import { bindAgenteSalao } from "@/modules/agente-salao/agente";
+import { bindBotPedidos } from "@/modules/bot-pedidos/entrada";
 import { marcarEnviadaPeloCrm } from "@/modules/agente-salao/enviados";
 import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
 import { logger } from "@/lib/logger";
+import { avisarEstadoSessaoEmSegundoPlano } from "@/modules/integracao/comanda/sessao-evento";
 
 const MAX_RECONNECT_ATTEMPTS = 3;
 
@@ -190,6 +192,7 @@ export class WhatsAppInstance {
                         ]);
                     } catch (e) { /* ignore */ }
                     logger.success("Instance", `Session ${this.sessionId} credentials deleted.`);
+                    avisarEstadoSessaoEmSegundoPlano(this.sessionId, "caiu");
 
                     // Remove from memory manager
                     this.onRemovedFromManager?.();
@@ -251,6 +254,7 @@ export class WhatsAppInstance {
 
                     // Remove from memory manager
                     this.onRemovedFromManager?.();
+                    avisarEstadoSessaoEmSegundoPlano(this.sessionId, "caiu");
                 }
             }
 
@@ -286,6 +290,7 @@ export class WhatsAppInstance {
                 bindAutoReply(this.socket as WASocket, this.sessionId);
                 bindOptOut(this.socket as WASocket, this.sessionId);
                 bindAgenteSalao(this.socket as WASocket, this.sessionId);
+                bindBotPedidos(this.socket as WASocket, this.sessionId);
                 bindPpGuard(this.socket as WASocket, this.sessionId);
 
                 await prisma.session.update({
@@ -294,6 +299,7 @@ export class WhatsAppInstance {
                 });
 
                 logger.success("Instance", `Session ${this.sessionId} connected and synced successfully`);
+                avisarEstadoSessaoEmSegundoPlano(this.sessionId, "conectado");
             }
         } catch (error) {
             if (errorCode(error) === 'P2025') {

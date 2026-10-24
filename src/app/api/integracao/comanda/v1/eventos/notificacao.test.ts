@@ -15,6 +15,12 @@ vi.mock("@/lib/logger", () => ({ logger: h.logger }));
 vi.mock("@/lib/auth", () => ({ auth: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: { optOut: { findUnique: h.optOutFind } } }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
+vi.mock("@/modules/integracao/comanda/aviso-registro", () => ({
+    registrarAvisoDoEvento: vi.fn().mockResolvedValue("sem_sessao"),
+    barracaTemSessao: vi.fn().mockResolvedValue(false),
+    sessaoDaBarraca: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/modules/integracao/comanda/aviso-worker", () => ({ iniciarWorkerAvisos: vi.fn(), acordarWorkerAvisos: vi.fn() }));
 
 import { POST } from "./route";
 import { resetEventState } from "@/modules/integracao/comanda/state";

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { loadSecrets } from "@/modules/integracao/comanda/secrets";
+import { segredosWhatsapp } from "@/modules/integracao/comanda/sessao-evento";
 import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/modules/integracao/comanda/signature";
 import { validateEvento } from "@/modules/integracao/comanda/schema";
-import { isStale, markSeen, recordSequence, sequenceKey, wasSeen } from "@/modules/integracao/comanda/state";
+import { isStale, markSeen, recordSequence, sequenceKey, unmarkSeen, wasSeen } from "@/modules/integracao/comanda/state";
 import { dispatchComandaEvent } from "@/modules/integracao/comanda/consumers";
 import { registerOrderNotifier } from "@/modules/integracao/comanda/order-notifier";
+import { registrarAvisoDoEvento } from "@/modules/integracao/comanda/aviso-registro";
+import { acordarWorkerAvisos, iniciarWorkerAvisos } from "@/modules/integracao/comanda/aviso-worker";
+import { agendarAvaliacaoDoEvento, iniciarWorkerAvaliacoes } from "@/modules/disparos/avaliacao";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +19,9 @@ const TAG = "ComandaEventos";
 
 // Avisos de pedido por template (SAI-013). Só envia com COMANDA_NOTIFY_TEMPLATES=on; registrado uma vez.
 registerOrderNotifier();
+// Avisos pelo WhatsApp (Baileys) da própria barraca: o worker envia o que a rota registrou em banco.
+iniciarWorkerAvisos();
+iniciarWorkerAvaliacoes();
 
 /**
  * Eventos Comanda → CRM (contrato SAI-001 v1, INTEGRACAO.md §2). Rota pública em src/proxy.ts (caminho
@@ -29,8 +36,11 @@ registerOrderNotifier();
  */
 export async function POST(request: NextRequest) {
     const secrets = loadSecrets();
-    if (!secrets) {
-        logger.error(TAG, "COMANDA_WEBHOOK_SECRETS ausente ou inválida");
+    // Loja sem segredo próprio assina com o segredo de plataforma (o mesmo da conexão do WhatsApp): quem conecta o
+    // WhatsApp não precisa configurar integração à parte. Segredo próprio, quando existe, é o único que vale.
+    const plataforma = segredosWhatsapp();
+    if (!secrets && plataforma.length === 0) {
+        logger.error(TAG, "COMANDA_WEBHOOK_SECRETS e COMANDA_WHATSAPP_SEGREDO ausentes ou inválidos");
         return NextResponse.json({ error: "Integração não configurada" }, { status: 503 });
     }
 
@@ -61,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     // O segredo é da barraca citada no corpo; só depois de a assinatura bater é que o corpo é confiável.
     const barracaId = typeof (parsed as { barraca_id?: unknown } | null)?.barraca_id === "string" ? (parsed as { barraca_id: string }).barraca_id : null;
-    const barracaSecrets = barracaId ? secrets.get(barracaId) : undefined;
+    const barracaSecrets = barracaId ? (secrets?.get(barracaId) ?? (plataforma.length > 0 ? plataforma : undefined)) : undefined;
     if (!barracaSecrets) return unauthorized("barraca desconhecida");
     if (!timestampInWindow(ts)) return unauthorized("timestamp fora da janela de 5 minutos");
     if (!verifyComandaSignature(raw, timestampHeader!, signatureHeader, barracaSecrets)) return unauthorized("assinatura inválida");
@@ -91,8 +101,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ received: true, ignored: "sequence_antiga" });
     }
 
+    // Marca como visto ANTES de qualquer await: duas entregas simultâneas do mesmo id não passam as duas.
     markSeen(event.id);
     if (seqKey) recordSequence(seqKey, event.sequence);
+
+    // Avisos pelo WhatsApp da barraca: grava como pendente ANTES do 2xx (o envio é do worker). Se o banco falhar, 503
+    // e o evento deixa de contar como visto: a Comanda reenvia e o registro é refeito (a chave única impede duplicata).
+    try {
+        if ((await registrarAvisoDoEvento(event)) === "registrado") acordarWorkerAvisos();
+        await agendarAvaliacaoDoEvento(event); // pedido de avaliação 30 min depois do "entregue" (idempotente)
+    } catch {
+        unmarkSeen(event.id);
+        logger.error(TAG, "falha ao registrar o aviso do evento");
+        return NextResponse.json({ error: "Falha temporária" }, { status: 503 });
+    }
     logger.info(TAG, `${event.type} aceito`);
 
     // Sem esperar: a Comanda quer o 2xx rápido. Falha de consumidor nunca vira erro para ela.

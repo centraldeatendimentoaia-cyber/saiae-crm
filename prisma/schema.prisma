@@ -725,3 +725,110 @@ model JobLock {
   expiresAt DateTime
   updatedAt DateTime @updatedAt
 }
+
+// ---------------------------------------------------------------------------------------------
+// Avisos de pedido pelo WhatsApp de cada restaurante (Baileys). SO TABELAS NOVAS: nada existente muda.
+// ATENCAO: o CRM roda `prisma db push` em todo start; publicar esta mudanca CRIA ESTAS TABELAS no banco de
+// producao. Ver docs/whatsapp-avisos-baileys.md.
+// ---------------------------------------------------------------------------------------------
+
+/// Vinculo restaurante (barraca_id do Sai aê) <-> sessao do WhatsApp. Uma sessao pertence a uma barraca;
+/// uma barraca pode ter varias sessoes (a rota de conexao opera na mais antiga).
+model BarracaSessao {
+  id        String   @id @default(cuid())
+  barracaId String
+  sessionId String   @unique // Session.sessionId (sem relacao Prisma, para nao alterar o model Session)
+  createdAt DateTime @default(now())
+
+  @@index([barracaId])
+}
+
+/// Um aviso de status de pedido (recebido, pronto, saiu_entrega, entregue, cancelado). A restricao unica e a
+/// idempotencia: o mesmo aviso do mesmo pedido nunca e criado duas vezes, nem depois de reiniciar o CRM.
+/// `payload` guarda telefone, nome e texto SO enquanto o aviso esta pendente; vira null em qualquer estado final,
+/// para o historico nao reter dado pessoal.
+model AvisoPedido {
+  id                 String    @id @default(cuid())
+  barracaId          String
+  pedidoId           String
+  tipo               String // recebido | pronto | saiu_entrega | entregue | cancelado
+  estado             String    @default("pendente") // pendente | enviado | falhou | pulado_sem_telefone | pulado_optout | pulado_desconectado | pulado_nao_aplica
+  motivo             String? // codigo fixo (nunca texto livre, telefone ou mensagem)
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime  @default(now())
+  ocorridoEm         DateTime // occurred_at do evento: a validade do aviso conta daqui
+  enviadoEm          DateTime?
+  payload            Json?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  @@unique([barracaId, pedidoId, tipo])
+  @@index([estado, proximaTentativaEm])
+  @@index([barracaId, criadoEm])
+}
+
+/// Campanha de disparo (promocao | reativacao) criada pelo Sai ae para uma loja. O texto e o que o dono escreveu
+/// (o rodape de descadastro e acrescentado no envio). Telefone e nome NUNCA ficam aqui: vao no payload do envio.
+model DisparoCampanha {
+  id           String   @id @default(cuid())
+  barracaId    String
+  requestId    String   @unique // idempotencia: o mesmo request_id devolve a campanha original
+  tipo         String // promocao | reativacao
+  estado       String   @default("em_andamento") // em_andamento | concluida | cancelada | expirada
+  texto        String   @db.Text
+  barracaNome  String
+  total        Int
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([barracaId, criadoEm])
+}
+
+/// Um destinatario de uma campanha. `chave` = HMAC-SHA256(segredo do servidor, barracaId:ultimos 8 digitos), usada no teto de
+/// 1 mensagem por cliente por 24 h; vira null 24 h depois (a chave so serve a esse teto). `payload` guarda telefone e nome SO enquanto o item esta pendente; vira null em qualquer estado final.
+model DisparoEnvio {
+  id                 String    @id @default(cuid())
+  campanhaId         String
+  barracaId          String
+  chave              String?
+  estado             String    @default("pendente") // pendente | enviado | falhou | pulado_optout | pulado_limite_diario | pulado_desconectado | cancelado | expirado
+  motivo             String? // codigo fixo (nunca texto livre, telefone ou mensagem)
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime  @default(now())
+  enviadoEm          DateTime?
+  payload            Json?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  @@unique([campanhaId, chave])
+  @@index([estado, proximaTentativaEm])
+  @@index([barracaId, chave, enviadoEm])
+}
+
+/// Pedido de avaliacao enviado depois da entrega. `payload` (telefone, nome, senha) so existe enquanto a avaliacao
+/// esta agendada ou aguardando resposta; vira null depois. O comentario fica so no CRM e e mostrado ao dono da loja.
+model AvaliacaoPedido {
+  id          String    @id @default(cuid())
+  barracaId   String
+  pedidoId    String
+  estado      String    @default("agendada") // agendada | enviada | respondida | expirada | falhou | pulada_sem_telefone | pulada_desativada | pulada_optout | pulada_cancelado | pulada_desconectada
+  motivo      String? // codigo fixo
+  tentativas  Int       @default(0)
+  enviarEm    DateTime
+  ocorridoEm  DateTime // occurred_at do evento `entregue`
+  enviadaEm   DateTime?
+  respondidaEm DateTime?
+  nota        Int?
+  comentario  String?   @db.Text
+  telefoneChave String? // HMAC(segredo, barracaId + ultimos 8 digitos): casa a resposta sem ler o telefone; some quando a avaliacao deixa de aguardar resposta
+  donoAvisoAte DateTime? // enquanto o aviso da nota ao dono esta pendente (ate 1 h depois da nota)
+  payload     Json?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([barracaId, pedidoId])
+  @@index([barracaId, estado, telefoneChave])
+  @@index([estado, donoAvisoAte])
+  @@index([estado, enviarEm])
+  @@index([barracaId, criadoEm])
+}
