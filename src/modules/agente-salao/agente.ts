@@ -24,7 +24,7 @@ import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, ty
 
 const TAG = "AgenteSalao";
 const DEBOUNCE_MS = 7000;
-const IDADE_MAX_MS = 15 * 60_000; // mensagem recebida há mais que isso (servidor ficou fora) não é respondida
+export const IDADE_MAX_MS = 15 * 60_000; // mensagem recebida há mais que isso (servidor ficou fora) não é respondida
 const MAX_RESPOSTAS_HORA = 10; // por contato: trava contra conversa entre dois robôs
 const CACHE_CONFIG_MS = 20_000;
 
@@ -116,7 +116,7 @@ export function veioDeAnuncioMeta(msg: WAMessage): boolean {
     return !!(ctx?.externalAdReply || ctx?.conversionSource);
 }
 
-const telefoneDe = (jid: string, alt?: string | null): string | null => {
+export const telefoneDe = (jid: string, alt?: string | null): string | null => {
     const j = jid.endsWith("@s.whatsapp.net") ? jid : alt && alt.endsWith("@s.whatsapp.net") ? alt : null;
     return j ? j.split("@")[0].split(":")[0].replace(/\D/g, "") || null : null;
 };

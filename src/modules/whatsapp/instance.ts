@@ -21,6 +21,7 @@ import { bindContactSync } from "./store/contacts";
 import { bindAutoReply } from "./store/autoreply";
 import { bindOptOut } from "./store/optout";
 import { bindAgenteSalao } from "@/modules/agente-salao/agente";
+import { bindBotPedidos } from "@/modules/bot-pedidos/entrada";
 import { marcarEnviadaPeloCrm } from "@/modules/agente-salao/enviados";
 import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
@@ -289,6 +290,7 @@ export class WhatsAppInstance {
                 bindAutoReply(this.socket as WASocket, this.sessionId);
                 bindOptOut(this.socket as WASocket, this.sessionId);
                 bindAgenteSalao(this.socket as WASocket, this.sessionId);
+                bindBotPedidos(this.socket as WASocket, this.sessionId);
                 bindPpGuard(this.socket as WASocket, this.sessionId);
 
                 await prisma.session.update({
