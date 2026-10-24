@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { isOptedOut as isOptedOutDb } from "@/lib/optout";
@@ -86,7 +87,7 @@ function ehPayload(p: unknown): p is PayloadAviso {
 }
 
 async function finalizar(db: WorkerDb, id: string, estado: string, motivo: string | null, extra: Record<string, unknown> = {}) {
-    await db.avisoPedido.update({ where: { id }, data: { estado, motivo, payload: null, ...extra } });
+    await db.avisoPedido.update({ where: { id }, data: { estado, motivo, payload: Prisma.DbNull, ...extra } });
 }
 
 async function adiar(db: WorkerDb, id: string, ate: number, motivo: string | null, extra: Record<string, unknown> = {}) {

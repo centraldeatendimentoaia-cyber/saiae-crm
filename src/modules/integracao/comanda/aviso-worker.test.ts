@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
@@ -67,7 +68,7 @@ describe("processarPendentes", () => {
         expect(await processarPendentes(deps)).toBe(1);
         expect(provider.resolveRecipient).toHaveBeenCalledWith("5561999990001@s.whatsapp.net");
         expect(provider.sendText).toHaveBeenCalledWith("5561999990001@s.whatsapp.net", "Olá!");
-        expect(linhas[0]).toMatchObject({ estado: "enviado", payload: null, tentativas: 1 });
+        expect(linhas[0]).toMatchObject({ estado: "enviado", payload: Prisma.DbNull, tentativas: 1 });
         expect(linhas[0].enviadoEm).toBeInstanceOf(Date);
     });
 
@@ -95,7 +96,7 @@ describe("processarPendentes", () => {
     ])("%s desconectado há %i ms além da validade vira %s e perde o payload", async (tipo, idade, estado) => {
         const { linhas, deps, provider } = cenario({ conectadas: [], linhas: [{ tipo, ocorridoEm: new Date(AGORA - idade) }] });
         await processarPendentes(deps);
-        expect(linhas[0]).toMatchObject({ estado, motivo: "validade_expirada", payload: null });
+        expect(linhas[0]).toMatchObject({ estado, motivo: "validade_expirada", payload: Prisma.DbNull });
         expect(provider.sendText).not.toHaveBeenCalled();
     });
 
@@ -115,7 +116,7 @@ describe("processarPendentes", () => {
         const { linhas, deps, provider } = cenario();
         (deps.isOptedOut as ReturnType<typeof vi.fn>).mockResolvedValue(true);
         await processarPendentes(deps);
-        expect(linhas[0]).toMatchObject({ estado: "pulado_optout", payload: null });
+        expect(linhas[0]).toMatchObject({ estado: "pulado_optout", payload: Prisma.DbNull });
         expect(provider.sendText).not.toHaveBeenCalled();
         expect(deps.isOptedOut).toHaveBeenCalledWith("sessao-A", "5561999990001@s.whatsapp.net");
     });
@@ -131,14 +132,14 @@ describe("processarPendentes", () => {
         }
         linhas[0].proximaTentativaEm = new Date(AGORA - 1);
         await processarPendentes(deps);
-        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "erro_envio", payload: null, tentativas: MAX_TENTATIVAS });
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "erro_envio", payload: Prisma.DbNull, tentativas: MAX_TENTATIVAS });
     });
 
     it("número sem WhatsApp: falhou na hora, sem retentar", async () => {
         const { linhas, deps, provider } = cenario();
         provider.resolveRecipient.mockRejectedValue(new Error("Número não possui WhatsApp"));
         await processarPendentes(deps);
-        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "numero_sem_whatsapp", payload: null });
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "numero_sem_whatsapp", payload: Prisma.DbNull });
         expect(provider.sendText).not.toHaveBeenCalled();
     });
 
@@ -174,7 +175,7 @@ describe("processarPendentes", () => {
         const { linhas, deps, provider } = cenario({ vinculoCriadoHaDias: 2, enviadosNoDia: TETO_POR_DIA.novo, linhas: [{ ocorridoEm: new Date(AGORA - 20 * MIN) }] });
         await processarPendentes(deps);
         expect(provider.sendText).not.toHaveBeenCalled();
-        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "teto_diario", payload: null });
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "teto_diario", payload: Prisma.DbNull });
     });
 
     it("duas execuções ao mesmo tempo não enviam o mesmo aviso duas vezes (reserva)", async () => {
@@ -184,7 +185,7 @@ describe("processarPendentes", () => {
     });
 
     it("aviso sem payload válido não trava a fila", async () => {
-        const { linhas, deps } = cenario({ linhas: [{ payload: null }] });
+        const { linhas, deps } = cenario({ linhas: [{ payload: Prisma.DbNull }] });
         await processarPendentes(deps);
         expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "sem_dados_para_envio" });
     });
