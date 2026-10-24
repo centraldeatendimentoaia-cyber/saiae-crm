@@ -766,3 +766,65 @@ model AvisoPedido {
   @@index([estado, proximaTentativaEm])
   @@index([barracaId, criadoEm])
 }
+
+/// Campanha de disparo (promocao | reativacao) criada pelo Sai ae para uma loja. O texto e o que o dono escreveu
+/// (o rodape de descadastro e acrescentado no envio). Telefone e nome NUNCA ficam aqui: vao no payload do envio.
+model DisparoCampanha {
+  id           String   @id @default(cuid())
+  barracaId    String
+  requestId    String   @unique // idempotencia: o mesmo request_id devolve a campanha original
+  tipo         String // promocao | reativacao
+  estado       String   @default("em_andamento") // em_andamento | concluida | cancelada | expirada
+  texto        String   @db.Text
+  barracaNome  String
+  total        Int
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@index([barracaId, criadoEm])
+}
+
+/// Um destinatario de uma campanha. `chave` = sha256(barracaId:telefone), usada no teto de 1 mensagem por cliente por
+/// 24 h. `payload` guarda telefone e nome SO enquanto o item esta pendente; vira null em qualquer estado final.
+model DisparoEnvio {
+  id                 String    @id @default(cuid())
+  campanhaId         String
+  barracaId          String
+  chave              String
+  estado             String    @default("pendente") // pendente | enviado | falhou | pulado_optout | pulado_limite_diario | pulado_desconectado | cancelado | expirado
+  motivo             String? // codigo fixo (nunca texto livre, telefone ou mensagem)
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime  @default(now())
+  enviadoEm          DateTime?
+  payload            Json?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  @@unique([campanhaId, chave])
+  @@index([estado, proximaTentativaEm])
+  @@index([barracaId, chave, enviadoEm])
+}
+
+/// Pedido de avaliacao enviado depois da entrega. `payload` (telefone, nome, senha) so existe enquanto a avaliacao
+/// esta agendada ou aguardando resposta; vira null depois. O comentario fica so no CRM e e mostrado ao dono da loja.
+model AvaliacaoPedido {
+  id          String    @id @default(cuid())
+  barracaId   String
+  pedidoId    String
+  estado      String    @default("agendada") // agendada | enviada | respondida | expirada | falhou | pulada_sem_telefone | pulada_desativada | pulada_optout | pulada_cancelado | pulada_desconectada
+  motivo      String? // codigo fixo
+  tentativas  Int       @default(0)
+  enviarEm    DateTime
+  ocorridoEm  DateTime // occurred_at do evento `entregue`
+  enviadaEm   DateTime?
+  respondidaEm DateTime?
+  nota        Int?
+  comentario  String?   @db.Text
+  payload     Json?
+  criadoEm    DateTime  @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([barracaId, pedidoId])
+  @@index([estado, enviarEm])
+  @@index([barracaId, criadoEm])
+}
