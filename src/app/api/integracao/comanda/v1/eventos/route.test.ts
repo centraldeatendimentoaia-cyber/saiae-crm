@@ -15,6 +15,7 @@ vi.mock("@/modules/integracao/comanda/aviso-registro", () => ({
     sessaoDaBarraca: vi.fn().mockResolvedValue(null),
 }));
 vi.mock("@/modules/integracao/comanda/aviso-worker", () => ({ iniciarWorkerAvisos: vi.fn(), acordarWorkerAvisos: vi.fn() }));
+vi.mock("@/modules/disparos/avaliacao", () => ({ agendarAvaliacaoDoEvento: vi.fn().mockResolvedValue(undefined), iniciarWorkerAvaliacoes: vi.fn() }));
 
 import { POST } from "./route";
 import { proxy } from "@/proxy";

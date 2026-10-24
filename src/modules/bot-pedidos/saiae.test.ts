@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
-import { chamarSaiae, type Cardapio, type DepsSaiae } from "./saiae";
+import { avaliacaoConfig, chamarSaiae, type Cardapio, type DepsSaiae } from "./saiae";
 
 const SEGREDO = "segredo-de-plataforma-1234";
 const BARRACA = "cd4ac833-86de-4429-83d9-8b24c7ab23db";
@@ -65,5 +65,24 @@ describe("chamarSaiae", () => {
         circular.a = circular;
         const r = await chamarSaiae("pedido", BARRACA, circular, deps(vi.fn()));
         expect(r).toMatchObject({ ok: false });
+    });
+});
+
+describe("avaliacaoConfig", () => {
+    const AVALIACAO = { ativo: true, texto: null, whatsapp_dono: "5561999990001", barraca_nome: "Jmal" };
+    it("chama a ação avaliacao_config assinada e devolve a configuração", async () => {
+        const f = vi.fn(async (..._a: unknown[]) => resp({ ok: true, avaliacao: AVALIACAO }));
+        expect(await avaliacaoConfig(BARRACA, deps(f))).toEqual(AVALIACAO);
+        const [, init] = f.mock.calls[0] as [string, { body: string }];
+        expect(JSON.parse(init.body)).toEqual({ barraca_id: BARRACA, acao: "avaliacao_config" });
+    });
+    it("null em falha de rede, HTTP de erro, recusa ou formato fora do contrato", async () => {
+        expect(await avaliacaoConfig(BARRACA, deps(vi.fn(async () => { throw new Error("rede"); })))).toBeNull();
+        expect(await avaliacaoConfig(BARRACA, deps(vi.fn(async () => resp({}, 500))))).toBeNull();
+        expect(await avaliacaoConfig(BARRACA, deps(vi.fn(async () => resp({ ok: false, codigo: "x" }))))).toBeNull();
+        expect(await avaliacaoConfig(BARRACA, deps(vi.fn(async () => resp({ ok: true, avaliacao: { ativo: "sim" } }))))).toBeNull();
+    });
+    it("null sem URL configurada", async () => {
+        expect(await avaliacaoConfig(BARRACA, deps(vi.fn(), {}))).toBeNull();
     });
 });

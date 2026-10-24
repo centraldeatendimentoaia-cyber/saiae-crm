@@ -10,7 +10,7 @@ import { segredosWhatsapp } from "@/modules/integracao/comanda/sessao-evento";
  * falha vira `{ ok:false, codigo }`. O log nunca leva telefone, itens, nem o corpo.
  */
 
-export type AcaoSaiae = "cardapio" | "rascunho" | "pedido" | "pix";
+export type AcaoSaiae = "cardapio" | "rascunho" | "pedido" | "pix" | "avaliacao_config";
 /** `total_esperado_centavos` (opcional) vai nas ações pedido e pix; o app responde `total_mudou` (com `total_centavos`) se divergir. */
 export type RespostaSaiae = { ok: true; [k: string]: unknown } | { ok: false; codigo: string; mensagem?: string; erros?: unknown; total_centavos?: number };
 
@@ -107,3 +107,16 @@ export async function chamarSaiae(acao: AcaoSaiae, barracaId: string, corpo: Rec
 }
 
 export const limparCacheSaiaeParaTeste = () => cachePadrao.clear();
+
+const avaliacaoConfigSchema = z.object({
+    ok: z.literal(true),
+    avaliacao: z.object({ ativo: z.boolean(), texto: z.string().nullable(), whatsapp_dono: z.string().nullable(), barraca_nome: z.string() }),
+});
+export type AvaliacaoConfig = z.infer<typeof avaliacaoConfigSchema>["avaliacao"];
+
+/** Configuração da avaliação pós-entrega da loja (ação `avaliacao_config`). null em qualquer falha ou resposta fora do contrato. */
+export async function avaliacaoConfig(barracaId: string, over: Partial<DepsSaiae> = {}): Promise<AvaliacaoConfig | null> {
+    const r = await chamarSaiae("avaliacao_config", barracaId, {}, over);
+    const p = avaliacaoConfigSchema.safeParse(r);
+    return p.success ? p.data.avaliacao : null;
+}

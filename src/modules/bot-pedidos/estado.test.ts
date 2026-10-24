@@ -42,3 +42,32 @@ describe("estado do bot", () => {
         expect(e.primeiroLinkDoDia("s", "c", "2026-10-25")).toBe(true);
     });
 });
+
+describe("conversaAberta", () => {
+    const conv = () => ({ historico: [], rascunho: null, hashMostrado: null, aguardandoConfirmacao: false, soLink: false });
+    it("sem conversa: fechada", () => {
+        expect(criarEstadoBot().conversaAberta("s", "c")).toBe(false);
+    });
+    it("com rascunho ou aguardando o sim: aberta, mesmo depois de muito tempo", () => {
+        let t = 0;
+        const e = criarEstadoBot(() => t);
+        e.salvarConversa("s", "c", { ...conv(), aguardandoConfirmacao: true });
+        t = 3_600_000;
+        expect(e.conversaAberta("s", "c")).toBe(true);
+    });
+    it("conversa recente sem pedido em andamento: aberta por 15 min, depois fechada", () => {
+        let t = 0;
+        const e = criarEstadoBot(() => t);
+        e.salvarConversa("s", "c", conv());
+        t = 14 * 60_000;
+        expect(e.conversaAberta("s", "c")).toBe(true);
+        t = 16 * 60_000;
+        expect(e.conversaAberta("s", "c")).toBe(false);
+    });
+    it("é por contato e por sessão", () => {
+        const e = criarEstadoBot();
+        e.salvarConversa("s", "c", conv());
+        expect(e.conversaAberta("s", "outro")).toBe(false);
+        expect(e.conversaAberta("outra", "c")).toBe(false);
+    });
+});

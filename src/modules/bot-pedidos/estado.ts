@@ -12,6 +12,8 @@ export const LIMITE_MINUTO = 8;
 export const LIMITE_HORA = 60;
 const MAX_HISTORICO = 12;
 export const RESUMO_VALE_MS = 30 * 60_000;
+/** Depois da última troca, o contato ainda conta como "no meio de um pedido" por este tempo (a nota de avaliação não o interrompe). */
+export const CONVERSA_ABERTA_MS = 15 * 60_000;
 
 export interface RascunhoVigente {
     hash: string;
@@ -31,6 +33,8 @@ export interface ConversaBot {
     /** A última coisa que o bot mandou foi o resumo: só então um "sim" vale. */
     aguardandoConfirmacao: boolean;
     soLink: boolean;
+    /** Instante da última troca de mensagens com o bot (preenchido por salvarConversa). */
+    ultimaEm?: number;
 }
 
 export function criarEstadoBot(agora: () => number = Date.now) {
@@ -71,8 +75,14 @@ export function criarEstadoBot(agora: () => number = Date.now) {
             return true;
         },
         conversa: (sessionId: string, contactKey: string) => conversas.get(chave(sessionId, contactKey)),
+        /** true se o bot está no meio de um pedido com o contato (rascunho vigente ou resumo aguardando o "sim"). */
+        conversaAberta(sessionId: string, contactKey: string): boolean {
+            const c = conversas.get(chave(sessionId, contactKey));
+            return !!c && (c.rascunho !== null || c.aguardandoConfirmacao || (c.ultimaEm !== undefined && agora() - c.ultimaEm < CONVERSA_ABERTA_MS));
+        },
         salvarConversa(sessionId: string, contactKey: string, c: ConversaBot) {
             c.historico = c.historico.slice(-MAX_HISTORICO);
+            c.ultimaEm = agora();
             conversas.set(chave(sessionId, contactKey), c);
         },
     };

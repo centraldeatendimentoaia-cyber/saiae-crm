@@ -45,7 +45,12 @@ const depsPadrao = (): DepsEntrada => ({
         cacheBarraca.set(sessionId, { id });
         return id;
     },
-    tratar: (entrada) => tratar(entrada),
+    tratar: async (entrada) => {
+        // Resposta a um pedido de avaliação (nota 1 a 5) não vai para o bot. Import tardio: evita ciclo com o manager.
+        const { tratarRespostaAvaliacao } = await import("@/modules/disparos/avaliacao");
+        if (await tratarRespostaAvaliacao({ sessionId: entrada.sessionId, jid: entrada.jid, contactKey: entrada.contactKey, texto: entrada.texto })) return;
+        await tratar(entrada);
+    },
     humanoAssumiu: (sessionId, contactKey) => humanoAssumiu(sessionId, contactKey),
 });
 

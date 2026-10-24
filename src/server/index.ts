@@ -11,6 +11,7 @@ import { waManager } from "../modules/whatsapp/manager";
 import { logger } from "../lib/logger";
 import { iniciarWorkerAvisos } from "../modules/integracao/comanda/aviso-worker";
 import { iniciarWorkerCampanhas } from "../modules/disparos/worker";
+import { iniciarWorkerAvaliacoes } from "../modules/disparos/avaliacao";
 import pkg from "../../package.json";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -58,6 +59,8 @@ app.prepare().then(() => {
   iniciarWorkerAvisos();
   // Envia as campanhas de disparo que ficaram na fila (inclusive de antes de um reinício)
   iniciarWorkerCampanhas();
+  // Envia os pedidos de avaliação pós-entrega que ficaram agendados
+  iniciarWorkerAvaliacoes();
 
   // Cloudflare 520 Fix: increase keep-alive timeout so Node doesn't kill idle connections that Cloudflare expects to reuse
   // See: https://github.com/vercel/next.js/issues/48962
