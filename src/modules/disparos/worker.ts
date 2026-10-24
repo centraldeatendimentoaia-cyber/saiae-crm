@@ -20,8 +20,8 @@ const TAG = "DisparoWorker";
 export const INTERVALO_WORKER_MS = 5_000;
 /** Lote pequeno: cada envio espera 8 a 25 s, então um ciclo já dura minutos. */
 export const LOTE = 5;
-/** Reserva do envio enquanto um worker o processa; se o processo cair, ele volta a ficar disponível depois disto. */
-export const RESERVA_MS = 90_000;
+/** Reserva do envio enquanto um worker o processa (maior que a pausa de 25 s, o envio e os tempos limite); se o processo cair, ele volta a ficar disponível depois disto. */
+export const RESERVA_MS = 5 * 60_000;
 export const ESPERA_RETENTATIVA_MS = [30_000, 5 * 60_000];
 export const MAX_TENTATIVAS = ESPERA_RETENTATIVA_MS.length + 1;
 export const ESPERA_SEM_SESSAO_MS = 60_000;
@@ -51,8 +51,8 @@ export interface WorkerDb {
     disparoEnvio: {
         findMany(args: unknown): Promise<LinhaEnvio[]>;
         updateMany(args: unknown): Promise<{ count: number }>;
-        update(args: unknown): Promise<unknown>;
         count(args: unknown): Promise<number>;
+        findFirst(args: unknown): Promise<{ enviadoEm: Date | null } | null>;
     };
     disparoCampanha: {
         findUnique(args: unknown): Promise<CampanhaLinha | null>;
@@ -88,12 +88,13 @@ function ehPayload(p: unknown): p is { telefone: string; nome: string | null } {
     return !!o && typeof o.telefone === "string" && (o.nome === null || typeof o.nome === "string");
 }
 
+// Condicionais em "pendente": um cancelamento do dono que chegou no meio do caminho nunca é sobrescrito.
 async function finalizar(db: WorkerDb, id: string, estado: string, motivo: string | null, extra: Record<string, unknown> = {}) {
-    await db.disparoEnvio.update({ where: { id }, data: { estado, motivo, payload: Prisma.DbNull, ...extra } });
+    await db.disparoEnvio.updateMany({ where: { id, estado: "pendente" }, data: { estado, motivo, payload: Prisma.DbNull, ...extra } });
 }
 
 async function adiar(db: WorkerDb, id: string, ate: number, motivo: string | null, extra: Record<string, unknown> = {}) {
-    await db.disparoEnvio.update({ where: { id }, data: { proximaTentativaEm: new Date(ate), motivo, ...extra } });
+    await db.disparoEnvio.updateMany({ where: { id, estado: "pendente" }, data: { proximaTentativaEm: new Date(ate), motivo, ...extra } });
 }
 
 /** Quando não resta nenhum envio pendente, a campanha deixa de estar em andamento. */
@@ -157,7 +158,14 @@ async function decidir(linha: LinhaEnvio, campanha: CampanhaLinha, deps: WorkerD
         db.disparoEnvio.count({ where: { barracaId: linha.barracaId, estado: "enviado", enviadoEm: { gte: new Date(agora - DIA_MS) } } }),
     ]);
     if (ultimoDia >= (novo ? TETO_CAMPANHA.diaNovo : TETO_CAMPANHA.diaNormal)) {
-        await adiar(db, linha.id, ate(proximaJanela(agora)), "teto_diario");
+        // Janela móvel de 24 h: volta quando o envio mais antigo da janela sai dela (e a janela horária decide o resto).
+        const maisAntigo = await db.disparoEnvio.findFirst({
+            where: { barracaId: linha.barracaId, estado: "enviado", enviadoEm: { gte: new Date(agora - DIA_MS) } },
+            orderBy: { enviadoEm: "asc" },
+            select: { enviadoEm: true },
+        });
+        const liberaEm = maisAntigo?.enviadoEm ? maisAntigo.enviadoEm.getTime() + DIA_MS + 1_000 : agora + ESPERA_TETO_MS;
+        await adiar(db, linha.id, ate(Math.max(liberaEm, agora + 1_000)), "teto_diario");
         return;
     }
     if (ultimoMinuto >= TETO_CAMPANHA.minuto) {
@@ -182,6 +190,21 @@ async function decidir(linha: LinhaEnvio, campanha: CampanhaLinha, deps: WorkerD
             return;
         }
         await deps.sleep(JITTER_CAMPANHA_MS.min + Math.floor(deps.random() * (JITTER_CAMPANHA_MS.max - JITTER_CAMPANHA_MS.min + 1)));
+        // Durante a pausa (8 a 25 s) o dono pode cancelar, o cliente pode dizer SAIR e a janela horária pode fechar.
+        if ((await db.disparoEnvio.count({ where: { id: linha.id, estado: "pendente" } })) === 0) return;
+        const atual = await db.disparoCampanha.findUnique({ where: { id: linha.campanhaId } });
+        if (!atual || atual.estado === "cancelada") {
+            await finalizar(db, linha.id, "cancelado", "cancelado_pelo_dono");
+            return;
+        }
+        if (await deps.isOptedOut(sessionId, telefone + "@s.whatsapp.net")) {
+            await finalizar(db, linha.id, "pulado_optout", null);
+            return;
+        }
+        if (!dentroDaJanela(deps.now())) {
+            await adiar(db, linha.id, ate(proximaJanela(deps.now())), "fora_da_janela");
+            return;
+        }
         const jid = await provider.resolveRecipient(`${telefone}@s.whatsapp.net`);
         await provider.sendText(jid, montarTextoCampanha(campanha.texto, { nome, barraca: campanha.barracaNome }));
         await finalizar(db, linha.id, "enviado", null, { tentativas: linha.tentativas + 1, enviadoEm: new Date(deps.now()) });
@@ -233,9 +256,10 @@ export async function processarCampanhas(over: Partial<WorkerDeps> = {}): Promis
     });
     let feitos = 0;
     for (const linha of linhas) {
+        const t = deps.now(); // relógio atual: o ciclo pode já ter demorado minutos nos envios anteriores
         const reservada = await deps.db.disparoEnvio.updateMany({
-            where: { id: linha.id, estado: "pendente", proximaTentativaEm: { lte: new Date(agora) } },
-            data: { proximaTentativaEm: new Date(agora + RESERVA_MS) },
+            where: { id: linha.id, estado: "pendente", proximaTentativaEm: { lte: new Date(t) } },
+            data: { proximaTentativaEm: new Date(t + RESERVA_MS) },
         });
         if (reservada.count !== 1) continue;
         try {

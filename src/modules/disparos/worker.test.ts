@@ -9,7 +9,7 @@ vi.mock("@/lib/optout", async (orig) => ({ ...(await orig<typeof import("@/lib/o
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 vi.mock("@/modules/whatsapp/provider", () => ({ getProvider: vi.fn() }));
 
-import { ESPERA_RETENTATIVA_MS, MAX_TENTATIVAS, limparChaves, processarCampanhas, type LinhaEnvio, type WorkerDeps } from "./worker";
+import { ESPERA_RETENTATIVA_MS, MAX_TENTATIVAS, RESERVA_MS, limparChaves, processarCampanhas, type LinhaEnvio, type WorkerDeps } from "./worker";
 import { JITTER_CAMPANHA_MS, RODAPE_SAIR, TETO_CAMPANHA, VALIDADE_CAMPANHA_MS, chaveDoCliente, proximaJanela } from "./regras";
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -24,7 +24,8 @@ interface Camp { id: string; estado: string; texto: string; barracaNome: string;
 function cenario(
     opts: { envios?: Partial<Envio>[]; campanhas?: Camp[]; conectadas?: string[]; vinculoCriadoHaDias?: number; enviadosAntes?: Partial<Envio>[]; agora?: number } = {}
 ) {
-    const agora = opts.agora ?? AGORA;
+    const relogio = { t: opts.agora ?? AGORA };
+    const agora = relogio.t;
     const envios: Envio[] = (opts.envios ?? [{}]).map((e, i) => ({
         id: `e${i}`, campanhaId: "c0", barracaId: A, chave: chaveDoCliente(A, "5561999990001"), tentativas: 0, estado: "pendente",
         proximaTentativaEm: new Date(agora - 1000), enviadoEm: null, payload: { telefone: "5561999990001", nome: "Ana Souza" }, ...e,
@@ -52,7 +53,10 @@ function cenario(
                 alvo.forEach((e) => Object.assign(e, a.data));
                 return { count: alvo.length };
             },
-            update: async (a: { where: { id: string }; data: Partial<Envio> }) => Object.assign(envios.find((x) => x.id === a.where.id)!, a.data),
+            findFirst: async (a: { where: Record<string, unknown> }) => {
+                const l = envios.filter((e) => casa(a.where, e as never)).sort((x, y) => x.enviadoEm!.getTime() - y.enviadoEm!.getTime());
+                return l[0] ? { enviadoEm: l[0].enviadoEm } : null;
+            },
             count: async (a: { where: Record<string, unknown> }) => envios.filter((e) => casa(a.where, e as never)).length,
         },
         disparoCampanha: {
@@ -74,11 +78,11 @@ function cenario(
     const sleep = vi.fn(async () => {});
     const isOptedOut = vi.fn(async () => false);
     const deps: Partial<WorkerDeps> = {
-        db: db as never, now: () => agora, sleep, random: () => 0,
+        db: db as never, now: () => relogio.t, sleep, random: () => 0,
         estaConectada: (s) => (opts.conectadas ?? ["sessao-A", "sessao-B"]).includes(s),
         getProvider: () => provider as never, isOptedOut, logger: h.logger,
     };
-    return { envios, campanhas, enviadas, deps, provider, sleep, isOptedOut, sendText };
+    return { envios, campanhas, enviadas, deps, provider, sleep, isOptedOut, sendText, relogio };
 }
 
 beforeEach(() => Object.values(h.logger).forEach((f) => f.mockReset()));
@@ -128,11 +132,12 @@ describe("worker de campanhas: ordem de decisão", () => {
         expect(c.sendText).not.toHaveBeenCalled();
     });
 
-    it("teto diário (número novo: 20): adia até a próxima janela", async () => {
-        const c = cenario({ vinculoCriadoHaDias: 2, enviadosAntes: Array.from({ length: TETO_CAMPANHA.diaNovo }, () => ({})) });
+    it("teto diário (número novo: 20): volta quando o envio mais antigo sai da janela móvel de 24 h", async () => {
+        const c = cenario({ vinculoCriadoHaDias: 2, enviadosAntes: Array.from({ length: TETO_CAMPANHA.diaNovo }, (_, i) => ({ enviadoEm: new Date(AGORA - 5 * H + i * MIN) })) });
         await processarCampanhas(c.deps);
         expect(c.envios[0]).toMatchObject({ estado: "pendente", motivo: "teto_diario" });
-        expect(c.envios[0].proximaTentativaEm.getTime()).toBe(proximaJanela(AGORA));
+        expect(c.envios[0].proximaTentativaEm.getTime()).toBe(AGORA - 5 * H + 24 * H + 1_000);
+        expect(c.envios[0].proximaTentativaEm.getTime()).toBeLessThan(proximaJanela(AGORA) + 24 * H);
     });
 
     it("número com mais de uma semana tem teto maior que o novo", async () => {
@@ -167,6 +172,62 @@ describe("worker de campanhas: ordem de decisão", () => {
         const c = cenario({ enviadosAntes: [{ barracaId: B, chave: chaveDoCliente(B, "5561999990001"), enviadoEm: new Date(AGORA - H) }] });
         await processarCampanhas(c.deps);
         expect(c.envios[0].estado).toBe("enviado");
+    });
+});
+
+describe("worker de campanhas: durante a pausa antes do envio", () => {
+    it("campanha cancelada ou item cancelado na pausa: nada é enviado e o cancelamento não é sobrescrito", async () => {
+        const campCancelada = cenario();
+        campCancelada.sleep.mockImplementation(async () => { campCancelada.campanhas[0].estado = "cancelada"; });
+        await processarCampanhas(campCancelada.deps);
+        expect(campCancelada.sendText).not.toHaveBeenCalled();
+        expect(campCancelada.envios[0].estado).toBe("cancelado");
+
+        const itemCancelado = cenario();
+        itemCancelado.sleep.mockImplementation(async () => { itemCancelado.envios[0].estado = "cancelado"; });
+        await processarCampanhas(itemCancelado.deps);
+        expect(itemCancelado.sendText).not.toHaveBeenCalled();
+        expect(itemCancelado.envios[0].estado).toBe("cancelado");
+    });
+
+    it("cancelamento durante o próprio envio não é sobrescrito por 'enviado'", async () => {
+        const c = cenario();
+        c.sendText.mockImplementation(async () => { c.envios[0].estado = "cancelado"; return { messageId: null }; });
+        await processarCampanhas(c.deps);
+        expect(c.envios[0].estado).toBe("cancelado");
+    });
+
+    it("SAIR dito durante a pausa: pulado_optout", async () => {
+        const c = cenario();
+        c.sleep.mockImplementation(async () => { c.isOptedOut.mockResolvedValue(true); });
+        await processarCampanhas(c.deps);
+        expect(c.sendText).not.toHaveBeenCalled();
+        expect(c.envios[0].estado).toBe("pulado_optout");
+    });
+
+    it("janela horária fecha durante a pausa: adia para as 9h", async () => {
+        const quase = Date.parse("2026-10-24T22:59:50Z"); // 19:59:50 em São Paulo
+        const c = cenario({ agora: quase });
+        c.sleep.mockImplementation(async () => { c.relogio.t += 20_000; });
+        await processarCampanhas(c.deps);
+        expect(c.sendText).not.toHaveBeenCalled();
+        expect(c.envios[0]).toMatchObject({ estado: "pendente", motivo: "fora_da_janela" });
+        expect(c.envios[0].proximaTentativaEm.getTime()).toBe(proximaJanela(quase + 20_000));
+    });
+
+    it("a reserva de cada item usa o relógio atual e dura mais que a pausa e o envio", async () => {
+        const c = cenario({ envios: [{}, { chave: "outro", payload: { telefone: "5561988880002", nome: null } }] });
+        c.sleep.mockImplementation(async () => { c.relogio.t += 20_000; });
+        const reservas: number[] = [];
+        c.sendText.mockImplementation(async () => {
+            const pendente = c.envios.find((e) => e.estado === "pendente");
+            reservas.push(pendente!.proximaTentativaEm.getTime());
+            return { messageId: null };
+        });
+        await processarCampanhas(c.deps);
+        expect(reservas[0]).toBe(AGORA + RESERVA_MS); // 1º item, reservado no instante inicial
+        expect(reservas[1]).toBe(AGORA + 20_000 + RESERVA_MS); // 2º item, reservado depois de 20 s de pausa
+        expect(RESERVA_MS).toBeGreaterThan(JITTER_CAMPANHA_MS.max + 60_000);
     });
 });
 
