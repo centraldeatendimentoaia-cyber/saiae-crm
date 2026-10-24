@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { isOptedOut as isOptedOutDb, phoneKey } from "@/lib/optout";
+import { isOptedOut as isOptedOutDb } from "@/lib/optout";
 import { waManager } from "@/modules/whatsapp/manager";
 import { getProvider } from "@/modules/whatsapp/provider";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
@@ -12,7 +12,7 @@ import { montarMensagem } from "@/modules/integracao/comanda/aviso-textos";
 import { normalizeBrPhone } from "@/modules/integracao/comanda/contato";
 import { ESPERA_RETENTATIVA_MS, JITTER_MS, MAX_TENTATIVAS, NOVO_DIAS, TETO_POR_DIA, TETO_POR_MINUTO } from "@/modules/integracao/comanda/aviso-worker";
 import type { ComandaEvent } from "@/modules/integracao/comanda/schema";
-import { dentroDaJanela, proximaJanela } from "./regras";
+import { chaveDoCliente, dentroDaJanela, proximaJanela } from "./regras";
 
 /**
  * Avaliação pós-entrega: 30 min depois do `entregue` o cliente recebe um pedido de nota (1 a 5); a resposta é lida nas
@@ -34,7 +34,11 @@ export const ESPERA_SEM_SESSAO_MS = 60_000;
 export const ESPERA_TETO_MS = 30_000;
 export const INTERVALO_WORKER_MS = 5_000;
 export const LOTE = 20;
-export const RESERVA_MS = 60_000;
+/** Maior que o jitter, o envio e os tempos limite juntos: a reserva só vence se o processo caiu. */
+export const RESERVA_MS = 5 * MIN;
+export const ESPERA_TETO_DIARIO_MS = 15 * MIN;
+/** Depois da nota, o aviso ao dono é tentado de novo por até isto. */
+export const VALIDADE_AVISO_DONO_MS = HORA;
 export const MAX_COMENTARIO = 300;
 
 export const TEXTO_AVALIACAO_PADRAO = "Olá {nome}! Como foi seu pedido {senha} na {barraca}? Responda com uma nota de 1 a 5 (5 = ótimo) e, se quiser, deixe um comentário.";
@@ -85,17 +89,18 @@ const ehDuplicata = (e: unknown) => (e as { code?: unknown } | null)?.code === "
 
 export interface AgendarDb {
     barracaSessao: { findFirst(args: unknown): Promise<{ sessionId: string; createdAt: Date } | null> };
-    avaliacaoPedido: { create(args: unknown): Promise<unknown> };
+    avaliacaoPedido: { create(args: unknown): Promise<unknown>; updateMany(args: unknown): Promise<{ count: number }> };
 }
 
 /**
- * Registra a avaliação do evento `entregue`. Pedido que já nasce entregue (entrega direta no balcão) ocupa a chave
+ * Registra a avaliação do evento `entregue` e cancela a agendada quando o pedido é cancelado (`order.cancelled`). Pedido que já nasce entregue (entrega direta no balcão) ocupa a chave
  * única sem agendar nada. Evento repetido cai na restrição única e é ignorado. Lança se o banco falhar: a rota
  * responde 503 e a Comanda reenvia o evento.
  */
 export async function agendarAvaliacaoDoEvento(event: ComandaEvent, db: AgendarDb = prisma as never): Promise<void> {
     const data = event.data as { pedido_id?: unknown; senha?: unknown; status?: unknown; cliente?: { nome?: unknown; telefone?: unknown } | null };
-    if (data.status !== "entregue" || (event.type !== "order.created" && event.type !== "order.status_changed")) return;
+    const cancelamento = event.type === "order.cancelled";
+    if (!cancelamento && (data.status !== "entregue" || (event.type !== "order.created" && event.type !== "order.status_changed"))) return;
     if (typeof data.pedido_id !== "string") return;
     if (!(await sessaoDaBarraca(event.barraca_id, db))) return;
 
@@ -109,6 +114,15 @@ export async function agendarAvaliacaoDoEvento(event: ComandaEvent, db: AgendarD
         }
     };
 
+    if (cancelamento) {
+        // Ocupa a chave (um "entregue" que chegue depois não agenda nada) e cancela a que já estava agendada.
+        await criar({ estado: "pulada_cancelado", motivo: "pedido_cancelado" });
+        await db.avaliacaoPedido.updateMany({
+            where: { barracaId: event.barraca_id, pedidoId: data.pedido_id, estado: "agendada" },
+            data: { estado: "pulada_cancelado", motivo: "pedido_cancelado", payload: Prisma.DbNull, telefoneChave: null },
+        });
+        return;
+    }
     if (event.type === "order.created") {
         await criar({ estado: "pulada_desativada", motivo: "nasceu_entregue" });
         return;
@@ -123,7 +137,7 @@ export async function agendarAvaliacaoDoEvento(event: ComandaEvent, db: AgendarD
         nome: typeof data.cliente?.nome === "string" ? data.cliente.nome : null,
         senha: typeof data.senha === "number" ? data.senha : null,
     };
-    await criar({ estado: "agendada", payload });
+    await criar({ estado: "agendada", payload, telefoneChave: chaveDoCliente(event.barraca_id, telefone) });
 }
 
 /* --------------------------- worker de envio --------------------------- */
@@ -172,12 +186,13 @@ const depsPadrao = (): AvaliacaoDeps => ({
     logger,
 });
 
+// Condicionais em "agendada": um cancelamento que chegou no meio do caminho não é sobrescrito.
 async function finalizar(db: AvaliacaoDb, id: string, estado: string, motivo: string | null, extra: Record<string, unknown> = {}) {
-    await db.avaliacaoPedido.update({ where: { id }, data: { estado, motivo, payload: Prisma.DbNull, ...extra } });
+    await db.avaliacaoPedido.updateMany({ where: { id, estado: "agendada" }, data: { estado, motivo, payload: Prisma.DbNull, telefoneChave: null, ...extra } });
 }
 
 async function adiar(db: AvaliacaoDb, id: string, ate: number, motivo: string | null, extra: Record<string, unknown> = {}) {
-    await db.avaliacaoPedido.update({ where: { id }, data: { enviarEm: new Date(ate), motivo, ...extra } });
+    await db.avaliacaoPedido.updateMany({ where: { id, estado: "agendada" }, data: { enviarEm: new Date(ate), motivo, ...extra } });
 }
 
 /** Processa uma avaliação já reservada. Nunca lança por regra de negócio. */
@@ -240,7 +255,7 @@ export async function processarAvaliacao(linha: LinhaAvaliacao, deps: AvaliacaoD
             db.avaliacaoPedido.count({ where: { barracaId: linha.barracaId, enviadaEm: desde(DIA_MS) } }),
         ]);
         if (avDia + apDia >= TETO_POR_DIA[perfil]) {
-            await adiar(db, linha.id, proximaJanela(agora), "teto_diario");
+            await adiar(db, linha.id, agora + ESPERA_TETO_DIARIO_MS, "teto_diario"); // janela móvel de 24 h: volta a olhar em breve
             return;
         }
         if (avMin + apMin >= TETO_POR_MINUTO[perfil]) {
@@ -254,11 +269,24 @@ export async function processarAvaliacao(linha: LinhaAvaliacao, deps: AvaliacaoD
             return;
         }
         await deps.sleep(JITTER_MS.min + Math.floor(deps.random() * (JITTER_MS.max - JITTER_MS.min + 1)));
+        // Durante a pausa o mundo pode ter mudado: cancelamento, descadastro, fim da janela horária.
+        if ((await db.avaliacaoPedido.count({ where: { id: linha.id, estado: "agendada" } })) === 0) return;
+        if (await deps.isOptedOut(sessionId, telefone + "@s.whatsapp.net")) {
+            await finalizar(db, linha.id, "pulada_optout", null);
+            return;
+        }
+        if (!dentroDaJanela(deps.now())) {
+            await adiar(db, linha.id, proximaJanela(deps.now()), "fora_da_janela");
+            return;
+        }
         const texto = montarMensagem(cfg.texto?.trim() || TEXTO_AVALIACAO_PADRAO, { nome, senha, barraca: cfg.barraca_nome });
         const jid = await provider.resolveRecipient(`${telefone}@s.whatsapp.net`);
         await provider.sendText(jid, texto);
         // Mantém o payload: a resposta é casada pelo telefone. Ele some quando a nota chega ou a janela de 48 h fecha.
-        await db.avaliacaoPedido.update({ where: { id: linha.id }, data: { estado: "enviada", motivo: null, tentativas: linha.tentativas + 1, enviadaEm: new Date(deps.now()) } });
+        await db.avaliacaoPedido.updateMany({
+            where: { id: linha.id, estado: "agendada" },
+            data: { estado: "enviada", motivo: null, tentativas: linha.tentativas + 1, enviadaEm: new Date(deps.now()) },
+        });
         deps.logger.info(TAG, "avaliação enviada");
     } catch (e) {
         const semWhatsapp = e instanceof Error && /não possui WhatsApp/i.test(e.message);
@@ -283,8 +311,9 @@ export async function processarAvaliacoes(over: Partial<AvaliacaoDeps> = {}): Pr
     const agora = deps.now();
     await deps.db.avaliacaoPedido.updateMany({
         where: { estado: "enviada", enviadaEm: { lt: new Date(agora - VALIDADE_RESPOSTA_MS) } },
-        data: { estado: "expirada", motivo: "sem_resposta", payload: Prisma.DbNull },
+        data: { estado: "expirada", motivo: "sem_resposta", payload: Prisma.DbNull, telefoneChave: null },
     });
+    await reavisarDonos(deps);
     const linhas = (await deps.db.avaliacaoPedido.findMany({
         where: { estado: "agendada", enviarEm: { lte: new Date(agora) } },
         orderBy: { enviarEm: "asc" },
@@ -293,9 +322,10 @@ export async function processarAvaliacoes(over: Partial<AvaliacaoDeps> = {}): Pr
     })) as LinhaAvaliacao[];
     let feitos = 0;
     for (const linha of linhas) {
+        const t = deps.now();
         const reservada = await deps.db.avaliacaoPedido.updateMany({
-            where: { id: linha.id, estado: "agendada", enviarEm: { lte: new Date(agora) } },
-            data: { enviarEm: new Date(agora + RESERVA_MS) },
+            where: { id: linha.id, estado: "agendada", enviarEm: { lte: new Date(t) } },
+            data: { enviarEm: new Date(t + RESERVA_MS) },
         });
         if (reservada.count !== 1) continue;
         try {
@@ -363,61 +393,131 @@ const respostaDepsPadrao = (): RespostaDeps => ({
 const primeiroNome = (nome: string | null) => (nome ?? "").trim().split(/\s+/)[0] ?? "";
 
 /**
+ * Manda ao WhatsApp do dono a nota recebida. "sem_dono" = a loja não tem WhatsApp cadastrado (nada a fazer);
+ * "falhou" = config fora do ar, sessão caída ou erro de envio (vale tentar de novo).
+ */
+async function avisarDono(
+    d: Pick<RespostaDeps, "getProvider" | "config" | "logger">,
+    a: { barracaId: string; sessionId: string; nome: string | null; senha: number | null; nota: number; comentario: string | null }
+): Promise<"enviado" | "sem_dono" | "falhou"> {
+    const cfg = await d.config(a.barracaId);
+    if (!cfg) return "falhou";
+    const dono = normalizeBrPhone(cfg.whatsapp_dono);
+    if (!dono) return "sem_dono";
+    const provider = d.getProvider(a.sessionId);
+    if (!provider?.isConnected()) return "falhou";
+    const quem = primeiroNome(a.nome) || "Cliente";
+    const pedido = a.senha === null ? "" : " (pedido #" + a.senha + ")";
+    const comentario = a.comentario ? '\n"' + a.comentario + '"' : "";
+    const aviso = (a.nota <= 2 ? "ATENÇÃO: " : "") + "Avaliação de " + quem + pedido + ": nota " + a.nota + " de 5." + comentario;
+    try {
+        await provider.sendText(await provider.resolveRecipient(dono + "@s.whatsapp.net"), aviso);
+        return "enviado";
+    } catch {
+        d.logger.warn(TAG, "aviso ao dono não enviado");
+        return "falhou";
+    }
+}
+
+/** Depois de avisado (ou sem dono para avisar), nada mais precisa ficar guardado. */
+const AVISO_DONO_RESOLVIDO = { donoAvisoAte: null, payload: Prisma.DbNull };
+
+/**
  * Tenta tratar a mensagem recebida como resposta a um pedido de avaliação. Devolve true se virou nota (a mensagem não
  * segue para o bot). Nunca lança. `contactKey` (telefone só com dígitos, quando o jid é @lid) tem prioridade sobre o jid.
+ * Se o aviso ao dono falhar, a avaliação fica com `donoAvisoAte` e é reenviada pelo worker por até 1 h.
  */
 export async function tratarRespostaAvaliacao(a: { sessionId: string; jid: string; contactKey?: string; texto: string }, over: Partial<RespostaDeps> = {}): Promise<boolean> {
     const parsed = parseNota(a.texto);
     if (!parsed) return false;
     const deps: RespostaDeps = { ...respostaDepsPadrao(), ...over };
     try {
-        const telefone = a.contactKey ?? a.jid;
-        const chave = phoneKey(telefone);
-        if (chave.length < 8) return false;
+        const telefone = (a.contactKey ?? a.jid.split("@")[0]).replace(/\D/g, "");
+        if (telefone.length < 8) return false;
         // Cliente no meio de um pedido com o bot: "5" é resposta ao bot, não nota.
-        if (deps.conversaAberta(a.sessionId, (a.contactKey ?? a.jid.split("@")[0]).replace(/\D/g, ""))) return false;
+        if (deps.conversaAberta(a.sessionId, telefone)) return false;
 
         const vinculo = await deps.db.barracaSessao.findUnique({ where: { sessionId: a.sessionId }, select: { barracaId: true } });
         if (!vinculo) return false;
         const agora = deps.now();
-        const candidatas = await deps.db.avaliacaoPedido.findMany({
-            where: { barracaId: vinculo.barracaId, estado: "enviada", enviadaEm: { gte: new Date(agora - VALIDADE_RESPOSTA_MS) } },
+        const [alvo] = await deps.db.avaliacaoPedido.findMany({
+            where: {
+                barracaId: vinculo.barracaId,
+                estado: "enviada",
+                telefoneChave: chaveDoCliente(vinculo.barracaId, telefone),
+                enviadaEm: { gte: new Date(agora - VALIDADE_RESPOSTA_MS) },
+            },
             orderBy: { enviadaEm: "desc" },
-            take: 50,
+            take: 1,
             select: { id: true, pedidoId: true, payload: true },
         });
-        const alvo = candidatas.find((c) => ehPayload(c.payload) && phoneKey(c.payload.telefone) === chave);
         if (!alvo || !ehPayload(alvo.payload)) return false;
-        const { nome, senha } = alvo.payload;
+        const nome = primeiroNome(alvo.payload.nome) || null;
+        const senha = alvo.payload.senha;
 
-        // Condicional em `enviada`: se duas respostas chegam juntas, só uma grava.
+        // Condicional em `enviada`: se duas respostas chegam juntas, só uma grava. O telefone sai do banco aqui; ficam só
+        // o primeiro nome e a senha enquanto o aviso ao dono estiver pendente.
         const gravou = await deps.db.avaliacaoPedido.updateMany({
             where: { id: alvo.id, estado: "enviada" },
-            data: { estado: "respondida", nota: parsed.nota, comentario: parsed.comentario, respondidaEm: new Date(agora), payload: Prisma.DbNull },
+            data: {
+                estado: "respondida",
+                nota: parsed.nota,
+                comentario: parsed.comentario,
+                respondidaEm: new Date(agora),
+                telefoneChave: null,
+                donoAvisoAte: new Date(agora + VALIDADE_AVISO_DONO_MS),
+                payload: { nome, senha },
+            },
         });
         if (gravou.count !== 1) return false;
 
         const provider = deps.getProvider(a.sessionId);
         if (provider?.isConnected()) {
             await provider.sendText(a.jid, parsed.nota >= 3 ? AGRADECIMENTO_BOM : AGRADECIMENTO_RUIM).catch(() => deps.logger.warn(TAG, "agradecimento não enviado"));
-            const cfg = await deps.config(vinculo.barracaId);
-            const dono = normalizeBrPhone(cfg?.whatsapp_dono ?? null);
-            if (dono) {
-                const quem = primeiroNome(nome) || "Cliente";
-                const pedido = senha === null ? "" : ` (pedido #${senha})`;
-                const comentario = parsed.comentario ? `\n"${parsed.comentario}"` : "";
-                const aviso = `${parsed.nota <= 2 ? "ATENÇÃO: " : ""}Avaliação de ${quem}${pedido}: nota ${parsed.nota} de 5.${comentario}`;
-                try {
-                    await provider.sendText(await provider.resolveRecipient(`${dono}@s.whatsapp.net`), aviso);
-                } catch {
-                    deps.logger.warn(TAG, "aviso ao dono não enviado");
-                }
-            }
         }
+        const aviso = await avisarDono(deps, { barracaId: vinculo.barracaId, sessionId: a.sessionId, nome, senha, nota: parsed.nota, comentario: parsed.comentario });
+        if (aviso !== "falhou") await deps.db.avaliacaoPedido.updateMany({ where: { id: alvo.id }, data: AVISO_DONO_RESOLVIDO });
         deps.logger.info(TAG, "avaliação respondida");
         return true;
     } catch (e) {
         deps.logger.warn(TAG, `falha ao tratar resposta: ${(e as { name?: string })?.name ?? "erro"}`);
         return false;
+    }
+}
+
+const ultimaTentativaDono = new Map<string, number>();
+const ESPERA_AVISO_DONO_MS = 60_000;
+
+/**
+ * Reenvia ao dono as notas cujo aviso falhou (sessão caída, Sai aê fora do ar), por até 1 h depois da nota; passado
+ * isso desiste e apaga o que restava guardado. A nota continua no histórico.
+ */
+export async function reavisarDonos(deps: AvaliacaoDeps): Promise<void> {
+    const agora = deps.now();
+    await deps.db.avaliacaoPedido.updateMany({
+        where: { estado: "respondida", donoAvisoAte: { lt: new Date(agora) } },
+        data: { ...AVISO_DONO_RESOLVIDO, motivo: "aviso_dono_perdido" },
+    });
+    const pendentes = (await deps.db.avaliacaoPedido.findMany({
+        where: { estado: "respondida", donoAvisoAte: { gte: new Date(agora) } },
+        take: 20,
+        select: { id: true, barracaId: true, nota: true, comentario: true, payload: true },
+    })) as { id: string; barracaId: string; nota: number | null; comentario: string | null; payload: unknown }[];
+    for (const p of pendentes) {
+        if (p.nota === null || agora - (ultimaTentativaDono.get(p.id) ?? 0) < ESPERA_AVISO_DONO_MS) continue;
+        ultimaTentativaDono.set(p.id, agora);
+        if (ultimaTentativaDono.size > 5_000) ultimaTentativaDono.clear();
+        const vinculo = await sessaoDaBarraca(p.barracaId, deps.db);
+        if (!vinculo) continue;
+        const info = p.payload as { nome?: unknown; senha?: unknown } | null;
+        const r = await avisarDono(deps, {
+            barracaId: p.barracaId,
+            sessionId: vinculo.sessionId,
+            nome: typeof info?.nome === "string" ? info.nome : null,
+            senha: typeof info?.senha === "number" ? info.senha : null,
+            nota: p.nota,
+            comentario: p.comentario,
+        });
+        if (r !== "falhou") await deps.db.avaliacaoPedido.updateMany({ where: { id: p.id }, data: AVISO_DONO_RESOLVIDO });
     }
 }

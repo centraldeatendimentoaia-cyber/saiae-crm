@@ -11,9 +11,9 @@ vi.mock("@/modules/whatsapp/provider", () => ({ getProvider: vi.fn() }));
 
 import {
     ATRASO_AVALIACAO_MS, LIMITE_ENVIO_MS, TEXTO_AVALIACAO_PADRAO, VALIDADE_RESPOSTA_MS,
-    agendarAvaliacaoDoEvento, parseNota, processarAvaliacoes, tratarRespostaAvaliacao, type AvaliacaoDeps, type RespostaDeps,
+    RESERVA_MS, agendarAvaliacaoDoEvento, parseNota, processarAvaliacoes, tratarRespostaAvaliacao, type AvaliacaoDeps, type RespostaDeps,
 } from "./avaliacao";
-import { proximaJanela } from "./regras";
+import { chaveDoCliente, proximaJanela } from "./regras";
 import { TETO_POR_MINUTO } from "@/modules/integracao/comanda/aviso-worker";
 import type { ComandaEvent } from "@/modules/integracao/comanda/schema";
 
@@ -54,6 +54,11 @@ function bancoAgendar(comSessao = true) {
                 if (linhas.some((l) => l.barracaId === a.data.barracaId && l.pedidoId === a.data.pedidoId)) throw Object.assign(new Error("dup"), { code: "P2002" });
                 linhas.push(a.data);
             },
+            updateMany: async (a: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+                const alvo = linhas.filter((l) => Object.entries(a.where).every(([k, v]) => l[k] === v));
+                alvo.forEach((l) => Object.assign(l, a.data));
+                return { count: alvo.length };
+            },
         },
     };
     return { db, linhas };
@@ -66,6 +71,26 @@ describe("agendarAvaliacaoDoEvento", () => {
         expect(linhas).toHaveLength(1);
         expect(linhas[0]).toMatchObject({ barracaId: A, pedidoId: "p1", estado: "agendada", payload: { telefone: "5561999990001", nome: "Ana Souza", senha: 12 } });
         expect((linhas[0].enviarEm as Date).getTime()).toBe(Date.parse("2026-10-24T14:00:00Z") + ATRASO_AVALIACAO_MS);
+    });
+    it("guarda a chave HMAC do telefone (não o telefone) para casar a resposta", async () => {
+        const { db, linhas } = bancoAgendar();
+        await agendarAvaliacaoDoEvento(ev("order.status_changed", {}), db);
+        expect(linhas[0].telefoneChave).toBe(chaveDoCliente(A, "5561999990001"));
+    });
+    it("pedido cancelado depois de agendado: a avaliação vira pulada_cancelado e perde o telefone", async () => {
+        const { db, linhas } = bancoAgendar();
+        await agendarAvaliacaoDoEvento(ev("order.status_changed", {}), db);
+        await agendarAvaliacaoDoEvento(ev("order.cancelled", { status: "cancelado" }), db);
+        expect(linhas).toHaveLength(1);
+        expect(linhas[0]).toMatchObject({ estado: "pulada_cancelado", motivo: "pedido_cancelado", telefoneChave: null });
+        expect(linhas[0].payload).toBe(Prisma.DbNull);
+    });
+    it("cancelamento que chega antes do entregue ocupa a chave: nada é agendado depois", async () => {
+        const { db, linhas } = bancoAgendar();
+        await agendarAvaliacaoDoEvento(ev("order.cancelled", { status: "cancelado" }), db);
+        await agendarAvaliacaoDoEvento(ev("order.status_changed", {}), db);
+        expect(linhas).toHaveLength(1);
+        expect(linhas[0].estado).toBe("pulada_cancelado");
     });
     it("evento entregue duplicado não cria outra", async () => {
         const { db, linhas } = bancoAgendar();
@@ -91,14 +116,13 @@ describe("agendarAvaliacaoDoEvento", () => {
         const { db, linhas } = bancoAgendar();
         await agendarAvaliacaoDoEvento(ev("order.ready", { status: "pronto" }), db);
         await agendarAvaliacaoDoEvento(ev("order.status_changed", { status: "pronto" }), db);
-        await agendarAvaliacaoDoEvento(ev("order.cancelled", { status: "cancelado" }), db);
         const sem = bancoAgendar(false);
         await agendarAvaliacaoDoEvento(ev("order.status_changed", {}), sem.db);
         expect(linhas).toHaveLength(0);
         expect(sem.linhas).toHaveLength(0);
     });
     it("erro de banco que não é duplicata sobe (a rota responde 503)", async () => {
-        const db = { barracaSessao: { findFirst: async () => ({ sessionId: "s", createdAt: new Date(0) }) }, avaliacaoPedido: { create: async () => { throw new Error("banco fora"); } } };
+        const db = { barracaSessao: { findFirst: async () => ({ sessionId: "s", createdAt: new Date(0) }) }, avaliacaoPedido: { create: async () => { throw new Error("banco fora"); }, updateMany: async () => ({ count: 0 }) } };
         await expect(agendarAvaliacaoDoEvento(ev("order.status_changed", {}), db)).rejects.toThrow();
     });
 });
@@ -111,7 +135,8 @@ interface Av {
 }
 
 function cenarioWorker(opts: { avs?: Partial<Av>[]; config?: unknown; conectada?: boolean; cancelado?: boolean; agora?: number; jaEnviados?: Partial<Av>[]; optout?: boolean } = {}) {
-    const agora = opts.agora ?? AGORA;
+    const relogio = { t: opts.agora ?? AGORA };
+    const agora = relogio.t;
     const avs: Av[] = (opts.avs ?? [{}]).map((a, i) => ({
         id: `a${i}`, barracaId: A, pedidoId: `p${i}`, estado: "agendada", tentativas: 0, enviarEm: new Date(agora - 1000), ocorridoEm: new Date(agora - 31 * MIN), enviadaEm: null,
         payload: { telefone: "5561999990001", nome: "Ana Souza", senha: 12 }, ...a,
@@ -148,10 +173,12 @@ function cenarioWorker(opts: { avs?: Partial<Av>[]; config?: unknown; conectada?
     const config = vi.fn(async () => (opts.config === undefined ? { ativo: true, texto: null, whatsapp_dono: null, barraca_nome: "Jmal" } : (opts.config as never)));
     const sleep = vi.fn(async () => {});
     const deps: Partial<AvaliacaoDeps> = {
-        db: db as never, now: () => agora, sleep, random: () => 0, estaConectada: () => opts.conectada ?? true, getProvider: () => provider as never,
+        db: db as never, now: () => relogio.t, sleep, random: () => 0, estaConectada: () => opts.conectada ?? true, getProvider: () => provider as never,
         isOptedOut: async () => opts.optout ?? false, config: config as never, logger: h.logger,
     };
-    return { avs, deps, sendText, provider, config, sleep };
+    const optout = { valor: false };
+    deps.isOptedOut = async () => (opts.optout ?? false) || optout.valor;
+    return { avs, deps, sendText, provider, config, sleep, relogio, optout };
 }
 
 beforeEach(() => Object.values(h.logger).forEach((f) => f.mockReset()));
@@ -257,6 +284,72 @@ describe("worker de avaliações", () => {
         expect(c.sendText).toHaveBeenCalledOnce();
     });
 
+    it("durante a pausa antes do envio: cancelamento, descadastro e fim da janela são respeitados", async () => {
+        const cancelada = cenarioWorker();
+        cancelada.sleep.mockImplementation(async () => { cancelada.avs[0].estado = "pulada_cancelado"; });
+        await processarAvaliacoes(cancelada.deps);
+        expect(cancelada.sendText).not.toHaveBeenCalled();
+        expect(cancelada.avs[0].estado).toBe("pulada_cancelado");
+
+        const optout = cenarioWorker();
+        optout.sleep.mockImplementation(async () => { optout.optout.valor = true; });
+        await processarAvaliacoes(optout.deps);
+        expect(optout.sendText).not.toHaveBeenCalled();
+        expect(optout.avs[0].estado).toBe("pulada_optout");
+
+        const fecha = cenarioWorker({ agora: Date.parse("2026-10-24T22:59:50Z") }); // 19:59:50 em São Paulo
+        fecha.sleep.mockImplementation(async () => { fecha.relogio.t += 20_000; });
+        await processarAvaliacoes(fecha.deps);
+        expect(fecha.sendText).not.toHaveBeenCalled();
+        expect(fecha.avs[0]).toMatchObject({ estado: "agendada", motivo: "fora_da_janela" });
+    });
+
+    it("a reserva usa o relógio atual e dura mais que a pausa e o envio", async () => {
+        const c = cenarioWorker();
+        let visto = 0;
+        c.sendText.mockImplementation(async () => { visto = c.avs[0].enviarEm.getTime(); return { messageId: null }; });
+        await processarAvaliacoes(c.deps);
+        expect(visto).toBe(AGORA + RESERVA_MS);
+        expect(RESERVA_MS).toBeGreaterThanOrEqual(3 * MIN);
+    });
+
+    it("teto diário: volta a olhar em 15 min (janela móvel), não só na manhã seguinte", async () => {
+        const c = cenarioWorker({ jaEnviados: Array.from({ length: 800 }, () => ({})) });
+        await processarAvaliacoes(c.deps);
+        expect(c.avs[0]).toMatchObject({ estado: "agendada", motivo: "teto_diario" });
+        expect(c.avs[0].enviarEm.getTime()).toBe(AGORA + 15 * MIN);
+    });
+
+    describe("aviso ao dono que falhou", () => {
+        const pendente = (over: Partial<Av & { donoAvisoAte: Date }> = {}) => ({
+            estado: "respondida", nota: 2, comentario: "frio", enviarEm: new Date(0), payload: { nome: "Ana", senha: 12 }, donoAvisoAte: new Date(AGORA + 30 * MIN), ...over,
+        });
+        const donoCfg = { ativo: true, texto: null, whatsapp_dono: "61988880002", barraca_nome: "Jmal" };
+        it("reenvia ao dono e limpa o que restava guardado", async () => {
+            const c = cenarioWorker({ avs: [pendente({ id: "d1" }) as never], config: donoCfg });
+            await processarAvaliacoes(c.deps);
+            expect(c.sendText).toHaveBeenCalledOnce();
+            expect(c.sendText.mock.calls[0][0]).toBe("5561988880002@s.whatsapp.net");
+            expect(c.sendText.mock.calls[0][1]).toBe('ATENÇÃO: Avaliação de Ana (pedido #12): nota 2 de 5.\n"frio"');
+            expect(c.avs[0].payload).toBe(Prisma.DbNull);
+            expect((c.avs[0] as unknown as { donoAvisoAte: Date | null }).donoAvisoAte).toBeNull();
+        });
+        it("sessão ainda caída: continua pendente para a próxima tentativa", async () => {
+            const c = cenarioWorker({ avs: [pendente({ id: "d2" }) as never], config: donoCfg });
+            c.provider.isConnected = () => false;
+            await processarAvaliacoes(c.deps);
+            expect(c.sendText).not.toHaveBeenCalled();
+            expect(c.avs[0].payload).toEqual({ nome: "Ana", senha: 12 });
+        });
+        it("passou de 1 h: desiste e apaga o que restava", async () => {
+            const c = cenarioWorker({ avs: [pendente({ id: "d3", donoAvisoAte: new Date(AGORA - MIN) }) as never], config: donoCfg });
+            await processarAvaliacoes(c.deps);
+            expect(c.sendText).not.toHaveBeenCalled();
+            expect(c.avs[0]).toMatchObject({ motivo: "aviso_dono_perdido" });
+            expect(c.avs[0].payload).toBe(Prisma.DbNull);
+        });
+    });
+
     it("enviada há mais de 48 h sem resposta: expirada e sem telefone", async () => {
         const c = cenarioWorker({ avs: [{ estado: "enviada", enviarEm: new Date(0), enviadaEm: new Date(AGORA - VALIDADE_RESPOSTA_MS - MIN) }] });
         await processarAvaliacoes(c.deps);
@@ -279,7 +372,7 @@ function cenarioResposta(opts: { avs?: Partial<Av>[]; conversaAberta?: boolean; 
     const agora = opts.agora ?? AGORA;
     const avs: Av[] = (opts.avs ?? [{}]).map((a, i) => ({
         id: `a${i}`, barracaId: A, pedidoId: `p${i}`, estado: "enviada", tentativas: 1, enviarEm: new Date(0), ocorridoEm: new Date(0), enviadaEm: new Date(agora - 10 * MIN),
-        payload: { telefone: "5561999990001", nome: "Ana Souza", senha: 12 }, nota: null, ...a,
+        payload: { telefone: "5561999990001", nome: "Ana Souza", senha: 12 }, nota: null, telefoneChave: chaveDoCliente(A, "5561999990001"), ...a,
     }));
     const casa = (where: Record<string, unknown>, row: Record<string, unknown>) =>
         Object.entries(where).every(([k, v]) => {
@@ -291,7 +384,7 @@ function cenarioResposta(opts: { avs?: Partial<Av>[]; conversaAberta?: boolean; 
         avaliacaoPedido: {
             findMany: async (a: { where: Record<string, unknown> }) => avs.filter((x) => casa(a.where, x as never)).sort((x, y) => y.enviadaEm!.getTime() - x.enviadaEm!.getTime()),
             updateMany: async (a: { where: Record<string, unknown>; data: Partial<Av> }) => {
-                const alvo = avs.filter((x) => x.id === a.where.id && x.estado === a.where.estado);
+                const alvo = avs.filter((x) => x.id === a.where.id && (a.where.estado === undefined || x.estado === a.where.estado));
                 alvo.forEach((x) => Object.assign(x, a.data));
                 return { count: alvo.length };
             },
@@ -310,7 +403,7 @@ describe("tratarRespostaAvaliacao", () => {
     it("nota válida: grava, limpa o telefone, agradece ao cliente e avisa o dono", async () => {
         const c = cenarioResposta();
         expect(await tratarRespostaAvaliacao(resp("5 - ótimo"), c.deps)).toBe(true);
-        expect(c.avs[0]).toMatchObject({ estado: "respondida", nota: 5, comentario: "ótimo" });
+        expect(c.avs[0]).toMatchObject({ estado: "respondida", nota: 5, comentario: "ótimo", telefoneChave: null, donoAvisoAte: null });
         expect(c.avs[0].payload).toBe(Prisma.DbNull);
         expect(c.enviadas[0]).toEqual({ jid: "5561999990001@s.whatsapp.net", texto: "Obrigado pela avaliação!" });
         expect(c.enviadas[1].jid).toBe("5561988880002@s.whatsapp.net");
@@ -393,7 +486,20 @@ describe("tratarRespostaAvaliacao", () => {
         const c = cenarioResposta();
         c.provider.sendText.mockRejectedValue(new Error("rede"));
         expect(await tratarRespostaAvaliacao(resp("4"), c.deps)).toBe(true);
-        expect(c.avs[0]).toMatchObject({ estado: "respondida", nota: 4 });
+        expect(c.avs[0]).toMatchObject({ estado: "respondida", nota: 4, telefoneChave: null });
+        // aviso ao dono pendente: sem telefone, só primeiro nome e senha, e um prazo de 1 h para o worker tentar de novo
+        expect(c.avs[0].payload).toEqual({ nome: "Ana", senha: 12 });
+        expect((c.avs[0] as unknown as { donoAvisoAte: Date }).donoAvisoAte.getTime()).toBe(AGORA + 60 * MIN);
+    });
+
+    it("busca pela chave do telefone indexada, sem ler o telefone das outras avaliações", async () => {
+        const c = cenarioResposta();
+        const findMany = vi.fn(async (_a: unknown) => [] as never[]);
+        (c.deps.db as unknown as { avaliacaoPedido: { findMany: unknown } }).avaliacaoPedido.findMany = findMany;
+        await tratarRespostaAvaliacao(resp("5"), c.deps);
+        const where = (findMany.mock.calls[0][0] as { where: Record<string, unknown>; take: number });
+        expect(where.where.telefoneChave).toBe(chaveDoCliente(A, "5561999990001"));
+        expect(where.take).toBe(1);
     });
 
     it("erro de banco: false e o bot segue", async () => {
