@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { loadSecrets } from "@/modules/integracao/comanda/secrets";
+import { segredosWhatsapp } from "@/modules/integracao/comanda/sessao-evento";
 import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/modules/integracao/comanda/signature";
 import { validateEvento } from "@/modules/integracao/comanda/schema";
 import { isStale, markSeen, recordSequence, sequenceKey, unmarkSeen, wasSeen } from "@/modules/integracao/comanda/state";
@@ -33,8 +34,11 @@ iniciarWorkerAvisos();
  */
 export async function POST(request: NextRequest) {
     const secrets = loadSecrets();
-    if (!secrets) {
-        logger.error(TAG, "COMANDA_WEBHOOK_SECRETS ausente ou inválida");
+    // Loja sem segredo próprio assina com o segredo de plataforma (o mesmo da conexão do WhatsApp): quem conecta o
+    // WhatsApp não precisa configurar integração à parte. Segredo próprio, quando existe, é o único que vale.
+    const plataforma = segredosWhatsapp();
+    if (!secrets && plataforma.length === 0) {
+        logger.error(TAG, "COMANDA_WEBHOOK_SECRETS e COMANDA_WHATSAPP_SEGREDO ausentes ou inválidos");
         return NextResponse.json({ error: "Integração não configurada" }, { status: 503 });
     }
 
@@ -65,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     // O segredo é da barraca citada no corpo; só depois de a assinatura bater é que o corpo é confiável.
     const barracaId = typeof (parsed as { barraca_id?: unknown } | null)?.barraca_id === "string" ? (parsed as { barraca_id: string }).barraca_id : null;
-    const barracaSecrets = barracaId ? secrets.get(barracaId) : undefined;
+    const barracaSecrets = barracaId ? (secrets?.get(barracaId) ?? (plataforma.length > 0 ? plataforma : undefined)) : undefined;
     if (!barracaSecrets) return unauthorized("barraca desconhecida");
     if (!timestampInWindow(ts)) return unauthorized("timestamp fora da janela de 5 minutos");
     if (!verifyComandaSignature(raw, timestampHeader!, signatureHeader, barracaSecrets)) return unauthorized("assinatura inválida");
