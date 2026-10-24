@@ -99,7 +99,7 @@ export function limparNome(nome: string | null | undefined, padrao: string): str
     return l || padrao;
 }
 
-const CODIGOS_RETENTAVEIS = new Set(["indisponivel", "provedor_indisponivel", "resposta_invalida"]);
+const CODIGOS_RETENTAVEIS = new Set(["indisponivel", "provedor_indisponivel", "resposta_invalida", "pix_em_andamento"]);
 
 export interface ResultadoFerramenta {
     texto: string;
