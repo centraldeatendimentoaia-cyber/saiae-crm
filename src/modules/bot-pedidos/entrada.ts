@@ -5,6 +5,7 @@ import { IDADE_MAX_MS, lerConteudo, telefoneDe } from "@/modules/agente-salao/ag
 import { foiEnviadaPeloCrm } from "@/modules/agente-salao/enviados";
 import { pessoaAssumiu } from "@/modules/agente-salao/estado";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
+import { humanoAssumiu, tratar } from "./motor";
 
 /**
  * Ponte do Baileys para o bot de pedidos. Só olha mensagens de sessões ligadas a uma loja (BarracaSessao) e entrega
@@ -44,8 +45,8 @@ const depsPadrao = (): DepsEntrada => ({
         cacheBarraca.set(sessionId, { id });
         return id;
     },
-    tratar: async () => undefined, // ligado ao motor na Task 5
-    humanoAssumiu: () => undefined,
+    tratar: (entrada) => tratar(entrada),
+    humanoAssumiu: (sessionId, contactKey) => humanoAssumiu(sessionId, contactKey),
 });
 
 // Lista de sessões da Cloud API (mesma variável de provider/index.ts; não importa o provider para não criar ciclo com o manager).
