@@ -29,6 +29,7 @@ Este CRM nasceu de um projeto open source de gateway WhatsApp (Baileys + Next.js
 | :--- | :--- |
 | [INTEGRACAO_COMANDA_EVENTOS.md](./INTEGRACAO_COMANDA_EVENTOS.md) | Contrato dos eventos Comanda -> CRM (SAI-001 v1), assinatura e janela de tempo. |
 | [whatsapp-avisos-baileys.md](./whatsapp-avisos-baileys.md) | Avisos de status do pedido ao cliente pelo WhatsApp (Baileys) de cada barraca: conexão por QR, fila e variáveis. |
+| [whatsapp-disparos.md](./whatsapp-disparos.md) | Campanhas de disparo (reativar e promoção) e avaliação pós-entrega pelo WhatsApp da barraca: rota, tetos, janela, privacidade e limites. |
 
 ### Qualidade e manutenção
 
