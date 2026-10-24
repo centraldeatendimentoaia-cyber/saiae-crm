@@ -42,16 +42,30 @@ const AGRADECIMENTO_BOM = "Obrigado pela avaliação!";
 const AGRADECIMENTO_RUIM = "Sentimos muito. Vamos avisar o responsável da loja para falar com você.";
 
 /**
- * Nota = `N`, `nota N`, `N estrelas` ou `N` seguido de espaço/pontuação e um comentário (N de 1 a 5). "Quero 2 pizzas",
- * "2x yakisoba", "10", "0", "6", "4,5" e texto solto não são nota.
+ * Nota = `N` sozinho, `nota N`, `N estrelas`, ou `N` colado a pontuação/hífen e um comentário (`3 - demorou`, `2, frio`).
+ * `N` + espaço + palavra NÃO vale ("2 pizzas", "1 hora", "4 sabores"), nem comentário que começa com dígito
+ * ("5-6 pessoas"). "Quero 2 pizzas", "2x yakisoba", "10", "0", "6" e "4,5" também não são nota.
+ * Com o prefixo "nota" ou o sufixo "estrelas" o comentário pode vir direto depois.
  */
-const REGEX_NOTA = /^\s*(?:nota\s*[:-]?\s*)?([1-5])(?![\d])(?![.,]\d)(?:\s*estrelas?)?(?=$|[\s.,;:!?\-–—])\s*[-–—,.:;!?]*\s*([\s\S]*)$/i;
+const REGEX_NOTA = /^\s*(nota\s*[:-]?\s*)?([1-5])(?!\d)(?![.,]\d)(\s*estrelas?\b)?/i;
+const REGEX_PONTUACAO = /^\s*[-–—,.:;!?]+\s*/;
 
 export function parseNota(texto: string): { nota: 1 | 2 | 3 | 4 | 5; comentario: string | null } | null {
     const m = REGEX_NOTA.exec(texto.trim());
     if (!m) return null;
-    const comentario = m[2].trim().slice(0, MAX_COMENTARIO);
-    return { nota: Number(m[1]) as 1 | 2 | 3 | 4 | 5, comentario: comentario || null };
+    const resto = texto.trim().slice(m[0].length);
+    let comentario: string;
+    if (resto.trim() === "") {
+        comentario = "";
+    } else if (m[1] || m[3]) {
+        comentario = resto.replace(REGEX_PONTUACAO, "").trim();
+    } else {
+        const p = REGEX_PONTUACAO.exec(resto);
+        if (!p) return null; // "2 pizzas", "2x yakisoba"
+        comentario = resto.slice(p[0].length).trim();
+    }
+    if (/^\d/.test(comentario)) return null; // "5-6 pessoas", "nota 4 2 pizzas"
+    return { nota: Number(m[2]) as 1 | 2 | 3 | 4 | 5, comentario: comentario.slice(0, MAX_COMENTARIO) || null };
 }
 
 interface PayloadAvaliacao {

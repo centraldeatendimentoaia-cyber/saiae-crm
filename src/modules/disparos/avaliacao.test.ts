@@ -25,15 +25,15 @@ const H = 60 * MIN;
 describe("parseNota", () => {
     it.each([
         ["5", 5, null], ["nota 4", 4, null], ["Nota: 3", 3, null], ["4 estrelas", 4, null], ["1 estrela", 1, null],
-        ["3 - demorou", 3, "demorou"], ["2, frio", 2, "frio"], ["5! muito bom", 5, "muito bom"], ["  4  ", 4, null],
+        ["3 - demorou", 3, "demorou"], ["2, frio", 2, "frio"], ["5! muito bom", 5, "muito bom"], ["  4  ", 4, null], ["nota 4 gostei", 4, "gostei"], ["4 estrelas, ótimo", 4, "ótimo"], ["5.", 5, null],
     ])("%j vira nota %i", (texto, nota, comentario) => {
         expect(parseNota(texto)).toEqual({ nota, comentario });
     });
-    it.each(["10", "0", "6", "Quero 2 pizzas", "2x yakisoba", "", "   ", "sim", "4,5", "4.5", "15 minutos", "nota"])("%j não é nota", (texto) => {
+    it.each(["10", "0", "6", "Quero 2 pizzas", "2x yakisoba", "", "   ", "sim", "4,5", "4.5", "15 minutos", "nota", "2 pizzas", "3 pastéis", "5-6 pessoas", "1 hora", "4 sabores", "5 ótimo"])("%j não é nota", (texto) => {
         expect(parseNota(texto)).toBeNull();
     });
     it("corta o comentário em 300 caracteres", () => {
-        expect(parseNota(`5 ${"a".repeat(500)}`)!.comentario).toHaveLength(300);
+        expect(parseNota(`5 - ${"a".repeat(500)}`)!.comentario).toHaveLength(300);
     });
 });
 
@@ -308,7 +308,7 @@ const resp = (texto: string, over: Partial<{ sessionId: string; jid: string; con
 describe("tratarRespostaAvaliacao", () => {
     it("nota válida: grava, limpa o telefone, agradece ao cliente e avisa o dono", async () => {
         const c = cenarioResposta();
-        expect(await tratarRespostaAvaliacao(resp("5 ótimo"), c.deps)).toBe(true);
+        expect(await tratarRespostaAvaliacao(resp("5 - ótimo"), c.deps)).toBe(true);
         expect(c.avs[0]).toMatchObject({ estado: "respondida", nota: 5, comentario: "ótimo" });
         expect(c.avs[0].payload).toBe(Prisma.DbNull);
         expect(c.enviadas[0]).toEqual({ jid: "5561999990001@s.whatsapp.net", texto: "Obrigado pela avaliação!" });
@@ -318,7 +318,7 @@ describe("tratarRespostaAvaliacao", () => {
 
     it("nota 2: mensagem de desculpas ao cliente e aviso ao dono com ATENÇÃO", async () => {
         const c = cenarioResposta();
-        expect(await tratarRespostaAvaliacao(resp("2 frio"), c.deps)).toBe(true);
+        expect(await tratarRespostaAvaliacao(resp("2, frio"), c.deps)).toBe(true);
         expect(c.enviadas[0].texto).toBe("Sentimos muito. Vamos avisar o responsável da loja para falar com você.");
         expect(c.enviadas[1].texto.startsWith("ATENÇÃO: ")).toBe(true);
     });
