@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
 
 const h = vi.hoisted(() => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+vi.stubEnv("COMANDA_WHATSAPP_SEGREDO", "segredo-de-plataforma-1234");
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/logger", () => ({ logger: h.logger }));
-vi.mock("@/lib/optout", () => ({ isOptedOut: vi.fn() }));
+vi.mock("@/lib/optout", async (orig) => ({ ...(await orig<typeof import("@/lib/optout")>()), isOptedOut: vi.fn() }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 vi.mock("@/modules/whatsapp/provider", () => ({ getProvider: vi.fn() }));
 
-import { ESPERA_RETENTATIVA_MS, MAX_TENTATIVAS, processarCampanhas, type LinhaEnvio, type WorkerDeps } from "./worker";
+import { ESPERA_RETENTATIVA_MS, MAX_TENTATIVAS, limparChaves, processarCampanhas, type LinhaEnvio, type WorkerDeps } from "./worker";
 import { JITTER_CAMPANHA_MS, RODAPE_SAIR, TETO_CAMPANHA, VALIDADE_CAMPANHA_MS, chaveDoCliente, proximaJanela } from "./regras";
 
 const A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -251,4 +252,17 @@ describe("worker de campanhas: envio", () => {
         const logs = JSON.stringify(Object.values(h.logger).flatMap((f) => f.mock.calls));
         for (const proibido of ["5561999990001", "Ana", "promoção", "Souza"]) expect(logs).not.toContain(proibido);
     });
+});
+
+describe("limpeza das chaves", () => {
+  it("apaga a chave dos envios que não estão pendentes e terminaram há mais de 24 h", async () => {
+    const updateMany = vi.fn(async (_a: unknown) => ({ count: 3 }));
+    const n = await limparChaves({ db: { disparoEnvio: { updateMany } } as never, now: () => AGORA });
+    expect(n).toBe(3);
+    const a = updateMany.mock.calls[0][0] as { where: Record<string, any>; data: unknown };
+    expect(a.data).toEqual({ chave: null });
+    expect(a.where.estado).toEqual({ not: "pendente" });
+    expect(a.where.chave).toEqual({ not: null });
+    expect(a.where.atualizadoEm.lt.getTime()).toBe(AGORA - 24 * H);
+  });
 });

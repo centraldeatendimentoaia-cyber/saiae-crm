@@ -784,13 +784,13 @@ model DisparoCampanha {
   @@index([barracaId, criadoEm])
 }
 
-/// Um destinatario de uma campanha. `chave` = sha256(barracaId:telefone), usada no teto de 1 mensagem por cliente por
-/// 24 h. `payload` guarda telefone e nome SO enquanto o item esta pendente; vira null em qualquer estado final.
+/// Um destinatario de uma campanha. `chave` = HMAC-SHA256(segredo do servidor, barracaId:ultimos 8 digitos), usada no teto de
+/// 1 mensagem por cliente por 24 h; vira null 24 h depois (a chave so serve a esse teto). `payload` guarda telefone e nome SO enquanto o item esta pendente; vira null em qualquer estado final.
 model DisparoEnvio {
   id                 String    @id @default(cuid())
   campanhaId         String
   barracaId          String
-  chave              String
+  chave              String?
   estado             String    @default("pendente") // pendente | enviado | falhou | pulado_optout | pulado_limite_diario | pulado_desconectado | cancelado | expirado
   motivo             String? // codigo fixo (nunca texto livre, telefone ou mensagem)
   tentativas         Int       @default(0)
@@ -820,11 +820,15 @@ model AvaliacaoPedido {
   respondidaEm DateTime?
   nota        Int?
   comentario  String?   @db.Text
+  telefoneChave String? // HMAC(segredo, barracaId + ultimos 8 digitos): casa a resposta sem ler o telefone; some quando a avaliacao deixa de aguardar resposta
+  donoAvisoAte DateTime? // enquanto o aviso da nota ao dono esta pendente (ate 1 h depois da nota)
   payload     Json?
   criadoEm    DateTime  @default(now())
   atualizadoEm DateTime @updatedAt
 
   @@unique([barracaId, pedidoId])
+  @@index([barracaId, estado, telefoneChave])
+  @@index([estado, donoAvisoAte])
   @@index([estado, enviarEm])
   @@index([barracaId, criadoEm])
 }

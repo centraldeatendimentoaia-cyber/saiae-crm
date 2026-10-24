@@ -34,7 +34,7 @@ export interface LinhaEnvio {
     id: string;
     campanhaId: string;
     barracaId: string;
-    chave: string;
+    chave: string | null;
     tentativas: number;
     payload: unknown;
 }
@@ -201,12 +201,30 @@ async function decidir(linha: LinhaEnvio, campanha: CampanhaLinha, deps: WorkerD
 }
 
 /**
+ * A chave do cliente só serve ao teto de 24 h: depois disso ela é apagada (o banco não guarda o identificador do cliente
+ * mais que o necessário). Roda no máximo uma vez por hora. Devolve quantos envios limpou.
+ */
+export async function limparChaves(deps: Pick<WorkerDeps, "db" | "now">): Promise<number> {
+    const r = await deps.db.disparoEnvio.updateMany({
+        where: { chave: { not: null }, estado: { not: "pendente" }, atualizadoEm: { lt: new Date(deps.now() - DIA_MS) } },
+        data: { chave: null },
+    });
+    return r.count;
+}
+
+let ultimaLimpeza = 0;
+
+/**
  * Reserva e processa os envios pendentes que já venceram a espera. A reserva (updateMany condicional) impede que
  * dois workers peguem o mesmo envio. Devolve quantos processou.
  */
 export async function processarCampanhas(over: Partial<WorkerDeps> = {}): Promise<number> {
     const deps: WorkerDeps = { ...depsPadrao(), ...over };
     const agora = deps.now();
+    if (agora - ultimaLimpeza >= 60 * 60_000) {
+        ultimaLimpeza = agora;
+        await limparChaves(deps).catch(() => deps.logger.warn(TAG, "limpeza de chaves falhou"));
+    }
     const linhas = await deps.db.disparoEnvio.findMany({
         where: { estado: "pendente", proximaTentativaEm: { lte: new Date(agora) } },
         orderBy: { proximaTentativaEm: "asc" },

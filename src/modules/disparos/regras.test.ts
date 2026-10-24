@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
+vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import { RODAPE_SAIR, chaveDoCliente, dentroDaJanela, montarTextoCampanha, proximaJanela } from "./regras";
 
@@ -38,10 +39,24 @@ describe("montarTextoCampanha", () => {
 });
 
 describe("chaveDoCliente", () => {
+    const env = { COMANDA_WHATSAPP_SEGREDO: "segredo-de-plataforma-1234" };
     it("estável, 64 hex e muda com a loja", () => {
-        const a = chaveDoCliente("loja-a", "5561999990001");
+        const a = chaveDoCliente("loja-a", "5561999990001", env);
         expect(a).toMatch(/^[0-9a-f]{64}$/);
-        expect(chaveDoCliente("loja-a", "5561999990001")).toBe(a);
-        expect(chaveDoCliente("loja-b", "5561999990001")).not.toBe(a);
+        expect(chaveDoCliente("loja-a", "5561999990001", env)).toBe(a);
+        expect(chaveDoCliente("loja-b", "5561999990001", env)).not.toBe(a);
+    });
+    it("é um HMAC: muda com o segredo e não é o sha256 simples do telefone", () => {
+        const a = chaveDoCliente("loja-a", "5561999990001", env);
+        expect(chaveDoCliente("loja-a", "5561999990001", { COMANDA_WHATSAPP_SEGREDO: "outro-segredo-de-plataforma" })).not.toBe(a);
+        const simples = require("crypto").createHash("sha256").update("loja-a:5561999990001").digest("hex");
+        expect(a).not.toBe(simples);
+    });
+    it("iguala as variações com e sem o 9º dígito (últimos 8 dígitos)", () => {
+        expect(chaveDoCliente("loja-a", "556199990001", env)).toBe(chaveDoCliente("loja-a", "5561999990001", env));
+    });
+    it("usa o primeiro segredo da lista e falha sem segredo", () => {
+        expect(chaveDoCliente("l", "5561999990001", { COMANDA_WHATSAPP_SEGREDO: `${env.COMANDA_WHATSAPP_SEGREDO},segundo-segredo-de-teste` })).toBe(chaveDoCliente("l", "5561999990001", env));
+        expect(() => chaveDoCliente("l", "5561999990001", {})).toThrow();
     });
 });
