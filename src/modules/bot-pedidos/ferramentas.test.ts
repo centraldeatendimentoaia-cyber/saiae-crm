@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brl, listarCardapio, montarResumo, uuidDe } from "./ferramentas";
+import { brl, executarFerramenta, listarCardapio, montarResumo, type ContextoFerramentas } from "./ferramentas";
 import type { Cardapio } from "./saiae";
 
 const cardapio: Cardapio = {
@@ -23,9 +23,12 @@ describe("ferramentas do bot", () => {
         expect(r).toContain("SIM");
         expect(r).not.toContain("PIX");
     });
-    it("uuidDe é estável e tem formato de UUID", () => {
-        expect(uuidDe("a")).toBe(uuidDe("a"));
-        expect(uuidDe("a")).not.toBe(uuidDe("b"));
-        expect(uuidDe("a")).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
+    it("rascunho de outra barraca é invalidado ao confirmar", async () => {
+        const saiae = async () => ({ ok: true as const, senha: 1, total_centavos: 100 });
+        const ctx = { sessionId: "s", contactKey: "55", nome: "Ana", textoAtual: "sim", aguardava: true, barracaId: "B2", cardapio, agora: 1, saiae, avisarDono: async () => true, pausar: () => {}, respostas: [], resumoEnviado: false, retentar: false,
+            conversa: { historico: [], aguardandoConfirmacao: true, soLink: false, hashMostrado: "h", rascunho: { hash: "h", itens: [], totalCentavos: 100, criadoEm: 1, clientUuid: "u", barracaId: "B1" } } } as unknown as ContextoFerramentas;
+        const r = await executarFerramenta("confirmar_pedido", {}, ctx);
+        expect(r.erro).toBe(true);
+        expect(ctx.conversa.rascunho).toBeNull();
     });
 });

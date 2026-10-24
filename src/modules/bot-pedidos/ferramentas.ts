@@ -9,8 +9,11 @@ import type { AcaoSaiae, Cardapio, RespostaSaiae } from "./saiae";
  * Ferramentas do bot. Regras de segurança, todas em código (o modelo só pede):
  * - preço e total vêm SÓ do retorno do resolver (`rascunho`), formatados aqui; `ver_cardapio` não mostra preço;
  * - `confirmar_pedido` só passa se o último envio do bot foi o resumo vigente E a mensagem atual do cliente é um
- *   "sim" (ou "pix") verificado por `escolhaDeConfirmacao`; o `client_uuid` sai do hash do resumo, então reenviar
- *   o mesmo "sim" nunca cria dois pedidos.
+ *   "sim" (ou "pix") verificado por `escolhaDeConfirmacao`; o resumo precisa ser o que o cliente de fato recebeu
+ *   (`hashMostrado`, definido pelo motor só depois do envio); o `client_uuid` nasce com o rascunho (um por rascunho),
+ *   então reenviar o mesmo "sim" nunca cria dois pedidos e um pedido idêntico futuro não colide com o anterior.
+ * Anotado, sem implementar: a franquia (`contarConversa`) só conta conversa nova e não limita o gasto de um mesmo
+ * contato; `chamar_dono` pode ser usado em volume para incomodar o dono (o limite por minuto/hora já ajuda).
  */
 
 export const MOTIVOS_DONO = ["pedido_humano", "reclamacao", "duvida", "entrega", "outro"] as const;
@@ -74,6 +77,7 @@ export interface ContextoFerramentas {
     textoAtual: string;
     /** O último envio do bot foi o resumo (antes desta mensagem). */
     aguardava: boolean;
+    barracaId: string;
     cardapio: Cardapio;
     conversa: ConversaBot;
     agora: number;
@@ -85,7 +89,17 @@ export interface ContextoFerramentas {
     respostas: string[];
     /** O resumo foi enviado nesta rodada: o próximo "sim" vale. */
     resumoEnviado: boolean;
+    /** Falha retentável ao confirmar: o rascunho voltou e o próximo "sim" tenta de novo. */
+    retentar: boolean;
 }
+
+/** Nome do WhatsApp sem quebra de linha/controle e com limite (vai ao Sai aê e ao aviso do dono). */
+export function limparNome(nome: string | null | undefined, padrao: string): string {
+    const l = (nome ?? "").replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ").replace(/\s+/g, " ").trim().slice(0, 60).trim();
+    return l || padrao;
+}
+
+const CODIGOS_RETENTAVEIS = new Set(["indisponivel", "provedor_indisponivel", "resposta_invalida"]);
 
 export interface ResultadoFerramenta {
     texto: string;
@@ -124,12 +138,6 @@ export function montarResumo(linhas: Linha[], total: number, pagamentos: { na_en
     return `Seu pedido (retirada):\n${itens.join("\n")}\nTotal: ${brl(total)}\n\n${como}`;
 }
 
-/** UUID estável a partir de um texto (mesmo texto, mesmo UUID): idempotência do pedido no Sai aê. */
-export function uuidDe(texto: string): string {
-    const h = crypto.createHash("sha256").update(texto).digest("hex");
-    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
-}
-
 const linkMsg = (c: Cardapio, inicio: string) => `${inicio} ${c.loja.link_cardapio}`;
 
 export async function executarFerramenta(nome: string, argumentos: unknown, ctx: ContextoFerramentas): Promise<ResultadoFerramenta> {
@@ -143,6 +151,8 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
             if (!a.success) return { texto: "Argumentos inválidos.", erro: true };
             const r = await ctx.saiae("rascunho", { itens: a.data.itens });
             ctx.conversa.rascunho = null; // um rascunho novo (ou falho) sempre invalida o anterior
+            ctx.conversa.hashMostrado = null;
+            ctx.aguardava = false; // o "sim" desta rodada era para o resumo antigo, não para este
             if (!r.ok) {
                 const erros = Array.isArray(r.erros) ? (r.erros as { mensagem?: unknown }[]).map((e) => (typeof e.mensagem === "string" ? e.mensagem : "item inválido")).slice(0, 5) : [];
                 return { texto: `Não consegui montar o pedido (${r.codigo}): ${erros.join("; ") || "sem detalhe"}. Diga ao cliente que não achou e mande o link do cardápio.`, erro: true };
@@ -151,7 +161,7 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
             const total = Number(r.total_centavos);
             if (!linhas.length || !Number.isInteger(total) || total < 0) return { texto: "Resposta do sistema inválida.", erro: true };
             const hash = crypto.createHash("sha256").update(JSON.stringify({ itens: a.data.itens, total })).digest("hex");
-            ctx.conversa.rascunho = { hash, itens: a.data.itens, totalCentavos: total, criadoEm: ctx.agora };
+            ctx.conversa.rascunho = { hash, itens: a.data.itens, totalCentavos: total, criadoEm: ctx.agora, clientUuid: crypto.randomUUID(), barracaId: ctx.barracaId };
             ctx.respostas.push(montarResumo(linhas, total, loja.pagamentos));
             ctx.resumoEnviado = true;
             return { texto: "Resumo montado e enviado ao cliente pelo sistema. Não escreva valores nem repita o resumo." };
@@ -159,7 +169,8 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
 
         case "confirmar_pedido": {
             const r = ctx.conversa.rascunho;
-            if (!ctx.aguardava || !r || ctx.agora - r.criadoEm > RESUMO_VALE_MS) return { texto: "Recusado: não há resumo vigente aguardando confirmação. Monte o rascunho e peça a confirmação.", erro: true };
+            if (r && r.barracaId !== ctx.barracaId) ctx.conversa.rascunho = null; // rascunho de outra loja nunca vale
+            if (!ctx.aguardava || !r || r.barracaId !== ctx.barracaId || r.hash !== ctx.conversa.hashMostrado || ctx.agora - r.criadoEm > RESUMO_VALE_MS) return { texto: "Recusado: não há resumo vigente aguardando confirmação. Monte o rascunho e peça a confirmação.", erro: true };
             const escolha = escolhaDeConfirmacao(ctx.textoAtual, loja.pagamentos);
             if (!escolha) return { texto: "Recusado: o cliente não respondeu SIM (ou PIX) ao resumo.", erro: true };
             if (!loja.modos.includes("retirada")) {
@@ -171,31 +182,42 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
                 return { texto: "Loja fechada.", erro: true };
             }
             const corpo = {
-                client_uuid: uuidDe(`${ctx.sessionId}:${ctx.contactKey}:${r.hash}`),
+                client_uuid: r.clientUuid,
                 itens: r.itens,
-                cliente_nome: (ctx.nome ?? "Cliente").slice(0, 60),
+                cliente_nome: limparNome(ctx.nome, "Cliente"),
                 cliente_telefone: ctx.contactKey,
                 tipo_atendimento: "retirada",
+                total_esperado_centavos: r.totalCentavos,
             };
-            if (escolha === "pix") {
-                const p = await ctx.saiae("pix", { ...corpo, conversa_id: crypto.createHash("sha256").update(`${ctx.sessionId}:${ctx.contactKey}`).digest("hex").slice(0, 24) });
-                if (!p.ok || typeof p.copia_cola !== "string") return falhar(ctx, p.ok ? "resposta_invalida" : p.codigo);
-                ctx.conversa.rascunho = null;
+            // Toma o rascunho antes do await: uma segunda confirmação concorrente não o encontra.
+            ctx.conversa.rascunho = null;
+            const pix = escolha === "pix";
+            const p = await ctx.saiae(pix ? "pix" : "pedido", pix ? { ...corpo, conversa_id: crypto.createHash("sha256").update(`${ctx.sessionId}:${ctx.contactKey}`).digest("hex").slice(0, 24) } : corpo);
+            if (!p.ok && p.codigo === "total_mudou") return totalMudou(ctx);
+            if (!p.ok || (pix ? typeof p.copia_cola !== "string" : p.senha === undefined)) {
+                const codigo = p.ok ? "resposta_invalida" : p.codigo;
+                if (CODIGOS_RETENTAVEIS.has(codigo) && !ctx.conversa.rascunho) {
+                    ctx.conversa.rascunho = r; // o mesmo rascunho (e o mesmo client_uuid) volta para a retentativa
+                    ctx.retentar = true;
+                }
+                return falhar(ctx, codigo);
+            }
+            // O total devolvido tem de ser o do resumo que o cliente viu; senão nada de copia-e-cola nem confirmação.
+            if (!Number.isInteger(p.total_centavos) || p.total_centavos !== r.totalCentavos) return totalMudou(ctx);
+            ctx.conversa.hashMostrado = null;
+            if (pix) {
                 const ate = typeof p.expira_em === "string" ? horaSp(p.expira_em) : null;
-                ctx.respostas.push(`Pedido de ${brl(Number(p.total_centavos))} reservado. Pague com o Pix copia e cola${ate ? ` até ${ate}` : ""}. O pedido entra assim que o pagamento cair:`, p.copia_cola);
+                ctx.respostas.push(`Pedido de ${brl(r.totalCentavos)} reservado. Pague com o Pix copia e cola${ate ? ` até ${ate}` : ""}. O pedido entra assim que o pagamento cair:`, p.copia_cola as string);
                 return { texto: "Pix gerado e enviado ao cliente." };
             }
-            const p = await ctx.saiae("pedido", corpo);
-            if (!p.ok || p.senha === undefined) return falhar(ctx, p.ok ? "resposta_invalida" : p.codigo);
-            ctx.conversa.rascunho = null;
-            ctx.respostas.push(`Pedido anotado! Sua senha é ${String(p.senha)}. Total ${brl(Number(p.total_centavos))}, pagamento na retirada. Obrigado!`);
+            ctx.respostas.push(`Pedido anotado! Sua senha é ${String(p.senha)}. Total ${brl(r.totalCentavos)}, pagamento na retirada. Obrigado!`);
             return { texto: "Pedido criado e confirmado ao cliente pelo sistema." };
         }
 
         case "chamar_dono": {
             const a = argsDono.safeParse(argumentos);
             if (!a.success) return { texto: "Motivo inválido.", erro: true };
-            const aviso = `Atendimento por mensagem: ${(ctx.nome ?? "um cliente").slice(0, 60)} ${TEXTO_MOTIVO[a.data.motivo]}. Responda pela conversa no WhatsApp.`;
+            const aviso = `Atendimento por mensagem: ${limparNome(ctx.nome, "um cliente")} ${TEXTO_MOTIVO[a.data.motivo]}. Responda pela conversa no WhatsApp.`;
             const dono = loja.whatsapp_dono?.replace(/\D/g, "");
             if (!dono || !(await ctx.avisarDono(aviso))) {
                 ctx.respostas.push(linkMsg(ctx.cardapio, "Não consegui chamar o responsável agora. Você pode fazer o pedido pelo cardápio:"));
@@ -211,9 +233,17 @@ export async function executarFerramenta(nome: string, argumentos: unknown, ctx:
     }
 }
 
+/** O valor mudou entre o resumo e a confirmação: nada é confirmado, o cliente pede um resumo novo. */
+function totalMudou(ctx: ContextoFerramentas): ResultadoFerramenta {
+    ctx.conversa.rascunho = null;
+    ctx.conversa.hashMostrado = null;
+    ctx.respostas.push("O valor do pedido mudou desde o resumo, então não confirmei. Me diga de novo o que você quer que eu monto um resumo novo.");
+    return { texto: "Recusado: o total mudou. Nada foi confirmado.", erro: true };
+}
+
 /** Qualquer recusa do Sai aê ao confirmar vira "use o cardápio"; nada de tentar de novo por conta própria. */
 function falhar(ctx: ContextoFerramentas, codigo: string): ResultadoFerramenta {
-    const inicio = codigo === "fechado" ? "Estamos fechados agora. Veja o cardápio:" : "Não consegui anotar por aqui. Faça seu pedido pelo cardápio:";
+    const inicio = codigo === "fechado" ? "Estamos fechados agora. Veja o cardápio:" : ctx.retentar ? "Não consegui anotar agora. Responda SIM para eu tentar de novo ou faça seu pedido pelo cardápio:" : "Não consegui anotar por aqui. Faça seu pedido pelo cardápio:";
     ctx.respostas.push(linkMsg(ctx.cardapio, inicio));
     return { texto: `Recusado pelo sistema (${codigo}).`, erro: true };
 }

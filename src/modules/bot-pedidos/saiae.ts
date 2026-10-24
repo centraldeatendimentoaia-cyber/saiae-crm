@@ -11,7 +11,8 @@ import { segredosWhatsapp } from "@/modules/integracao/comanda/sessao-evento";
  */
 
 export type AcaoSaiae = "cardapio" | "rascunho" | "pedido" | "pix";
-export type RespostaSaiae = { ok: true; [k: string]: unknown } | { ok: false; codigo: string; mensagem?: string; erros?: unknown };
+/** `total_esperado_centavos` (opcional) vai nas ações pedido e pix; o app responde `total_mudou` (com `total_centavos`) se divergir. */
+export type RespostaSaiae = { ok: true; [k: string]: unknown } | { ok: false; codigo: string; mensagem?: string; erros?: unknown; total_centavos?: number };
 
 export const TIMEOUT_MS = 8_000;
 export const CACHE_CARDAPIO_MS = 60_000;
@@ -55,19 +56,21 @@ const cachePadrao = new BoundedTtlMap<Cardapio>(500, CACHE_CARDAPIO_MS);
 export async function chamarSaiae(acao: AcaoSaiae, barracaId: string, corpo: Record<string, unknown> = {}, over: Partial<DepsSaiae> = {}): Promise<RespostaSaiae> {
     const deps: DepsSaiae = { fetch: globalThis.fetch, env: process.env, now: Date.now, logger: defaultLogger, cache: cachePadrao, ...over };
     const url = deps.env.SAIAE_INTEGRACAO_V1_URL?.trim();
-    const segredo = segredosWhatsapp(deps.env)[0];
-    if (!url || !segredo) return { ok: false, codigo: "nao_configurado" };
+    if (!url) return { ok: false, codigo: "nao_configurado" };
 
     if (acao === "cardapio") {
         const guardado = deps.cache.get(barracaId);
         if (guardado) return guardado;
     }
 
-    const texto = JSON.stringify({ ...corpo, barraca_id: barracaId, acao });
-    const timestamp = String(Math.floor(deps.now() / 1000));
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
+        // Tudo que pode lançar fica dentro do try: a função nunca lança.
+        const segredo = segredosWhatsapp(deps.env)[0];
+        if (!segredo) return { ok: false, codigo: "nao_configurado" };
+        const texto = JSON.stringify({ ...corpo, barraca_id: barracaId, acao });
+        const timestamp = String(Math.floor(deps.now() / 1000));
         const res = await deps.fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-Saiae-Timestamp": timestamp, "X-Saiae-Signature": assinar(segredo, timestamp, texto) },

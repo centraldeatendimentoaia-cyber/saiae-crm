@@ -60,4 +60,10 @@ describe("chamarSaiae", () => {
         await chamarSaiae("pedido", BARRACA, { cliente_telefone: "5561999990001" }, d);
         expect(JSON.stringify((d.logger!.warn as ReturnType<typeof vi.fn>).mock.calls)).not.toContain("5561999990001");
     });
+    it("corpo que não vira JSON não lança: devolve ok:false", async () => {
+        const circular: Record<string, unknown> = {};
+        circular.a = circular;
+        const r = await chamarSaiae("pedido", BARRACA, circular, deps(vi.fn()));
+        expect(r).toMatchObject({ ok: false });
+    });
 });

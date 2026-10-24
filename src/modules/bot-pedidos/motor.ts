@@ -7,7 +7,7 @@ import { LlmAnthropic, type Llm, type MensagemLlm } from "@/modules/ia-atendimen
 import { isSaudacao } from "./afirmativo";
 import type { EntradaBot } from "./entrada";
 import { estadoPadrao, paraMensagensLlm, type EstadoBot } from "./estado";
-import { executarFerramenta, FERRAMENTAS, type ContextoFerramentas } from "./ferramentas";
+import { executarFerramenta, FERRAMENTAS, limparNome, type ContextoFerramentas } from "./ferramentas";
 import { chamarSaiae, type AcaoSaiae, type Cardapio, type RespostaSaiae } from "./saiae";
 
 /**
@@ -109,17 +109,29 @@ export function montarSistema(c: Cardapio): string {
 export function filtrarTexto(texto: string | undefined, link: string): string {
     const limpo = (texto ?? "").trim();
     if (!limpo) return `Não consegui te ajudar por aqui. Veja o cardápio: ${link}`;
-    if (/R\$|\d[.,]\d{2}\b/.test(limpo)) return `Os valores e o pedido ficam no cardápio: ${link}`;
+    if (/R\s*\$|\d[.,]\d|\b(reais|real|conto|contos|pila|pilas|centavos?)\b/i.test(limpo)) return `Os valores e o pedido ficam no cardápio: ${link}`;
     return limpo.replace(/https?:\/\/\S+/g, link).slice(0, 1000);
 }
 
-export async function tratar(entrada: EntradaBot, over: Partial<DepsMotor> = {}): Promise<void> {
+// Uma fila por sessão+contato: duas mensagens do mesmo cliente nunca são processadas ao mesmo tempo.
+// shortcut: fila só em memória deste processo, como o resto do estado do bot.
+const filas = new Map<string, Promise<void>>();
+
+export function tratar(entrada: EntradaBot, over: Partial<DepsMotor> = {}): Promise<void> {
     const d: DepsMotor = { ...depsPadrao(), ...over };
-    try {
-        await processar(entrada, d);
-    } catch (e) {
-        d.logger.warn(TAG, `falha no bot: ${(e as { name?: string })?.name ?? "erro"}`);
-    }
+    const chave = `${entrada.sessionId}:${entrada.contactKey}`;
+    const rodar = async () => {
+        try {
+            await processar(entrada, d);
+        } catch (e) {
+            d.logger.warn(TAG, `falha no bot: ${(e as { name?: string })?.name ?? "erro"}`);
+        }
+    };
+    const atual = (filas.get(chave) ?? Promise.resolve()).then(rodar);
+    filas.set(chave, atual);
+    return atual.finally(() => {
+        if (filas.get(chave) === atual) filas.delete(chave);
+    });
 }
 
 /** Uma pessoa escreveu pelo celular neste contato: o bot se cala por 12 h. */
@@ -146,7 +158,7 @@ async function processar(e: EntradaBot, d: DepsMotor): Promise<void> {
     const agora = new Date(d.now());
     let conv = d.estado.conversa(sessionId, contactKey);
     if (!conv) {
-        conv = { historico: [], rascunho: null, aguardandoConfirmacao: false, soLink: false };
+        conv = { historico: [], rascunho: null, aguardandoConfirmacao: false, hashMostrado: null, soLink: false };
         try {
             conv.soLink = (await d.contarConversa(barracaId, agora)) > franquiaDe(d.env);
         } catch {
@@ -158,17 +170,24 @@ async function processar(e: EntradaBot, d: DepsMotor): Promise<void> {
     const texto = e.texto.slice(0, MAX_TEXTO);
     const dia = diaSaoPaulo(agora);
 
-    const responder = async (mensagens: string[]) => {
+    /** Devolve true se TODAS as mensagens foram entregues ao provedor. */
+    const responder = async (mensagens: string[]): Promise<boolean> => {
+        let ok = true;
         for (const m of mensagens) {
             try {
-                if (!(await d.enviar(sessionId, contactKey, m))) d.logger.warn(TAG, "sessão indisponível para envio");
+                if (!(await d.enviar(sessionId, contactKey, m))) {
+                    ok = false;
+                    d.logger.warn(TAG, "sessão indisponível para envio");
+                }
             } catch (err) {
+                ok = false;
                 d.logger.warn(TAG, `envio falhou: ${(err as { name?: string })?.name ?? "erro"}`);
                 break;
             }
         }
         conv.historico.push({ papel: "user", texto }, { papel: "assistant", texto: mensagens.join("\n").slice(0, 1500) });
         d.estado.salvarConversa(sessionId, contactKey, conv);
+        return ok;
     };
 
     const llm = d.llm();
@@ -183,7 +202,7 @@ async function processar(e: EntradaBot, d: DepsMotor): Promise<void> {
     }
 
     const ctx: ContextoFerramentas = {
-        sessionId, contactKey, nome: e.nome, textoAtual: texto, aguardava, cardapio, conversa: conv, agora: d.now(),
+        sessionId, contactKey, barracaId, nome: e.nome === null ? null : limparNome(e.nome, ""), textoAtual: texto, aguardava, cardapio, conversa: conv, agora: d.now(),
         saiae: (acao, corpo) => d.saiae(acao, barracaId, corpo),
         avisarDono: async (aviso) => {
             const dono = loja.whatsapp_dono?.replace(/\D/g, "");
@@ -197,6 +216,7 @@ async function processar(e: EntradaBot, d: DepsMotor): Promise<void> {
         pausar: () => d.estado.pausar(sessionId, contactKey),
         respostas: [],
         resumoEnviado: false,
+        retentar: false,
     };
 
     const mensagens: MensagemLlm[] = [...paraMensagensLlm(conv), { papel: "user", texto }];
@@ -224,8 +244,12 @@ async function processar(e: EntradaBot, d: DepsMotor): Promise<void> {
     }
     await d.registrarTokens(barracaId, tokens, agora).catch(() => d.logger.warn(TAG, "registro de tokens falhou"));
 
-    conv.aguardandoConfirmacao = ctx.resumoEnviado;
-    await responder(ctx.respostas.length ? ctx.respostas : [filtrarTexto(final, link)]);
+    // Quando o código montou respostas (resumo, pedido, Pix), só elas saem; o texto do modelo só vai filtrado.
+    const enviou = await responder(ctx.respostas.length ? ctx.respostas : [filtrarTexto(final, link)]);
+    // O "sim" só vale se o cliente de fato recebeu o resumo (ou se a confirmação falhou de forma retentável).
+    const rasc = conv.rascunho;
+    conv.hashMostrado = rasc && enviou && ctx.resumoEnviado ? rasc.hash : rasc && ctx.retentar ? conv.hashMostrado : null;
+    conv.aguardandoConfirmacao = enviou && !!rasc && (ctx.resumoEnviado || ctx.retentar);
 }
 
 function saudacao(c: Cardapio, soLink: boolean): string {

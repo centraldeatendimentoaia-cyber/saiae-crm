@@ -18,11 +18,16 @@ export interface RascunhoVigente {
     itens: unknown[];
     totalCentavos: number;
     criadoEm: number;
+    /** Chave de idempotência no Sai aê: nasce com o rascunho, estável nas retentativas, nova a cada rascunho. */
+    clientUuid: string;
+    barracaId: string;
 }
 
 export interface ConversaBot {
     historico: { papel: "user" | "assistant"; texto: string }[];
     rascunho: RascunhoVigente | null;
+    /** Hash do resumo que o cliente efetivamente recebeu (só definido quando o envio deu certo). */
+    hashMostrado: string | null;
     /** A última coisa que o bot mandou foi o resumo: só então um "sim" vale. */
     aguardandoConfirmacao: boolean;
     soLink: boolean;
@@ -33,7 +38,7 @@ export function criarEstadoBot(agora: () => number = Date.now) {
     const pausas = new BoundedTtlMap<true>(20_000, PAUSA_MS, agora);
     const links = new BoundedTtlMap<true>(20_000, 24 * 3_600_000, agora);
     const conversas = new BoundedTtlMap<ConversaBot>(5_000, 24 * 3_600_000, agora);
-    const hits = new Map<string, number[]>();
+    const hits = new BoundedTtlMap<number[]>(20_000, 3_600_000, agora);
     const chave = (sessionId: string, contactKey: string) => `${sessionId}:${contactKey}`;
 
     return {
@@ -56,7 +61,6 @@ export function criarEstadoBot(agora: () => number = Date.now) {
             const lista = (hits.get(k) ?? []).filter((x) => t - x < 3_600_000);
             lista.push(t);
             hits.set(k, lista);
-            if (hits.size > 5_000) for (const [h, l] of hits) if (!l.some((x) => t - x < 3_600_000)) hits.delete(h);
             return lista.length > LIMITE_HORA || lista.filter((x) => t - x < 60_000).length > LIMITE_MINUTO;
         },
         /** true se ainda não mandou o link a este contato hoje (e marca como mandado). `dia` = AAAA-MM-DD de São Paulo. */
