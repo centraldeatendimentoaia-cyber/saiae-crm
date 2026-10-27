@@ -4,11 +4,12 @@ import { Prisma } from "@prisma/client";
 import { getAuthenticatedUser, canAccessSession, isAdmin } from "@/lib/api-auth";
 import { lerCorpo, opt } from "@/lib/validate";
 import { z } from "zod";
+import { MATCH_TYPES } from "@/modules/whatsapp/store/autoreply-match";
 
 const schema = z.object({
     keyword: z.string().min(1, "informe a palavra-chave"),
     response: opt(z.string()),
-    matchType: opt(z.enum(["EXACT", "CONTAINS", "REGEX"], { error: "use EXACT, CONTAINS ou REGEX" })),
+    matchType: opt(z.enum(MATCH_TYPES, { error: "use EXACT, CONTAINS, STARTS_WITH ou REGEX" })),
     triggerType: opt(z.enum(["ALL", "GROUP", "PRIVATE"], { error: "use ALL, GROUP ou PRIVATE" })),
     isMedia: opt(z.boolean()),
     mediaUrl: opt(z.string()),
