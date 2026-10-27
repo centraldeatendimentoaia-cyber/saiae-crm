@@ -4,7 +4,11 @@ import { addOptOut, removeOptOut, isOptOutText, isOptInText } from "@/lib/optout
 import { logger } from "@/lib/logger";
 
 /** Quem responde SAIR (ou PARAR) deixa de receber disparos; VOLTAR desfaz. */
+const jaLigado = new WeakSet<object>();
+
 export function bindOptOut(sock: WASocket, sessionId: string) {
+    if (jaLigado.has(sock)) return; // um segundo "open" no mesmo socket não soma outro ouvinte (a confirmação sairia em dobro)
+    jaLigado.add(sock);
     sock.ev.on("messages.upsert", async ({ messages, type }) => {
         if (type !== "notify") return;
         for (const msg of messages) {

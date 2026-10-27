@@ -4,6 +4,7 @@ import type { AnyMessageContent, WASocket } from "@whiskeysockets/baileys";
 import type { BotConfig } from "@prisma/client";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { logger } from "@/lib/logger";
+import { casaRegra } from "./autoreply-match";
 
 // Helper for permission check (Deduplicate from command-handler if possible, but keep simple here)
 function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, senderJid: string): boolean {
@@ -53,7 +54,12 @@ function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, sen
     return false;
 }
 
+const jaLigado = new WeakSet<object>();
+
 export async function bindAutoReply(sock: WASocket, sessionId: string) {
+    // um segundo "connection: open" no mesmo socket não pode somar outro ouvinte (a resposta sairia em dobro)
+    if (jaLigado.has(sock)) return;
+    jaLigado.add(sock);
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
 
@@ -117,28 +123,7 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
                 });
 
                 for (const rule of rules) {
-                    let match = false;
-                    const keyword = rule.keyword.toLowerCase();
-                    const incoming = text.toLowerCase();
-
-                    switch (rule.matchType) {
-                        case 'EXACT':
-                            match = incoming === keyword;
-                            break;
-                        case 'CONTAINS':
-                            match = incoming.includes(keyword);
-                            break;
-                        case 'REGEX':
-                            try {
-                                const regex = new RegExp(rule.keyword, 'i');
-                                match = regex.test(text); // Use original case for regex
-                            } catch (e) {
-                                logger.error("AutoReply", "Invalid regex in auto-reply", rule.keyword);
-                            }
-                            break;
-                    }
-
-                    if (match) {
+                    if (casaRegra(rule, text)) {
                         // Check trigger context (GROUP, PRIVATE, or ALL)
                         const isGroup = remoteJid.endsWith('@g.us');
                         const triggerType = rule.triggerType || 'ALL'; // Default to ALL if undefined

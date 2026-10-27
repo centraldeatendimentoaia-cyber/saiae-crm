@@ -4,13 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { canAccessSession } from "@/lib/api-auth";
 import { getAuthenticatedUserForAction } from "@/lib/server-action-auth";
 import { Prisma } from "@prisma/client";
+import { MATCH_TYPES } from "@/modules/whatsapp/store/autoreply-match";
 
-const MATCH_TYPES = ["EXACT", "CONTAINS", "REGEX"];
 const TRIGGER_TYPES = ["ALL", "GROUP", "PRIVATE"];
 
 /** Mesmos valores aceitos pela API (/api/autoreplies): evita gravar tipos que o motor de respostas não reconhece. */
 function validarTipos(data: { matchType?: string; triggerType?: string }) {
-    if (data.matchType && !MATCH_TYPES.includes(data.matchType)) throw new Error("matchType inválido (use EXACT, CONTAINS ou REGEX)");
+    if (data.matchType && !(MATCH_TYPES as readonly string[]).includes(data.matchType)) throw new Error("matchType inválido (use EXACT, CONTAINS, STARTS_WITH ou REGEX)");
     if (data.triggerType && !TRIGGER_TYPES.includes(data.triggerType)) throw new Error("triggerType inválido (use ALL, GROUP ou PRIVATE)");
 }
 
