@@ -257,7 +257,7 @@ export default function MetricasPage() {
                 <div>
                     <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-3xl"><BarChart3 className="h-6 w-6 sm:h-8 sm:w-8" />Métricas de atendimento</h2>
                     <p className="text-muted-foreground">
-                        Quantas pessoas escreveram, quanto tempo levou a primeira resposta e quantas ficaram sem retorno. Os horários seguem o expediente configurado em Agente do salão (sem configuração: segunda a sexta, das 9h às 18h).
+                        Quantas pessoas escreveram, quanto tempo levou a primeira resposta e quantas ficaram sem retorno. Os horários seguem o expediente configurado em Agente de atendimento (sem configuração: segunda a sexta, das 9h às 18h).
                     </p>
                 </div>
 

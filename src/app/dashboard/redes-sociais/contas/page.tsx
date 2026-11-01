@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckCircle2, Link2, Plus, ShieldAlert, Trash2, Unlink, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -148,7 +148,11 @@ function Connect() {
         <Card>
             <CardHeader><CardTitle className="text-base">{accounts.length ? "Adicionar ou atualizar contas" : "Conectar contas"}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-                <Label>Token de acesso da Meta</Label>
+                <Button asChild>
+                    <a href="/api/social/oauth/start"><Link2 className="mr-2 h-4 w-4" />Conectar com Instagram / Facebook</a>
+                </Button>
+                <p className="text-xs text-muted-foreground">Você entra na sua conta da Meta e escolhe as Páginas e os Instagrams. O Instagram precisa ser Business ou Creator e estar ligado a uma Página.</p>
+                <Label>Ou cole um token de acesso da Meta</Label>
                 <Textarea rows={2} value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAB…" />
                 <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer">Como gerar o token</summary>
@@ -209,8 +213,33 @@ function Signatures() {
     );
 }
 
+const AVISO_OAUTH: Record<string, string> = {
+    "nao-configurado": "A conexão com a Meta ainda não foi configurada neste sistema (SOCIAL_META_APP_ID e SOCIAL_META_APP_SECRET).",
+    negado: "Conexão cancelada: a Meta não recebeu as permissões.",
+    invalido: "O retorno da Meta expirou ou não é desta sessão. Tente conectar de novo.",
+    "sem-paginas": "Nenhuma Página encontrada. Na janela da Meta, marque as Páginas e os Instagrams.",
+    erro: "Não foi possível concluir a conexão com a Meta. Tente de novo.",
+};
+
 export default function ContasPage() {
-    const { accounts, accountsLoaded } = useSocial();
+    const { accounts, accountsLoaded, reloadAccounts, bump } = useSocial();
+
+    // retorno do login da Meta: /contas?oauth=ok|<motivo>
+    useEffect(() => {
+        const q = new URLSearchParams(window.location.search);
+        const r = q.get("oauth");
+        if (!r) return;
+        window.history.replaceState(null, "", window.location.pathname);
+        if (r === "ok") {
+            const semIg = q.get("semig");
+            const msg = `${q.get("n") ?? ""} conta(s) conectada(s).`;
+            if (semIg) toast.warning(`${msg} Sem Instagram ligado: ${semIg}. Confira se o Instagram é Business/Creator e está ligado à Página.`, { duration: 12000 });
+            else toast.success(msg);
+            reloadAccounts();
+            bump();
+        } else toast.error(AVISO_OAUTH[r] ?? AVISO_OAUTH.erro);
+    }, [reloadAccounts, bump]);
+
     return (
         <div className="space-y-5">
             {accountsLoaded && accounts.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma conta conectada ainda.</p>}
