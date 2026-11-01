@@ -1,7 +1,7 @@
 "use client";
 
 import { logger } from "@/lib/logger";
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition, ReactNode } from "react";
 import { getCookie, setCookie } from "@/lib/client-cookie";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -30,6 +30,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const [switchingTo, setSwitchingTo] = useState<string | null>(null);
     const router = useRouter();
+    const [pending, startTransition] = useTransition();
+    const switchStartedAt = useRef(0);
 
     const fetchSessions = async () => {
         try {
@@ -67,13 +69,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         fetchSessions();
     }, []);
 
+    // O overlay fica até o router.refresh() terminar (senão sobra página de servidor da sessão anterior), por pelo menos 600 ms para não piscar.
+    useEffect(() => {
+        if (!switchingTo || pending) return;
+        const t = setTimeout(() => setSwitchingTo(null), Math.max(0, 600 - (Date.now() - switchStartedAt.current)));
+        return () => clearTimeout(t);
+    }, [switchingTo, pending]);
+
     const setSessionId = (id: string) => {
+        if (id === sessionId) return;
+        switchStartedAt.current = Date.now();
         setSwitchingTo(sessions.find((s) => s.sessionId === id)?.name || id);
         setSessionIdState(id);
         setCookie("sessionId", id); // Sync Cookie
-        router.refresh(); // Sync Server Components
-        // router.refresh() não devolve promise; o prazo fixo evita o overlay piscar.
-        setTimeout(() => setSwitchingTo(null), 600);
+        startTransition(() => router.refresh()); // Sync Server Components
     };
 
     return (

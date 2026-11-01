@@ -51,12 +51,10 @@ export default function AgenteIaPage() {
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
-        setCfg(null);
-        setCfgSessionId(null);
-        setErroCarga(false);
         try {
             const [c, g] = await Promise.all([fetch(`/api/agente/${sessionId}/config`).then((r) => r.json()), fetch(`/api/groups/${sessionId}`).then((r) => r.json()).catch(() => null)]);
             if (!c?.status) throw new Error("Configuração indisponível");
+            setErroCarga(false);
             setCfg(c.data);
             setCfgSessionId(sessionId);
             setIgnorados((c.data.numerosIgnorados as string[]).join("\n"));
@@ -68,7 +66,13 @@ export default function AgenteIaPage() {
         }
     }, [sessionId]);
 
-    useEffect(() => { carregar(); }, [carregar]);
+    // Só na troca de sessão: o recarregamento pós-salvar sobrescreve no lugar e mantém o formulário.
+    useEffect(() => {
+        setCfg(null);
+        setCfgSessionId(null);
+        setErroCarga(false);
+        carregar();
+    }, [carregar]);
 
     const set = <K extends keyof Config>(k: K, v: Config[K]) => setCfg((c) => (c ? { ...c, [k]: v } : c));
 
