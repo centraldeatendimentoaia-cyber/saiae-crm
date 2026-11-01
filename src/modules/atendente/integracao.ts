@@ -35,9 +35,13 @@ export async function usarAtendenteNovo(sessionId: string): Promise<Treino | nul
         cache.set(sessionId, { em: Date.now(), treino });
         return treino;
     } catch (e) {
-        // Sem cache no erro: a próxima mensagem tenta de novo.
-        logger.warn(TAG, `não consegui carregar o treino publicado; segue o motor legado: ${(e as { name?: string })?.name ?? "erro"}`);
-        return null;
+        // Erro passageiro: serve o último valor conhecido (mesmo vencido), para um negócio publicado não cair na persona do
+        // salão; sem nenhum valor (primeira carga, tabela ainda inexistente), legado. O erro também fica 30 s no cache: uma
+        // consulta e um aviso por janela.
+        const treino = hit?.treino ?? null;
+        cache.set(sessionId, { em: Date.now(), treino });
+        logger.warn(TAG, `não consegui carregar o treino publicado; ${treino ? "uso o último conhecido" : "segue o motor legado"}: ${(e as { name?: string })?.name ?? "erro"}`);
+        return treino;
     }
 }
 
@@ -108,8 +112,8 @@ export async function responderComTreino(a: EntradaComTreino): Promise<{ mensage
             atendimentoHumanoAberto: a.atendimentoHumanoAberto,
             // Igual ao legado: primeira resposta = a IA ainda não falou nesta janela de histórico.
             primeiraResposta: !a.historico.some((h) => h.direcao === "out"),
-            // shortcut: sem registro de avanço no roteiro, conta as mensagens do cliente ainda sem resposta (o lote atual); trocar por um contador gravado se o gatilho "sem-avanco" disparar demais ou de menos.
-            mensagensSemAvancar: a.textos.length,
+            // shortcut: não há registro de avanço no roteiro, então o gatilho "sem-avanco" fica inerte; gravar um contador de progresso para ativá-lo.
+            mensagensSemAvancar: 0,
         }
     );
     if (s.avisoFalhou) {

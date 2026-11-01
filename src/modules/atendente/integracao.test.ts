@@ -81,6 +81,7 @@ import { limparCacheBarraca } from "@/modules/agente-salao/barraca";
 import { limparCacheAtendente, registrarVenda, usarAtendenteNovo } from "./integracao";
 import { MODELOS } from "./modelos-prontos";
 import { MSG_AVISO_FALHOU } from "./motor";
+import { logger } from "@/lib/logger";
 
 const SESSAO = "sessao-salao";
 const GRUPO = "120363000000000000@g.us";
@@ -169,12 +170,33 @@ describe("usarAtendenteNovo", () => {
         expect(db.prisma.atendenteTreino.findUnique).not.toHaveBeenCalled();
     });
 
-    it("erro de banco devolve null sem guardar, e a próxima mensagem tenta de novo", async () => {
+    it("erro de banco na primeira carga devolve null (legado)", async () => {
         db.estado.treino = TREINO;
         db.estado.erroTreino = true;
         expect(await usarAtendenteNovo(SESSAO)).toBeNull();
-        db.estado.erroTreino = false;
+    });
+
+    it("erro de banco depois de uma carga boa devolve o último treino conhecido, mesmo vencido", async () => {
+        db.estado.treino = TREINO;
         expect(await usarAtendenteNovo(SESSAO)).toEqual(TREINO);
+        db.estado.erroTreino = true;
+        vi.setSystemTime(T0.getTime() + 31_000);
+        expect(await usarAtendenteNovo(SESSAO)).toEqual(TREINO);
+    });
+
+    it("o erro também fica guardado por 30 s: uma consulta e um aviso só", async () => {
+        const warn = vi.spyOn(logger, "warn");
+        db.estado.erroTreino = true;
+        await usarAtendenteNovo(SESSAO);
+        vi.setSystemTime(T0.getTime() + 20_000);
+        await usarAtendenteNovo(SESSAO);
+        expect(db.prisma.atendenteTreino.findUnique).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls.filter((c) => String(c[1]).includes("treino publicado"))).toHaveLength(1);
+        vi.setSystemTime(T0.getTime() + 30_001);
+        db.estado.erroTreino = false;
+        db.estado.treino = TREINO;
+        expect(await usarAtendenteNovo(SESSAO)).toEqual(TREINO);
+        expect(db.prisma.atendenteTreino.findUnique).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -222,7 +244,7 @@ describe("ramo do agente do salão", () => {
         expect(motores.atendente).toHaveBeenCalledTimes(1);
         const [deps, entrada] = motores.atendente.mock.calls[0];
         expect(deps.treino).toEqual(TREINO);
-        expect(entrada).toMatchObject({ texto: "quanto custa?", primeiraResposta: true, mensagensSemAvancar: 1, atendimentoHumanoAberto: true, nomePerfil: "Ana" });
+        expect(entrada).toMatchObject({ texto: "quanto custa?", primeiraResposta: true, mensagensSemAvancar: 0, atendimentoHumanoAberto: true, nomePerfil: "Ana" });
         expect(t.enviados).toEqual([{ jid: CLIENTE, texto: "Temos o Plano Básico. Quer saber mais?" }]);
         expect(conversa().ultimaIaPerguntou).toBe(true);
     });
@@ -245,6 +267,20 @@ describe("ramo do agente do salão", () => {
         const frase = TREINO.gatilhos.find((g) => g.id === "pedido-humano")!.frase;
         expect(t.enviados.filter((e) => e.jid === CLIENTE).map((e) => e.texto)).toEqual([frase]);
         expect(conversa().ultimaIaPerguntou).toBe(false);
+    });
+
+    it("três mensagens no mesmo lote não passam para pessoa nem pausam a IA (sem-avanco inerte)", async () => {
+        db.estado.treino = TREINO;
+        const t = montar();
+        await t.emitir(t.msg("oi"));
+        await t.emitir(t.msg("tudo bem?"));
+        await t.emitir(t.msg("quanto custa?"));
+        await esperar(8000);
+        expect(motores.atendente).toHaveBeenCalledTimes(1);
+        expect(motores.atendente.mock.calls[0][1].mensagensSemAvancar).toBe(0);
+        expect(t.enviados.filter((e) => e.jid === GRUPO)).toHaveLength(0);
+        expect(conversa().estado).toBe("ia");
+        expect(t.enviados).toEqual([{ jid: CLIENTE, texto: "Temos o Plano Básico. Quer saber mais?" }]);
     });
 
     it("pessoa assumiu a conversa: o motor novo não é chamado", async () => {
