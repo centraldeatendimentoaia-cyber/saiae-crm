@@ -9,7 +9,7 @@ import { isOptedOut, isOptInText, isOptOutText } from "@/lib/optout";
 import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
 import { MAX_TEXTO } from "@/modules/atendimento-comum/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
-import { foiEnviadaPeloCrm } from "./enviados";
+import { foiEnviadaPeloCrm, foiRespondidaPorRegra } from "./enviados";
 import { sessaoEhDeBarraca } from "./barraca";
 import { registrarOrigem } from "./origem";
 import { origemDaMensagem } from "@/modules/metricas/anuncio";
@@ -183,6 +183,7 @@ interface Pendente {
     audio: boolean;
     naoTexto: boolean;
     msg: WAMessage;
+    ids: string[]; // ids das mensagens recebidas neste lote
     timer: ReturnType<typeof setTimeout> | null;
     processando: boolean;
 }
@@ -286,6 +287,9 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
         if (await sessaoEhDeBarraca(sessionId)) return; // número de restaurante do Sai aê: quem responde é o bot de pedidos
         const llm = over.llm ?? obterLlm();
         if (!llm) return;
+        // resposta automática por palavra-chave já respondeu todo o lote: a IA não responde de novo
+        // shortcut: só pula quando TODAS as mensagens do lote foram respondidas pela regra; lote misto a IA responde inteiro
+        if (p.ids.length > 0 && p.ids.every((id) => foiRespondidaPorRegra(id))) return;
         const agora = new Date();
         const msg = p.msg;
         const telefone = telefoneDe(jid, (msg.key as { remoteJidAlt?: string }).remoteJidAlt);
@@ -463,7 +467,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 await prisma.agenteConversa.update({ where: { sessionId_jid: { sessionId, jid } }, data: { ultimaInboundAt: new Date(), followUpEm: null } });
                 if (primeira && cfg.etiquetaAnuncio && veioDeAnuncioMeta(msg)) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAnuncio);
 
-                const p = pendentes.get(jid) ?? { textos: [], audio: false, naoTexto: false, msg, timer: null, processando: false };
+                const p = pendentes.get(jid) ?? { textos: [], audio: false, naoTexto: false, msg, ids: [], timer: null, processando: false };
+                if (msg.key.id) p.ids.push(msg.key.id);
                 if (c.texto) p.textos.push(c.texto);
                 if (c.audio) {
                     const t = podeTranscrever(MAX_AUDIOS_DIA) ? await (over.transcrever ?? ((m: WAMessage) => transcreverAudio(sock, m)))(msg) : null;

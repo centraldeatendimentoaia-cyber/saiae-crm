@@ -5,6 +5,7 @@ import type { BotConfig } from "@prisma/client";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { logger } from "@/lib/logger";
 import { casaRegra } from "./autoreply-match";
+import { marcarRespondidaPorRegra } from "@/modules/agente-salao/enviados";
 
 // Helper for permission check (Deduplicate from command-handler if possible, but keep simple here)
 export function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, senderJid: string): boolean {
@@ -161,6 +162,7 @@ export async function bindAutoReply(sock: WASocket, sessionId: string) {
                             await sock.sendMessage(remoteJid, { text: rule.response }, { quoted: msg });
                         }
 
+                        marcarRespondidaPorRegra(msg.key.id); // o agente de IA não responde de novo a esta mensagem
                         break;
                     }
                 }

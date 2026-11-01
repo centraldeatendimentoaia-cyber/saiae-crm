@@ -28,7 +28,31 @@ function limpar(agora: number): void {
     if (ids.size > MAX) for (const k of [...ids.keys()].slice(0, ids.size - MAX)) ids.delete(k);
 }
 
+/**
+ * IDs das mensagens RECEBIDAS que uma resposta automática por palavra-chave já respondeu. O agente de IA consulta isto
+ * depois de juntar as mensagens seguidas, para não mandar uma segunda resposta ao que a regra já respondeu.
+ */
+const regraIds = new Map<string, number>();
+
+export function marcarRespondidaPorRegra(id: string | null | undefined, agora = Date.now()): void {
+    if (!id) return;
+    regraIds.set(id, agora + TTL_MS);
+    if (regraIds.size > MAX) for (const [k, ate] of regraIds) if (ate < agora) regraIds.delete(k);
+}
+
+export function foiRespondidaPorRegra(id: string | null | undefined, agora = Date.now()): boolean {
+    if (!id) return false;
+    const ate = regraIds.get(id);
+    if (ate === undefined) return false;
+    if (ate < agora) {
+        regraIds.delete(id);
+        return false;
+    }
+    return true;
+}
+
 /** Só para testes. */
 export function _zerarEnviados(): void {
     ids.clear();
+    regraIds.clear();
 }
