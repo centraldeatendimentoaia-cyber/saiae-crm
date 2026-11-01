@@ -5,7 +5,7 @@ import { montarPromptSalao, MSG_TRANSFERENCIA, responderSalao } from "@/modules/
 import { MODELOS } from "./modelos-prontos";
 import { responderAtendente, type EntradaAtendente } from "./motor";
 import { montarPromptAtendente } from "./prompt";
-import { hostDoBanco, lerArgumentos, resumirTreino, treinoAPartirDoLegado, treinoAPartirDoLegadoComAvisos } from "./migrar-legado";
+import { avisoRascunhoExistente, decidirGravacao, hostDoBanco, lerArgumentos, resumirTreino, treinoAPartirDoLegado, treinoAPartirDoLegadoComAvisos } from "./migrar-legado";
 import { LIMITE_BASE_TOTAL, TreinoSchema } from "./treino";
 
 const T0 = new Date("2026-10-13T13:00:00Z");
@@ -160,8 +160,8 @@ describe("equivalência legado x neutro (treino migrado)", () => {
         const c = cfg();
         const legado = montarPromptSalao({ conhecimento: c.conhecimento, nome: c.nome, negocio: c.nomeNegocio, promocoes: c.promocoes, primeiraResposta: true, salaoAberto: true, agora: T0 });
         const neutro = montarPromptAtendente(treinoAPartirDoLegado(c), { agora: T0, atendimentoHumanoAberto: true, primeiraResposta: true });
-        // O link de agendamento: o legado o entrega por enviar_link_agendamento (não está no prompt); o neutro o escreve
-        // no prompt via desfecho/base. Aqui só se exige que o neutro o tenha, e que o texto do dono (conhecimento) tenha o seu.
+        // Nenhum dos dois prompts escreve o link de agendamento (ele chega por ferramenta; ver o teste do link abaixo).
+        // Aqui se compara só o texto do dono: conhecimento e promoções.
         for (const trecho of [CONHECIMENTO, PROMOCOES]) {
             expect(legado.estavel, `legado: ${trecho}`).toContain(trecho);
             expect(neutro.estavel, `neutro: ${trecho}`).toContain(trecho);
@@ -205,12 +205,53 @@ describe("equivalência legado x neutro (treino migrado)", () => {
     });
 });
 
+describe("migração: bordas", () => {
+    it("promoções enormes são cortadas com aviso, sem lançar, e o conhecimento mantém prioridade", () => {
+        const r = treinoAPartirDoLegadoComAvisos(cfg({ promocoes: "p".repeat(LIMITE_BASE_TOTAL + 10), conhecimento: "k".repeat(LIMITE_BASE_TOTAL) }));
+        expect(TreinoSchema.safeParse(r.treino).success).toBe(true);
+        const [k, p] = r.treino.base;
+        expect(p.texto).toHaveLength(LIMITE_BASE_TOTAL / 4);
+        expect(k.texto).toHaveLength(LIMITE_BASE_TOTAL - p.texto.length);
+        expect(r.avisos.filter((a) => /promoções/i.test(a)).length).toBeGreaterThan(0);
+    });
+    it("link com U+200B ou NUL cai para pessoa com aviso", () => {
+        for (const c of [0x200b, 0x0000]) {
+            const r = treinoAPartirDoLegadoComAvisos(cfg({ linkAgendamento: "https://exemplo.com/a" + String.fromCharCode(c) + "b" }));
+            expect(r.treino.roteiro.desfecho).toEqual({ tipo: "pessoa" });
+            expect(r.avisos.join(" ")).toMatch(/link/i);
+        }
+    });
+    it("avisos para nome e negócio cortados, nome vazio e conhecimento vazio", () => {
+        const a = treinoAPartirDoLegadoComAvisos(cfg({ nome: "n".repeat(300), nomeNegocio: "b".repeat(300) }));
+        expect(a.treino.identidade.nome).toHaveLength(200);
+        expect(a.treino.identidade.negocio).toHaveLength(200);
+        expect(a.avisos).toHaveLength(2);
+        const b = treinoAPartirDoLegadoComAvisos(cfg({ nome: "  ", conhecimento: "" }));
+        expect(b.treino.identidade.nome).toBe(MODELOS.salao.identidade.nome);
+        expect(b.avisos.join(" ")).toMatch(/nome da atendente/);
+        expect(b.avisos.join(" ")).toMatch(/conhecimento está vazio/);
+    });
+});
+
+describe("decidirGravacao", () => {
+    it("recusa quando já há rascunho, salvo --sobrescrever", () => {
+        expect(decidirGravacao({ rascunhoExiste: true, sobrescrever: false })).toMatchObject({ ok: false, erro: expect.stringMatching(/--sobrescrever/) });
+        expect(decidirGravacao({ rascunhoExiste: true, sobrescrever: true })).toEqual({ ok: true });
+        expect(decidirGravacao({ rascunhoExiste: false, sobrescrever: false })).toEqual({ ok: true });
+        expect(avisoRascunhoExistente(true)).toMatch(/rascunho/);
+        expect(avisoRascunhoExistente(false)).toBe("");
+    });
+    it("lerArgumentos aceita --sobrescrever", () => {
+        expect(lerArgumentos(["--sessao", "a", "--aplicar", "--confirmo-ambiente", "--sobrescrever"])).toMatchObject({ sobrescrever: true });
+    });
+});
+
 describe("lerArgumentos", () => {
     it("exige --sessao e aceita --aplicar com --confirmo-ambiente", () => {
         expect(lerArgumentos([])).toMatchObject({ erro: expect.stringMatching(/--sessao/) });
         expect(lerArgumentos(["--sessao"])).toMatchObject({ erro: expect.any(String) });
-        expect(lerArgumentos(["--sessao", "abc"])).toEqual({ sessao: "abc", aplicar: false, confirmoAmbiente: false });
-        expect(lerArgumentos(["--sessao", "abc", "--aplicar", "--confirmo-ambiente"])).toEqual({ sessao: "abc", aplicar: true, confirmoAmbiente: true });
+        expect(lerArgumentos(["--sessao", "abc"])).toEqual({ sessao: "abc", aplicar: false, confirmoAmbiente: false, sobrescrever: false });
+        expect(lerArgumentos(["--sessao", "abc", "--aplicar", "--confirmo-ambiente"])).toEqual({ sessao: "abc", aplicar: true, confirmoAmbiente: true, sobrescrever: false });
     });
     it("--aplicar sem --confirmo-ambiente é erro, e argumento desconhecido também", () => {
         expect(lerArgumentos(["--sessao", "abc", "--aplicar"])).toMatchObject({ erro: expect.stringMatching(/--confirmo-ambiente/) });
@@ -224,7 +265,10 @@ describe("hostDoBanco e resumirTreino", () => {
         expect(h).toBe("db.exemplo.com:5432");
         expect(h).not.toMatch(/segredo|usuario/);
         expect(hostDoBanco(undefined)).toBe("(DATABASE_URL ausente)");
-        expect(hostDoBanco("lixo")).not.toMatch(/lixo/);
+        expect(hostDoBanco("lixo")).toBe("host ilegível");
+        const h2 = hostDoBanco("mysql://user:p/ss#w@host:3306/db");
+        expect(h2).toBe("host:3306");
+        expect(h2).not.toMatch(/user|ss|w@/);
     });
     it("resumo traz seções, tamanhos e avisos", () => {
         const { treino, avisos } = treinoAPartirDoLegadoComAvisos(cfg({ linkAgendamento: "http://x.com" }));

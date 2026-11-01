@@ -10,11 +10,12 @@ import { CONTROLE, LIMITE_BASE_TOTAL, TreinoSchema, type Treino } from "./treino
 
 const FRASE = 2000;
 const HORAS_MAX = 720;
+const LIMITE_PROMOCOES = LIMITE_BASE_TOTAL / 4;
 const CONTROLE_G = new RegExp(CONTROLE.source, "g");
 const HTTPS = /^https:\/\/\S+$/i;
 
 const linkValido = (s: string) => {
-    if (!HTTPS.test(s) || s.length > FRASE) return false;
+    if (!HTTPS.test(s) || CONTROLE.test(s) || s.length > FRASE) return false;
     try {
         const u = new URL(s);
         return u.protocol === "https:" && !u.username && !u.password && u.hostname.includes(".") && !u.hostname.startsWith(".") && !u.hostname.endsWith(".");
@@ -32,17 +33,34 @@ export function treinoAPartirDoLegadoComAvisos(cfg: ConfigAgente): { treino: Tre
     };
     const modelo = MODELOS.salao;
 
-    const nome = limpo(cfg.nome, "nome").slice(0, 200) || modelo.identidade.nome;
-    let negocio = limpo(cfg.nomeNegocio ?? "", "nome do negócio").slice(0, 200);
+    let nome = limpo(cfg.nome, "nome");
+    if (!nome) {
+        nome = modelo.identidade.nome;
+        avisos.push(`O nome da atendente está vazio na configuração: usei "${nome}". Edite na identidade.`);
+    } else if (nome.length > 200) {
+        nome = nome.slice(0, 200).trim();
+        avisos.push("O nome da atendente passava de 200 caracteres e foi cortado.");
+    }
+    let negocio = limpo(cfg.nomeNegocio ?? "", "nome do negócio");
+    if (negocio.length > 200) {
+        negocio = negocio.slice(0, 200).trim();
+        avisos.push("O nome do negócio passava de 200 caracteres e foi cortado.");
+    }
     if (!negocio) {
         negocio = "nosso salão";
         avisos.push('O nome do negócio está vazio na configuração: usei "nosso salão". Edite na identidade.');
     }
 
-    // Promoções entram inteiras; o conhecimento perde o que passar do teto da base.
-    const promocoes = limpo(cfg.promocoes ?? "", "promoções");
+    // Orçamento da base: o conhecimento tem prioridade. As promoções valem até LIMITE_PROMOCOES (um quarto do teto) e o
+    // conhecimento fica com o resto; quem passar do seu espaço é cortado no fim, com aviso. Nunca lança por tamanho.
+    let promocoes = limpo(cfg.promocoes ?? "", "promoções");
+    if (promocoes.length > LIMITE_PROMOCOES) {
+        promocoes = promocoes.slice(0, LIMITE_PROMOCOES).trim();
+        avisos.push(`As promoções passavam de ${LIMITE_PROMOCOES} caracteres e foram cortadas no fim.`);
+    }
     let conhecimento = limpo(cfg.conhecimento, "conhecimento");
-    const espaco = Math.max(0, LIMITE_BASE_TOTAL - promocoes.length);
+    if (!conhecimento) avisos.push("O conhecimento está vazio na configuração: a base ficou sem texto do negócio.");
+    const espaco = LIMITE_BASE_TOTAL - promocoes.length;
     if (conhecimento.length > espaco) {
         conhecimento = conhecimento.slice(0, espaco).trim();
         avisos.push(`O conhecimento passava do limite da base (${LIMITE_BASE_TOTAL} caracteres somados às promoções) e foi cortado no fim.`);
@@ -84,12 +102,13 @@ export const treinoAPartirDoLegado = (cfg: ConfigAgente): Treino => treinoAParti
 
 // ---------------------------------------------------------------- apoio do script (lógica pura, testada aqui)
 
-export type Argumentos = { sessao: string; aplicar: boolean; confirmoAmbiente: boolean } | { erro: string };
+export type Argumentos = { sessao: string; aplicar: boolean; confirmoAmbiente: boolean; sobrescrever: boolean } | { erro: string };
 
 export function lerArgumentos(argv: string[]): Argumentos {
     let sessao = "";
     let aplicar = false;
     let confirmoAmbiente = false;
+    let sobrescrever = false;
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === "--sessao") {
@@ -98,22 +117,38 @@ export function lerArgumentos(argv: string[]): Argumentos {
             sessao = v;
         } else if (a === "--aplicar") aplicar = true;
         else if (a === "--confirmo-ambiente") confirmoAmbiente = true;
+        else if (a === "--sobrescrever") sobrescrever = true;
         else return { erro: `Argumento desconhecido: ${a}` };
     }
     if (!sessao) return { erro: "Informe --sessao <baileysSessionId>." };
     if (aplicar && !confirmoAmbiente) return { erro: "--aplicar exige também --confirmo-ambiente (confira o banco de destino antes)." };
-    return { sessao, aplicar, confirmoAmbiente };
+    return { sessao, aplicar, confirmoAmbiente, sobrescrever };
 }
 
-/** Só host:porta do banco, para conferência; nunca usuário, senha ou nome do banco. */
+/**
+ * Só host:porta do banco, para conferência; nunca usuário, senha ou nome do banco. Não usa new URL: uma senha com "/", "?"
+ * ou "#" sem codificar quebraria o parser e vazaria pedaços dela. Pega o que vem depois do ÚLTIMO "@" e corta em / ? #.
+ */
 export function hostDoBanco(url: string | undefined): string {
     if (!url) return "(DATABASE_URL ausente)";
-    try {
-        return new URL(url).host || "(host não identificado)";
-    } catch {
-        return "(DATABASE_URL ilegível)";
-    }
+    const m = /^[a-z][a-z0-9+.-]*:\/\/([\s\S]*)$/i.exec(url.trim());
+    if (!m) return "host ilegível";
+    const resto = m[1];
+    const h = /^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(:\d{1,5})?(?:[/?#]|$)/.exec(resto.slice(resto.lastIndexOf("@") + 1));
+    return h ? h[1] + (h[2] ?? "") : "host ilegível";
 }
+
+export type DecisaoGravacao = { ok: true } | { ok: false; erro: string };
+
+/** Decide se pode gravar o rascunho: se já existe um, só com --sobrescrever. */
+export function decidirGravacao(args: { rascunhoExiste: boolean; sobrescrever: boolean }): DecisaoGravacao {
+    if (args.rascunhoExiste && !args.sobrescrever) {
+        return { ok: false, erro: "Esta sessão já tem um rascunho da atendente. Nada foi gravado. Para substituí-lo, rode de novo com --sobrescrever." };
+    }
+    return { ok: true };
+}
+
+export const avisoRascunhoExistente = (existe: boolean) => (existe ? "ATENÇÃO: já existe um rascunho nesta sessão; --aplicar só o substitui com --sobrescrever." : "");
 
 export function resumirTreino(t: Treino, avisos: string[]): string {
     const tam = t.base.reduce((s, b) => s + b.texto.length, 0);
