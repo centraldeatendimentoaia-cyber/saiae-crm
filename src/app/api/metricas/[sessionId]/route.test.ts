@@ -7,15 +7,20 @@ const db = vi.hoisted(() => ({
     origens: [] as { keyId: string; origem: string }[],
     cfg: null as { diasAbertos: string; horaAbre: number; horaFecha: number } | null,
     sessaoExiste: true,
+    vendas: [] as Date[],
 }));
 
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         session: { findFirst: vi.fn(async () => (db.sessaoExiste ? { id: "db-1", sessionId: "s1" } : null)) },
+        vendaIA: { count: vi.fn(async ({ where }: { where: { sessionId: string; criadoEm: { gte: Date; lte: Date } } }) => db.vendas.filter((d) => d >= where.criadoEm.gte && d <= where.criadoEm.lte).length) },
         agenteConfig: { findUnique: vi.fn(async () => db.cfg) },
         message: {
             findMany: vi.fn(async (args: { select: Record<string, boolean> }) => db.mensagens.map((m) => Object.fromEntries(Object.keys(args.select).map((k) => [k, (m as Record<string, unknown>)[k]])))),
+            groupBy: vi.fn(async () => []),
         },
+        conversaOrigem: { findMany: vi.fn(async () => [{ jid: "5561999990001@s.whatsapp.net", origem: "anuncio" }]) },
+        contact: { findMany: vi.fn(async () => []) },
         mensagemOrigem: {
             findFirst: vi.fn(async () => ({ criadoEm: new Date("2026-10-01T00:00:00Z") })),
             findMany: vi.fn(async () => db.origens),
@@ -38,6 +43,7 @@ beforeEach(() => {
     db.usuario = { id: "u1", role: "USER" };
     db.cfg = null;
     db.sessaoExiste = true;
+    db.vendas = [];
     db.origens = [{ keyId: "K2", origem: "ia" }];
     db.mensagens = [
         { id: "1", remoteJid: "5561999990001@s.whatsapp.net", fromMe: false, timestamp: sp("2026-10-12T10:00:00"), keyId: "K1", content: "segredo: meu cpf é 123" },
@@ -95,5 +101,67 @@ describe("GET /api/metricas/[sessionId]", () => {
         expect(corpo).toContain("dia;mensagens_recebidas;demandas;sem_retorno");
         expect(corpo).toContain("2026-10-12;1;1;0;300");
         expect(corpo).toContain("2026-10-13;0;0;0;");
+    });
+
+    it("vendasFechadas conta as VendaIA do período, e o anterior usa o seu próprio intervalo", async () => {
+        db.vendas = [sp("2026-10-12T11:00:00"), sp("2026-10-13T11:00:00"), sp("2026-10-06T11:00:00"), sp("2026-09-01T11:00:00")];
+        const { data } = await (await chamar("de=2026-10-12&ate=2026-10-18")).json();
+        expect(data.vendasFechadas).toBe(2);
+        const c = (await (await chamar("de=2026-10-12&ate=2026-10-18&comparar=1")).json()).data;
+        expect(c.atual.vendasFechadas).toBe(2);
+        expect(c.anterior.vendasFechadas).toBe(1);
+        expect(c.variacoes.vendasFechadas).toEqual({ atual: 2, anterior: 1, variacaoPct: 100 });
+    });
+
+    describe("comparar=1", () => {
+        const base = "de=2026-10-12&ate=2026-10-18&comparar=1";
+        it("devolve atual, anterior (mesma duração, termina na véspera) e variações", async () => {
+            const r = await chamar(base);
+            expect(r.status).toBe(200);
+            const { data } = await r.json();
+            expect(data.atual.demandas).toBe(1);
+            expect(data.atual.clientesDeAnuncio).toBe(1);
+            expect(data.anterior.porDia).toHaveLength(7);
+            expect(data.anterior.porDia[0].dia).toBe("2026-10-05");
+            expect(data.anterior.porDia[6].dia).toBe("2026-10-11");
+            expect(Object.keys(data.variacoes)).toEqual([
+                "mensagensRecebidas", "mensagensEnviadas", "contatosUnicos", "contatosNovos", "clientesDeAnuncio", "reativados", "vendasFechadas",
+                "passagensParaPessoa", "demandas", "demandasForaExpediente", "demandasSemRetorno", "demandasPendentes", "tempoMedianoPrimeiraResposta",
+            ]);
+        });
+        it("anteriorDe/anteriorAte escolhem o período de comparação (mês anterior inteiro)", async () => {
+            const r = await chamar("de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-01&anteriorAte=2026-09-30");
+            expect(r.status).toBe(200);
+            const { data } = await r.json();
+            expect(data.anterior.porDia).toHaveLength(30);
+            expect(data.anterior.porDia[0].dia).toBe("2026-09-01");
+        });
+        it("anteriorDe/anteriorAte inválidos: 400 (sem comparar, só um deles, datas ruins ou sobrepostas ao período)", async () => {
+            for (const qs of [
+                "de=2026-10-01&ate=2026-10-12&anteriorDe=2026-09-01&anteriorAte=2026-09-30",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-01",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=x&anteriorAte=y",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-15&anteriorAte=2026-10-02",
+            ]) expect((await chamar(qs)).status, qs).toBe(400);
+        });
+        it("comparar diferente de 1: 400; com formato=csv: 400", async () => {
+            const r = await chamar("de=2026-10-12&ate=2026-10-18&comparar=2");
+            expect(r.status).toBe(400);
+            expect((await r.json()).message).toContain("comparar");
+            expect((await chamar(base + "&formato=csv")).status).toBe(400);
+        });
+        it("401 e 403 continuam valendo", async () => {
+            db.usuario = null;
+            expect((await chamar(base)).status).toBe(401);
+            db.usuario = { id: "u1", role: "USER" };
+            db.acesso = false;
+            expect((await chamar(base)).status).toBe(403);
+        });
+        it("a resposta não tem jid nem telefone", async () => {
+            const texto = await (await chamar(base)).text();
+            expect(texto).not.toContain("@s.whatsapp.net");
+            expect(texto).not.toContain("@lid");
+            expect(texto).not.toMatch(/\d{10,}/);
+        });
     });
 });

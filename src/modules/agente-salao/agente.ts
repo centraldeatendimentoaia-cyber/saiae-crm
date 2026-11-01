@@ -12,9 +12,12 @@ import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
 import { sessaoEhDeBarraca } from "./barraca";
 import { registrarOrigem } from "./origem";
+import { origemDaMensagem } from "@/modules/metricas/anuncio";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
+import { responderComTreino, usarAtendenteNovo } from "@/modules/atendente/integracao";
+import { registrarCorrecaoHumana } from "@/modules/atendente/sugestoes";
 
 /**
  * Liga o agente do salão ao socket do WhatsApp (QR/Baileys) de UMA sessão.
@@ -112,11 +115,7 @@ export function lerConteudo(msg: WAMessage): ConteudoMensagem {
 }
 
 /** Mensagem que veio de um anúncio de "clique para WhatsApp" do Meta. */
-export function veioDeAnuncioMeta(msg: WAMessage): boolean {
-    const c = normalizeMessageContent(msg.message);
-    const ctx = c?.extendedTextMessage?.contextInfo ?? c?.imageMessage?.contextInfo ?? c?.videoMessage?.contextInfo;
-    return !!(ctx?.externalAdReply || ctx?.conversionSource);
-}
+export const veioDeAnuncioMeta = (msg: WAMessage): boolean => origemDaMensagem(msg) === "anuncio";
 
 export const telefoneDe = (jid: string, alt?: string | null): string | null => {
     const j = jid.endsWith("@s.whatsapp.net") ? jid : alt && alt.endsWith("@s.whatsapp.net") ? alt : null;
@@ -348,7 +347,11 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             while (ordem.length && !ordem[ordem.length - 1].fromMe) ordem.pop();
             const historico = ordem.map((m) => ({ direcao: (m.fromMe ? "out" : "in") as "in" | "out", texto: m.content ?? "" }));
 
-            const r = await responderSalao(
+            // treino publicado: motor neutro; sem treino, erro ou número de barraca: o motor legado abaixo, igual a antes
+            const treino = await usarAtendenteNovo(sessionId);
+            const r = treino
+                ? await responderComTreino({ llm, treino, sessionId, jid, historico, textos: p.textos, nomePerfil, agora, atendimentoHumanoAberto: salaoAberto(cfg, agora), etiquetas: cfg.etiquetasInteresse, etiquetaAguardando: cfg.etiquetaAguardando, chamarRecepcao, etiquetar: (e: string) => aplicarEtiqueta(sock, sessionId, jid, e) })
+                : await responderSalao(
                 { llm, historico, logger },
                 {
                     conhecimento: cfg.conhecimento,
@@ -437,6 +440,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         const p = pendentes.get(jid);
                         if (p?.timer) clearTimeout(p.timer);
                         pendentes.delete(jid);
+                        // sugestão de treino (só sessão com treino publicado); disparar-e-esquecer, nunca lança nem atrasa
+                        if (c.texto) void registrarCorrecaoHumana(sessionId, jid, c.texto, criadaEm).catch(() => {});
                     }
                     continue;
                 }

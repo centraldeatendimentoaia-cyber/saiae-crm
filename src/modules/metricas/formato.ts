@@ -62,3 +62,35 @@ export function periodoAnterior(de: string, ate: string): { de: string; ate: str
     const dias = Math.round((new Date(`${ate}T12:00:00Z`).getTime() - new Date(`${de}T12:00:00Z`).getTime()) / 86_400_000) + 1;
     return { de: somarDias(de, -dias), ate: somarDias(de, -1) };
 }
+
+/** Do dia 1 do mês até hoje (fuso de São Paulo). */
+export function mesAtual(hoje: Date = new Date()): { de: string; ate: string } {
+    const ate = diaSaoPaulo(hoje);
+    return { de: `${ate.slice(0, 7)}-01`, ate };
+}
+
+/** O mês anterior inteiro. */
+export function mesPassado(hoje: Date = new Date()): { de: string; ate: string } {
+    const ate = somarDias(mesAtual(hoje).de, -1);
+    return { de: `${ate.slice(0, 7)}-01`, ate };
+}
+
+/** "2026-10-01" → "outubro de 2026" */
+export function nomeDoMes(dia: string): string {
+    const meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+    return `${meses[Number(dia.slice(5, 7)) - 1]} de ${dia.slice(0, 4)}`;
+}
+
+/** O mês civil inteiro anterior ao mês da data `de` (AAAA-MM-DD). */
+export function mesCivilAnterior(de: string): { de: string; ate: string } {
+    const ate = somarDias(`${de.slice(0, 7)}-01`, -1);
+    return { de: `${ate.slice(0, 7)}-01`, ate };
+}
+
+/** Texto do período para o resumo: o nome do mês só quando o mês está inteiro; senão o intervalo, marcado como parcial. */
+export function rotuloPeriodo(p: { de: string; ate: string }): { texto: string; parcial: boolean } {
+    const mesmoMes = p.de.slice(0, 7) === p.ate.slice(0, 7);
+    if (mesmoMes && p.de.endsWith("-01") && somarDias(p.ate, 1).endsWith("-01")) return { texto: nomeDoMes(p.de), parcial: false };
+    if (mesmoMes) return { texto: `${Number(p.de.slice(8))} a ${Number(p.ate.slice(8))} de ${nomeDoMes(p.de)} (parcial)`, parcial: true };
+    return { texto: `${dataBr(p.de)} a ${dataBr(p.ate)}`, parcial: true };
+}

@@ -7,7 +7,7 @@ import { logger } from "@/lib/logger";
 import { casaRegra } from "./autoreply-match";
 
 // Helper for permission check (Deduplicate from command-handler if possible, but keep simple here)
-function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, senderJid: string): boolean {
+export function canAutoReply(config: BotConfig | null | undefined, fromMe: boolean, senderJid: string): boolean {
     if (!config || !config.enabled) return false;
 
     // Auto Reply Specific Mode

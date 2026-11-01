@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useSession } from "@/components/dashboard/session-provider";
+import { podeSalvar } from "@/lib/sessao-segura";
 import { SessionGuard } from "@/components/dashboard/session-guard";
 
 interface Config {
@@ -41,6 +42,8 @@ interface Grupo { jid: string; subject: string | null }
 export default function AgenteIaPage() {
     const { sessionId } = useSession();
     const [cfg, setCfg] = useState<Config | null>(null);
+    const [cfgSessionId, setCfgSessionId] = useState<string | null>(null);
+    const [erroCarga, setErroCarga] = useState(false);
     const [grupos, setGrupos] = useState<Grupo[]>([]);
     const [ignorados, setIgnorados] = useState("");
     const [interesses, setInteresses] = useState("");
@@ -48,21 +51,33 @@ export default function AgenteIaPage() {
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
-        const [c, g] = await Promise.all([fetch(`/api/agente/${sessionId}/config`).then((r) => r.json()), fetch(`/api/groups/${sessionId}`).then((r) => r.json()).catch(() => null)]);
-        if (c?.status) {
+        try {
+            const [c, g] = await Promise.all([fetch(`/api/agente/${sessionId}/config`).then((r) => r.json()), fetch(`/api/groups/${sessionId}`).then((r) => r.json()).catch(() => null)]);
+            if (!c?.status) throw new Error("Configuração indisponível");
+            setErroCarga(false);
             setCfg(c.data);
+            setCfgSessionId(sessionId);
             setIgnorados((c.data.numerosIgnorados as string[]).join("\n"));
             setInteresses((c.data.etiquetasInteresse as string[]).join("\n"));
+            if (g?.status) setGrupos((g.data as Grupo[]).filter((x) => x.jid?.endsWith("@g.us")));
+        } catch {
+            setErroCarga(true);
+            toast.error("Falha ao carregar a configuração do agente");
         }
-        if (g?.status) setGrupos((g.data as Grupo[]).filter((x) => x.jid?.endsWith("@g.us")));
     }, [sessionId]);
 
-    useEffect(() => { carregar(); }, [carregar]);
+    // Só na troca de sessão: o recarregamento pós-salvar sobrescreve no lugar e mantém o formulário.
+    useEffect(() => {
+        setCfg(null);
+        setCfgSessionId(null);
+        setErroCarga(false);
+        carregar();
+    }, [carregar]);
 
     const set = <K extends keyof Config>(k: K, v: Config[K]) => setCfg((c) => (c ? { ...c, [k]: v } : c));
 
     const salvar = async (extra: Partial<Config> = {}) => {
-        if (!cfg) return;
+        if (!cfg || !podeSalvar(sessionId, cfgSessionId, salvando)) return;
         setSalvando(true);
         try {
             const corpo = {
@@ -110,7 +125,7 @@ export default function AgenteIaPage() {
                     </p>
                 </div>
 
-                {!cfg ? <p className="text-sm text-muted-foreground">Carregando...</p> : (
+                {!cfg ? <p className="text-sm text-muted-foreground">{erroCarga ? "Não foi possível carregar a configuração desta sessão. Recarregue a página." : "Carregando..."}</p> : (
                     <>
                         <Card>
                             <CardHeader>

@@ -710,6 +710,7 @@ model AgenteConversa {
   ultimaIaPerguntou Boolean   @default(false)
   ultimaHumanoAt    DateTime?
   followUpEm        DateTime?
+  followUpEnvios    Int       @default(0) // follow-ups da sequência atual (atendente com treino); vale enquanto followUpEm != null
   criadoEm          DateTime  @default(now())
   atualizadoEm      DateTime  @updatedAt
 
@@ -843,4 +844,60 @@ model MensagemOrigem {
 
   @@unique([sessionId, keyId])
   @@index([criadoEm])
+}
+
+// Origem da PRIMEIRA mensagem recebida de cada contato: "anuncio" (clique para WhatsApp) ou "organico". Alimenta as métricas de crescimento.
+model ConversaOrigem {
+  id        String   @id @default(cuid())
+  sessionId String // Session.sessionId (string do Baileys)
+  jid       String
+  origem    String // "anuncio" | "organico"
+  criadoEm  DateTime @default(now())
+
+  @@unique([sessionId, jid])
+  @@index([sessionId, criadoEm])
+}
+
+/// Treino da atendente de IA de uma sessao: rascunho em edicao e a versao publicada. `sessionId` e a string do Baileys
+/// (Session.sessionId, mesma chave de AgenteConfig), sem relacao Prisma.
+model AtendenteTreino {
+  sessionId       String   @id
+  rascunho        Json
+  publicadoVersao Int?
+  atualizadoEm    DateTime @updatedAt
+}
+
+/// Foto imutavel do treino a cada publicacao; permite reverter. Versao cresce 1, 2, 3... por sessao.
+model AtendenteVersao {
+  id        String   @id @default(cuid())
+  sessionId String
+  versao    Int
+  conteudo  Json
+  criadoEm  DateTime @default(now())
+
+  @@unique([sessionId, versao])
+}
+
+/// Venda ou contratacao que a atendente neutra registrou numa conversa (ferramenta registrar_venda).
+model VendaIA {
+  id            String   @id @default(cuid())
+  sessionId     String // Session.sessionId (string do Baileys)
+  jid           String
+  descricao     String
+  valorCentavos Int?
+  criadoEm      DateTime @default(now())
+
+  @@index([sessionId, criadoEm])
+}
+
+/// Sugestao de treino tirada de uma resposta da equipe; so entra no rascunho quando o dono aprova.
+model AtendenteSugestao {
+  id        String   @id @default(cuid())
+  sessionId String
+  cliente   String   @db.Text
+  resposta  String   @db.Text
+  status    String   @default("pendente") // "pendente" | "aprovada" | "descartada"
+  criadoEm  DateTime @default(now())
+
+  @@index([sessionId, status])
 }

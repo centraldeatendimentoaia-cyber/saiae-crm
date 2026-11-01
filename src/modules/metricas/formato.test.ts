@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dataBr, formatarDuracao, percentual, periodoAnterior, somarDias, ultimosDias, variacao } from "./formato";
+import { dataBr, formatarDuracao, percentual, periodoAnterior, somarDias, mesAtual, mesCivilAnterior, mesPassado, nomeDoMes, rotuloPeriodo, ultimosDias, variacao } from "./formato";
 
 describe("formatarDuracao", () => {
     it("escolhe a unidade pelo tamanho", () => {
@@ -46,5 +46,28 @@ describe("datas", () => {
     });
     it("dataBr", () => {
         expect(dataBr("2026-10-12")).toBe("12/10/2026");
+    });
+});
+
+describe("meses", () => {
+    const hoje = new Date("2026-03-15T15:00:00Z");
+    it("mês atual vai do dia 1 até hoje", () => expect(mesAtual(hoje)).toEqual({ de: "2026-03-01", ate: "2026-03-15" }));
+    it("mês passado é inteiro, inclusive na virada do ano", () => {
+        expect(mesPassado(hoje)).toEqual({ de: "2026-02-01", ate: "2026-02-28" });
+        expect(mesPassado(new Date("2026-01-05T15:00:00Z"))).toEqual({ de: "2025-12-01", ate: "2025-12-31" });
+    });
+    it("nomeia o mês em português", () => expect(nomeDoMes("2026-10-01")).toBe("outubro de 2026"));
+    it("usa o dia de São Paulo na virada: 01/03 02:00 UTC ainda é fevereiro", () => {
+        expect(mesAtual(new Date("2026-03-01T02:00:00Z"))).toEqual({ de: "2026-02-01", ate: "2026-02-28" });
+        expect(mesPassado(new Date("2026-03-01T02:00:00Z"))).toEqual({ de: "2026-01-01", ate: "2026-01-31" });
+    });
+    it("mês civil anterior ao mês de uma data", () => {
+        expect(mesCivilAnterior("2026-11-01")).toEqual({ de: "2026-10-01", ate: "2026-10-31" });
+        expect(mesCivilAnterior("2026-01-01")).toEqual({ de: "2025-12-01", ate: "2025-12-31" });
+    });
+    it("rótulo do período: mês inteiro, parcial ou intervalo livre", () => {
+        expect(rotuloPeriodo({ de: "2026-10-01", ate: "2026-10-31" })).toEqual({ texto: "outubro de 2026", parcial: false });
+        expect(rotuloPeriodo({ de: "2026-11-01", ate: "2026-11-12" })).toEqual({ texto: "1 a 12 de novembro de 2026 (parcial)", parcial: true });
+        expect(rotuloPeriodo({ de: "2026-10-25", ate: "2026-11-03" })).toEqual({ texto: "25/10/2026 a 03/11/2026", parcial: true });
     });
 });

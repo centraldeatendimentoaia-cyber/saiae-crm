@@ -1,8 +1,8 @@
 "use client";
 
 import { errorMessage } from "@/lib/errors";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Download } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, ClipboardCopy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useSession } from "@/components/dashboard/session-provider";
 import { SessionGuard } from "@/components/dashboard/session-guard";
 import type { RelatorioMetricas } from "@/modules/metricas/calcular";
-import { dataBr, formatarDuracao, percentual, periodoAnterior, ultimosDias, variacao } from "@/modules/metricas/formato";
+import { dataBr, formatarDuracao, mesAtual, mesCivilAnterior, mesPassado, nomeDoMes, percentual, periodoAnterior, rotuloPeriodo, ultimosDias, variacao } from "@/modules/metricas/formato";
+import { gerarResumoWhatsApp } from "@/modules/metricas/resumo-texto";
 
-type Atalho = "7" | "30" | "personalizado";
+type Atalho = "7" | "30" | "mes" | "mes-passado" | "personalizado";
 interface Periodo { de: string; ate: string }
 interface Resultado { rotulo: string; periodo: Periodo; dados: RelatorioMetricas }
 
@@ -27,18 +28,34 @@ async function buscar(sessionId: string, p: Periodo): Promise<RelatorioMetricas>
     return json.data as RelatorioMetricas;
 }
 
+type Variacoes = Parameters<typeof gerarResumoWhatsApp>[0]["comparacao"];
+interface Comparado { atual: RelatorioMetricas; anterior: RelatorioMetricas; variacoes: Variacoes }
+
+/** Período atual + anterior + variações numa chamada (comparar=1). Com `anterior`, compara com esse período em vez do de mesma duração. O CSV não aceita comparar. */
+async function buscarComparado(sessionId: string, p: Periodo, anterior: Periodo | null): Promise<Comparado> {
+    const extra = anterior ? `&anteriorDe=${anterior.de}&anteriorAte=${anterior.ate}` : "";
+    const res = await fetch(`/api/metricas/${encodeURIComponent(sessionId)}?de=${p.de}&ate=${p.ate}&comparar=1${extra}`);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.status) throw new Error(json.message || "Não foi possível carregar as métricas.");
+    return json.data as Comparado;
+}
+
+/** "Este mês" e "Mês passado" comparam com o mês civil anterior inteiro; os demais, com o período de mesma duração. */
+const anteriorDoAtalho = (atalho: Atalho, p: Periodo): Periodo | null => (atalho === "mes" || atalho === "mes-passado" ? mesCivilAnterior(p.de) : null);
+
 const urlCsv = (sessionId: string, p: Periodo) => `/api/metricas/${encodeURIComponent(sessionId)}?de=${p.de}&ate=${p.ate}&formato=csv`;
 
 /** Quando `menorMelhor`, queda é boa (verde); sem isso a variação é neutra (só informa). */
-function Variacao({ atual, anterior, menorMelhor, unidade }: { atual: number | null; anterior: number | null; menorMelhor?: boolean; unidade?: "pp" | "s" }) {
+function Variacao({ atual, anterior, menorMelhor, unidade, contra }: { atual: number | null; anterior: number | null; menorMelhor?: boolean; unidade?: "pp" | "s"; contra: string }) {
     const v = variacao(atual, anterior);
-    if (!v) return null;
+    if (!v) return <span className="text-xs text-muted-foreground">sem base de comparação</span>;
+    if (unidade === undefined && v.percentual === null) return <span className="text-xs text-muted-foreground">sem base de comparação</span>;
     if (v.sentido === "igual") return <span className="text-xs text-muted-foreground">sem mudança</span>;
     const sinal = v.diferenca > 0 ? "+" : "−";
     const abs = Math.abs(v.diferenca);
     const texto = unidade === "s" ? `${sinal}${formatarDuracao(abs)}` : unidade === "pp" ? `${sinal}${abs} p.p.` : v.percentual !== null ? `${sinal}${Math.abs(v.percentual)}%` : `${sinal}${abs}`;
     const cor = menorMelhor === undefined ? "text-muted-foreground" : (v.sentido === "caiu") === menorMelhor ? "text-green-600" : "text-red-600";
-    return <span className={`text-xs font-medium ${cor}`}>{texto} vs. período A</span>;
+    return <span className={`text-xs font-medium ${cor}`}>{texto} vs. {contra}</span>;
 }
 
 function Cartao({ titulo, valor, detalhe, children }: { titulo: string; valor: string; detalhe?: string; children?: React.ReactNode }) {
@@ -109,7 +126,7 @@ function GraficoDiario({ serie }: { serie: RelatorioMetricas["porDia"] }) {
 }
 
 export default function MetricasPage() {
-    const { sessionId } = useSession();
+    const { sessionId, sessions } = useSession();
     const hoje7 = useMemo(() => ultimosDias(7), []);
     const [comparar, setComparar] = useState(false);
     const [atalho, setAtalho] = useState<Atalho>("7");
@@ -118,11 +135,14 @@ export default function MetricasPage() {
     const [loading, setLoading] = useState(false);
     const [resultados, setResultados] = useState<Resultado[]>([]);
     const [erro, setErro] = useState<string | null>(null);
+    const [copiando, setCopiando] = useState(false);
+    const [anteriorUnico, setAnteriorUnico] = useState<Comparado | null>(null); // só no modo de período único
+    const requisicao = useRef(0); // descarta respostas de uma sessão/período que já foi trocado
 
     const escolherAtalho = (a: Atalho) => {
         setAtalho(a);
         if (a !== "personalizado") {
-            const p = ultimosDias(Number(a));
+            const p = a === "mes" ? mesAtual() : a === "mes-passado" ? mesPassado() : ultimosDias(Number(a));
             setPeriodoB(p);
             setPeriodoA(periodoAnterior(p.de, p.ate));
         }
@@ -130,35 +150,79 @@ export default function MetricasPage() {
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
+        const minha = ++requisicao.current;
         setLoading(true);
         setErro(null);
         try {
             if (comparar) {
+                setAnteriorUnico(null);
                 const [a, b] = await Promise.all([buscar(sessionId, periodoA), buscar(sessionId, periodoB)]);
+                if (minha !== requisicao.current) return;
                 setResultados([
                     { rotulo: "Período A (antes)", periodo: periodoA, dados: a },
                     { rotulo: "Período B (depois)", periodo: periodoB, dados: b },
                 ]);
             } else {
-                setResultados([{ rotulo: "Período", periodo: periodoB, dados: await buscar(sessionId, periodoB) }]);
+                const c = await buscarComparado(sessionId, periodoB, anteriorDoAtalho(atalho, periodoB));
+                if (minha !== requisicao.current) return;
+                setAnteriorUnico(c);
+                setResultados([{ rotulo: "Período", periodo: periodoB, dados: c.atual }]);
             }
         } catch (e) {
+            if (minha !== requisicao.current) return;
             const msg = errorMessage(e, "Não foi possível carregar as métricas.");
             setErro(msg);
             setResultados([]);
+            setAnteriorUnico(null);
             toast.error(msg);
         } finally {
-            setLoading(false);
+            if (minha === requisicao.current) setLoading(false);
         }
-    }, [sessionId, comparar, periodoA, periodoB]);
+    }, [sessionId, comparar, atalho, periodoA, periodoB]);
+
+    // trocar de sessão não pode deixar a tela mostrando números da anterior
+    useEffect(() => {
+        setResultados([]);
+        setAnteriorUnico(null);
+        setErro(null);
+    }, [sessionId]);
 
     useEffect(() => {
         const datasOk = (p: Periodo) => /^\d{4}-\d{2}-\d{2}$/.test(p.de) && /^\d{4}-\d{2}-\d{2}$/.test(p.ate) && p.de <= p.ate;
         if (datasOk(periodoB) && (!comparar || datasOk(periodoA))) void carregar();
     }, [carregar, comparar, periodoA, periodoB]);
 
+    const copiarResumo = async () => {
+        if (!sessionId) return;
+        setCopiando(true);
+        try {
+            const anterior = anteriorDoAtalho(atalho, periodoB);
+            // reaproveita a resposta já carregada quando é a do período único atual
+            const variacoes = !comparar && anteriorUnico ? anteriorUnico.variacoes : (await buscarComparado(sessionId, periodoB, anterior)).variacoes;
+            const texto = gerarResumoWhatsApp({
+                negocio: sessions.find((s) => s.sessionId === sessionId)?.name || "Meu negócio",
+                mes: rotuloPeriodo(periodoB).texto,
+                comparadoCom: anterior ? nomeDoMes(anterior.de) : undefined,
+                vocabulario: { cliente: "cliente", clientes: "clientes" }, // o vocabulário treinável chega numa etapa seguinte
+                comparacao: variacoes,
+            });
+            try {
+                await navigator.clipboard.writeText(texto);
+                toast.success("Resumo copiado. Cole no WhatsApp.");
+            } catch {
+                // sem permissão de área de transferência (ex.: página sem HTTPS): mostra o texto para copiar à mão
+                toast.message("Não foi possível copiar sozinho. Copie o texto abaixo:", { description: texto, duration: 30000 });
+            }
+        } catch (e) {
+            toast.error(errorMessage(e, "Não foi possível montar o resumo."));
+        } finally {
+            setCopiando(false);
+        }
+    };
+
     const principal = resultados[resultados.length - 1]?.dados;
-    const base = comparar && resultados.length === 2 ? resultados[0].dados : null;
+    const base = comparar ? (resultados.length === 2 ? resultados[0].dados : null) : (anteriorUnico?.anterior ?? null);
+    const contra = comparar ? "período A" : anteriorDoAtalho(atalho, periodoB) ? "mês anterior" : "período anterior";
 
     const resumo = (d: RelatorioMetricas) => ({
         foraPct: percentual(d.demandasForaExpediente, d.demandas),
@@ -206,10 +270,18 @@ export default function MetricasPage() {
                         <div className="flex flex-wrap gap-2">
                             <Button variant={atalho === "7" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("7")}>Últimos 7 dias</Button>
                             <Button variant={atalho === "30" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("30")}>Últimos 30 dias</Button>
+                            <Button variant={atalho === "mes" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("mes")}>Este mês</Button>
+                            <Button variant={atalho === "mes-passado" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("mes-passado")}>Mês passado</Button>
                             <Button variant={atalho === "personalizado" ? "default" : "outline"} size="sm" onClick={() => setAtalho("personalizado")}>Personalizado</Button>
                             <Button variant={comparar ? "default" : "outline"} size="sm" onClick={() => setComparar((c) => !c)} aria-pressed={comparar}>
                                 Comparar antes x depois
                             </Button>
+                        </div>
+                        <div>
+                            <Button variant="outline" size="sm" onClick={() => void copiarResumo()} disabled={copiando || loading || !sessionId}>
+                                <ClipboardCopy className="h-4 w-4" /> {copiando ? "Montando..." : "Copiar resumo"}
+                            </Button>
+                            <p className="mt-1 text-xs text-muted-foreground">Texto pronto para o WhatsApp, com a variação contra o período anterior (mês civil anterior em "Este mês" e "Mês passado"; nos demais, período de mesma duração).</p>
                         </div>
                         <div className="flex flex-wrap gap-6">
                             {comparar && campoPeriodo("Período A (antes)", periodoA, setPeriodoA, "a")}
@@ -233,29 +305,34 @@ export default function MetricasPage() {
                     <div className={`space-y-6 ${loading ? "opacity-60" : ""}`}>
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                             <Cartao titulo="Mensagens recebidas" valor={String(principal.mensagensRecebidas)} detalhe={`${principal.contatosUnicos} contatos, ${principal.contatosNovos} novos`}>
-                                {base && <Variacao atual={principal.mensagensRecebidas} anterior={base.mensagensRecebidas} />}
+                                {base && <Variacao contra={contra} atual={principal.mensagensRecebidas} anterior={base.mensagensRecebidas} />}
                             </Cartao>
                             <Cartao titulo="Demandas (pessoas que pediram atendimento)" valor={String(principal.demandas)} detalhe="Várias mensagens seguidas contam como uma demanda">
-                                {base && <Variacao atual={principal.demandas} anterior={base.demandas} />}
+                                {base && <Variacao contra={contra} atual={principal.demandas} anterior={base.demandas} />}
                             </Cartao>
                             <Cartao titulo="Fora do expediente" valor={p.foraPct === null ? "—" : `${p.foraPct}%`} detalhe={`${principal.demandasForaExpediente} de ${principal.demandas} demandas`}>
-                                {b && <Variacao atual={p.foraPct} anterior={b.foraPct} unidade="pp" />}
+                                {b && <Variacao contra={contra} atual={p.foraPct} anterior={b.foraPct} unidade="pp" />}
                             </Cartao>
                             <Cartao
                                 titulo="Sem retorno"
                                 valor={p.semRetornoPct === null ? "—" : `${p.semRetornoPct}%`}
                                 detalhe={`${principal.demandasSemRetorno} sem resposta em 24 h${principal.demandasPendentes ? ` · ${principal.demandasPendentes} ainda dentro do prazo` : ""}`}
                             >
-                                {b && <Variacao atual={p.semRetornoPct} anterior={b.semRetornoPct} menorMelhor unidade="pp" />}
+                                {b && <Variacao contra={contra} atual={p.semRetornoPct} anterior={b.semRetornoPct} menorMelhor unidade="pp" />}
                             </Cartao>
                             <Cartao
                                 titulo="Tempo da 1ª resposta (mediana)"
                                 valor={formatarDuracao(p.mediana)}
                                 detalhe={`Dentro do expediente: ${formatarDuracao(principal.tempoPrimeiraResposta.dentroExpediente.mediana)} · Fora: ${formatarDuracao(principal.tempoPrimeiraResposta.foraExpediente.mediana)}`}
                             >
-                                {b && <Variacao atual={p.mediana} anterior={b.mediana} menorMelhor unidade="s" />}
+                                {b && <Variacao contra={contra} atual={p.mediana} anterior={b.mediana} menorMelhor unidade="s" />}
                                 <p className="text-xs text-muted-foreground">90% das respostas em até {formatarDuracao(principal.tempoPrimeiraResposta.geral.p90)}</p>
                             </Cartao>
+                            {(principal.vendasFechadas > 0 || (base?.vendasFechadas ?? 0) > 0) && (
+                                <Cartao titulo="Vendas fechadas pela IA" valor={String(principal.vendasFechadas)} detalhe="Vendas que a atendente registrou no período">
+                                    {base && <Variacao contra={contra} atual={principal.vendasFechadas} anterior={base.vendasFechadas} />}
+                                </Cartao>
+                            )}
                             <Cartao
                                 titulo="Quem respondeu primeiro"
                                 valor={`${p.ia} IA · ${p.humano} pessoas`}

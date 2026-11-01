@@ -6,6 +6,7 @@ import { onMessageReceived, onMessageSent, dispatchWebhook, downloadAndSaveMedia
 import { resolveToPhoneJid, isLidJid, normalizeJid } from "@/lib/jid-utils";
 import { Server } from "socket.io";
 import { logger } from "@/lib/logger";
+import { ehPrimeiraRecebida, origemDaMensagem, podeSerPrimeiraRecebida, registrarOrigemConversa } from "@/modules/metricas/anuncio";
 
 export async function processAndSaveMessage(
     msg: WAMessage,
@@ -279,6 +280,20 @@ export async function processAndSaveMessage(
                     remoteJidAlt: remoteJidAlt || undefined
                 } : {}
             });
+
+            // Origem da conversa (anúncio ou orgânico): só na 1ª mensagem recebida; roda com o atendente desligado e nunca atrasa o salvamento
+            // (checagens baratas antes do count: histórico, append e mensagem antiga não contam como conversa nova)
+            const quando = { fromMe: !!fromMe, triggerWebhook, timestamp, agora: Date.now() };
+            if (podeSerPrimeiraRecebida(quando)) {
+                void (async () => {
+                    try {
+                        const recebidas = await prisma.message.count({ where: { sessionId: dbSessionId, remoteJid: finalRemoteJid, fromMe: false }, take: 2 });
+                        if (ehPrimeiraRecebida({ ...quando, recebidas })) registrarOrigemConversa(sessionId, finalRemoteJid, origemDaMensagem(msg));
+                    } catch (e) {
+                        logger.debug("ConversaOrigem", `não consegui checar a primeira mensagem: ${(e as { name?: string })?.name ?? "erro"}`);
+                    }
+                })();
+            }
 
             // Welcome Message Logic
             if (!fromMe && triggerWebhook && config?.welcomeMessage && sock) {

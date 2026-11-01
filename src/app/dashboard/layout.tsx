@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { Navbar } from "@/components/dashboard/navbar";
 import { SessionProvider } from "@/components/dashboard/session-provider";
+import { SessionScope } from "@/components/dashboard/session-scope";
+import { SessionSwitchOverlay } from "@/components/dashboard/session-switch-overlay";
 import { SidebarProvider } from "@/components/dashboard/sidebar-context";
 import { SidebarShell } from "@/components/dashboard/sidebar-shell";
 import { BroadcastBar } from "@/components/dashboard/broadcast-bar";
@@ -47,9 +49,10 @@ export default async function DashboardLayout({
                         <Navbar appName={appName} />
                         <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6 styled-scrollbar">
                             <BroadcastBar />
-                            {children}
+                            <SessionScope>{children}</SessionScope>
                         </main>
                     </div>
+                    <SessionSwitchOverlay />
                     <Toaster />
                 </div>
             </SidebarProvider>

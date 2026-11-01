@@ -1,7 +1,7 @@
 "use client";
 
 import { logger } from "@/lib/logger";
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition, ReactNode } from "react";
 import { getCookie, setCookie } from "@/lib/client-cookie";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ interface SessionContextType {
     setSessionId: (id: string) => void;
     refreshSessions: () => Promise<void>;
     loading: boolean;
+    switchingTo: string | null;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -27,7 +28,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [sessionId, setSessionIdState] = useState<string>("");
     const [loading, setLoading] = useState(true);
+    const [switchingTo, setSwitchingTo] = useState<string | null>(null);
     const router = useRouter();
+    const [pending, startTransition] = useTransition();
+    const switchStartedAt = useRef(0);
 
     const fetchSessions = async () => {
         try {
@@ -65,14 +69,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         fetchSessions();
     }, []);
 
+    // O overlay fica até o router.refresh() terminar (senão sobra página de servidor da sessão anterior), por pelo menos 600 ms para não piscar.
+    useEffect(() => {
+        if (!switchingTo || pending) return;
+        const t = setTimeout(() => setSwitchingTo(null), Math.max(0, 600 - (Date.now() - switchStartedAt.current)));
+        return () => clearTimeout(t);
+    }, [switchingTo, pending]);
+
     const setSessionId = (id: string) => {
+        if (id === sessionId) return;
+        switchStartedAt.current = Date.now();
+        setSwitchingTo(sessions.find((s) => s.sessionId === id)?.name || id);
         setSessionIdState(id);
         setCookie("sessionId", id); // Sync Cookie
-        router.refresh(); // Sync Server Components
+        startTransition(() => router.refresh()); // Sync Server Components
     };
 
     return (
-        <SessionContext.Provider value={{ sessions, sessionId, setSessionId, refreshSessions: fetchSessions, loading }}>
+        <SessionContext.Provider value={{ sessions, sessionId, setSessionId, refreshSessions: fetchSessions, loading, switchingTo }}>
             {children}
         </SessionContext.Provider>
     );
