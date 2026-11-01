@@ -876,3 +876,15 @@ model AtendenteVersao {
 
   @@unique([sessionId, versao])
 }
+
+/// Venda ou contratacao que a atendente neutra registrou numa conversa (ferramenta registrar_venda).
+model VendaIA {
+  id            String   @id @default(cuid())
+  sessionId     String // Session.sessionId (string do Baileys)
+  jid           String
+  descricao     String
+  valorCentavos Int?
+  criadoEm      DateTime @default(now())
+
+  @@index([sessionId, criadoEm])
+}

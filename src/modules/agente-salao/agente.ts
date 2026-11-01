@@ -16,6 +16,7 @@ import { origemDaMensagem } from "@/modules/metricas/anuncio";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
+import { responderComTreino, usarAtendenteNovo } from "@/modules/atendente/integracao";
 
 /**
  * Liga o agente do salão ao socket do WhatsApp (QR/Baileys) de UMA sessão.
@@ -345,7 +346,11 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             while (ordem.length && !ordem[ordem.length - 1].fromMe) ordem.pop();
             const historico = ordem.map((m) => ({ direcao: (m.fromMe ? "out" : "in") as "in" | "out", texto: m.content ?? "" }));
 
-            const r = await responderSalao(
+            // treino publicado: motor neutro; sem treino, erro ou número de barraca: o motor legado abaixo, igual a antes
+            const treino = await usarAtendenteNovo(sessionId);
+            const r = treino
+                ? await responderComTreino({ llm, treino, sessionId, jid, historico, textos: p.textos, nomePerfil, agora, atendimentoHumanoAberto: salaoAberto(cfg, agora), etiquetas: cfg.etiquetasInteresse, etiquetaAguardando: cfg.etiquetaAguardando, chamarRecepcao, etiquetar: (e: string) => aplicarEtiqueta(sock, sessionId, jid, e) })
+                : await responderSalao(
                 { llm, historico, logger },
                 {
                     conhecimento: cfg.conhecimento,
