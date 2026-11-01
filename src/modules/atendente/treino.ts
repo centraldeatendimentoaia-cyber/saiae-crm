@@ -11,6 +11,8 @@ export const LIMITE_OBJECOES = 30;
 export const LIMITE_EXEMPLOS = 30;
 // O brief fala em 12 gatilhos "extras"; os 6 gatilhos padrão são à parte, então o teto do array é 6 + 12 = 18.
 export const LIMITE_GATILHOS = 18;
+/** Ids dos 6 gatilhos padrão: o schema exige todos (podem ser desligados, nunca removidos). */
+export const GATILHOS_PADRAO_IDS: readonly string[] = ["reclamacao", "desconto", "pedido-humano", "assunto-sensivel", "audio", "sem-avanco"];
 
 // Controle C0/C1 (menos \n e \t), largura zero, marcas bidi, separadores de linha/parágrafo e BOM: nada disso é texto
 // legítimo do dono, e todos servem para esconder instruções dentro do prompt.
@@ -99,6 +101,9 @@ export const TreinoSchema = z
             // A frase é a mensagem que o motor envia ao passar para uma pessoa; gatilho ligado sem ela deixaria o cliente sem resposta.
             if (g.ativo && !g.frase) ctx.addIssue({ code: "custom", path: ["gatilhos", i, "frase"], message: "gatilho ativo precisa ter a frase de transferência" });
         });
+        for (const id of GATILHOS_PADRAO_IDS) {
+            if (!vistos.has(id)) ctx.addIssue({ code: "custom", path: ["gatilhos"], message: `o gatilho padrão "${id}" não pode ser removido` });
+        }
         const total = t.base.reduce((soma, b) => soma + b.texto.length, 0);
         if (total > LIMITE_BASE_TOTAL) {
             ctx.addIssue({ code: "custom", path: ["base"], message: `a base passa de ${LIMITE_BASE_TOTAL} caracteres no total` });

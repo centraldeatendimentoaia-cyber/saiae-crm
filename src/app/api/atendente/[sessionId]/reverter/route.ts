@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { guardAtendente, type Ctx } from "@/modules/atendente/guard-rota";
+import { guardAtendente, respostaErroAcao, type Ctx } from "@/modules/atendente/guard-rota";
 import { reverter } from "@/modules/atendente/armazenamento";
 import { limparCacheAtendente } from "@/modules/atendente/integracao";
 
@@ -18,7 +18,11 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if (!(await prisma.atendenteVersao.findUnique({ where: { sessionId_versao: { sessionId, versao } }, select: { id: true } }))) {
         return NextResponse.json({ status: false, message: `A versão ${versao} não existe nesta sessão.` }, { status: 404 });
     }
-    await reverter(sessionId, versao);
-    limparCacheAtendente(sessionId);
-    return NextResponse.json({ status: true });
+    try {
+        await reverter(sessionId, versao);
+        limparCacheAtendente(sessionId);
+        return NextResponse.json({ status: true });
+    } catch (e) {
+        return respostaErroAcao(e);
+    }
 }

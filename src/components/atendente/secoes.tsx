@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,10 +34,11 @@ function Secao({ titulo, descricao, children }: { titulo: string; descricao?: st
 }
 
 function Campo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
+    const id = useId();
     return (
         <div className="space-y-1.5">
-            <Label>{rotulo}</Label>
-            {children}
+            <Label htmlFor={id}>{rotulo}</Label>
+            {isValidElement(children) ? cloneElement(children as ReactElement<{ id?: string }>, { id }) : children}
         </div>
     );
 }

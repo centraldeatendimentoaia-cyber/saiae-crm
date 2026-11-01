@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ZodError } from "zod";
 
 const h = vi.hoisted(() => {
     const proibido = (nome: string) => vi.fn(() => { throw new Error(`${nome} não pode ser chamado`); });
@@ -8,13 +9,14 @@ const h = vi.hoisted(() => {
         rascunho: null as unknown,
         versoes: [] as { versao: number }[],
         mensagens: [] as { fromMe: boolean; content: string }[],
-        sendMessage: proibido("sock.sendMessage"),
         msgCreate: proibido("message.create"),
         msgUpsert: proibido("message.upsert"),
         msgUpdate: proibido("message.update"),
         vendaCreate: proibido("vendaIA.create"),
         contactWrite: proibido("contact.upsert"),
         chamadasLlm: 0,
+        llmFalha: false,
+        prazo: 45_000,
         salvar: vi.fn(async () => {}),
         publicar: vi.fn(async () => 3),
         reverter: vi.fn(async () => {}),
@@ -43,9 +45,13 @@ vi.mock("@/modules/atendente/armazenamento", () => ({ salvarRascunho: h.salvar, 
 vi.mock("@/modules/atendente/integracao", () => ({ limparCacheAtendente: h.limpar }));
 vi.mock("@/modules/atendente/teste", async (orig) => ({
     ...(await orig<typeof import("@/modules/atendente/teste")>()),
+    get PRAZO_REPRODUZIR_MS() {
+        return h.prazo;
+    },
     obterLlm: () => ({
         responder: async () => {
             h.chamadasLlm++;
+            if (h.llmFalha) throw new Error("falha do modelo");
             return { texto: "Olá! Como posso ajudar?", chamadas: [] };
         },
     }),
@@ -70,6 +76,8 @@ beforeEach(() => {
     h.versoes = [{ versao: 1 }, { versao: 2 }];
     h.mensagens = [];
     h.chamadasLlm = 0;
+    h.llmFalha = false;
+    h.prazo = 45_000;
     vi.clearAllMocks();
     zerarLimite();
 });
@@ -134,6 +142,15 @@ describe("publicar e reverter", () => {
         expect(h.reverter).not.toHaveBeenCalled();
         expect(h.limpar).not.toHaveBeenCalled();
     });
+    it("erro inesperado vira 500 genérico e não limpa o cache; treino inválido vira 409", async () => {
+        h.publicar.mockRejectedValueOnce(new Error("banco caiu"));
+        const r = await postPublicar(req(), ctx);
+        expect(r.status).toBe(500);
+        expect((await r.json()).message).not.toMatch(/banco/);
+        h.reverter.mockRejectedValueOnce(new ZodError([]));
+        expect((await postReverter(req({ versao: 1 }), ctx)).status).toBe(409);
+        expect(h.limpar).not.toHaveBeenCalled();
+    });
     it("reverter versão existente limpa o cache", async () => {
         expect((await postReverter(req({ versao: 1 }), ctx)).status).toBe(200);
         expect(h.reverter).toHaveBeenCalledWith("s1", 1);
@@ -141,13 +158,14 @@ describe("publicar e reverter", () => {
     });
 });
 
+// Nunca enviar pelo WhatsApp: as rotas nem importam o socket; o motor só recebe callbacks sem efeito. Por isso o teste
+// confere que nada é gravado (qualquer escrita nos mocks abaixo lança).
 describe("teste", () => {
     it("responde com o rascunho sem enviar nem gravar nada", async () => {
         const r = await postTeste(req({ mensagens: [{ papel: "cliente", texto: "oi" }, { papel: "atendente", texto: "olá" }, { papel: "cliente", texto: "quanto custa?" }] }), ctx);
         expect(r.status).toBe(200);
         const j = await r.json();
         expect(j.data.resposta.length).toBeGreaterThan(0);
-        expect(h.sendMessage).not.toHaveBeenCalled();
         for (const f of [h.msgCreate, h.msgUpsert, h.msgUpdate, h.vendaCreate, h.contactWrite]) expect(f).not.toHaveBeenCalled();
     });
     it("rejeita quando a última mensagem não é do cliente", async () => {
@@ -159,8 +177,8 @@ describe("teste", () => {
         h.rascunho = null;
         expect((await postTeste(req(cliente()), ctx)).status).toBe(404);
     });
-    it("limite de uso: a 21ª chamada no minuto dá 429", async () => {
-        for (let i = 0; i < 20; i++) expect((await postTeste(req(cliente()), ctx)).status).toBe(200);
+    it("limite de uso: cada teste custa 4 chamadas ao modelo, então a 31ª no minuto dá 429", async () => {
+        for (let i = 0; i < 30; i++) expect((await postTeste(req(cliente()), ctx)).status).toBe(200);
         expect((await postTeste(req(cliente()), ctx)).status).toBe(429);
     });
 });
@@ -173,16 +191,29 @@ describe("reproduzir", () => {
         const j = await r.json();
         expect(j.data).toHaveLength(14);
         expect(h.chamadasLlm).toBe(14);
-        expect(h.sendMessage).not.toHaveBeenCalled();
         for (const f of [h.msgCreate, h.msgUpsert, h.msgUpdate, h.vendaCreate, h.contactWrite]) expect(f).not.toHaveBeenCalled();
+    });
+    it("passou do prazo: devolve o que já fez e parcial=true", async () => {
+        h.mensagens = Array.from({ length: 5 }, (_, i) => ({ fromMe: false, content: "m" + i }));
+        h.prazo = -1;
+        const j = await (await postReproduzir(req({ jid: "5511999999999@s.whatsapp.net" }), ctx)).json();
+        expect(j.parcial).toBe(true);
+        expect(j.data).toHaveLength(1);
+    });
+    it("falha do modelo marca o item com falhou=true", async () => {
+        h.mensagens = [{ fromMe: false, content: "oi" }];
+        h.llmFalha = true;
+        const j = await (await postReproduzir(req({ jid: "5511999999999@s.whatsapp.net" }), ctx)).json();
+        expect(j.parcial).toBe(false);
+        expect(j.data[0]).toMatchObject({ falhou: true, respostas: [] });
     });
     it("jid inválido: 400", async () => {
         expect((await postReproduzir(req({ jid: "não é jid" }), ctx)).status).toBe(400);
     });
-    it("limite de uso: 429 depois de gastar o minuto", async () => {
+    it("limite de uso: reproduzir custa 56 de 120, então a 3ª no minuto dá 429", async () => {
         h.mensagens = [{ fromMe: false, content: "oi" }];
         const j = { jid: "5511999999999@s.whatsapp.net" };
-        for (let i = 0; i < 4; i++) expect((await postReproduzir(req(j), ctx)).status).toBe(200);
+        for (let i = 0; i < 2; i++) expect((await postReproduzir(req(j), ctx)).status).toBe(200);
         expect((await postReproduzir(req(j), ctx)).status).toBe(429);
     });
 });

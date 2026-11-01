@@ -17,7 +17,7 @@ import {
     SecaoBase, SecaoExemplos, SecaoFollowUp, SecaoGatilhos, SecaoIdentidade, SecaoObjecoes, SecaoRoteiro, SecaoVocabulario,
 } from "@/components/atendente/secoes";
 import { MODELOS } from "@/modules/atendente/modelos-prontos";
-import { temAlteracoes, validarTreino } from "@/modules/atendente/editor";
+import { criarGuardaSessao, temAlteracoes, validarTreino } from "@/modules/atendente/editor";
 import type { Treino } from "@/modules/atendente/treino";
 
 type ChaveModelo = keyof typeof MODELOS;
@@ -46,14 +46,14 @@ export default function AtendenteTreinoPage() {
     const [modelo, setModelo] = useState<ChaveModelo | "">("");
     const [confirmar, setConfirmar] = useState<Confirmar>(null);
     const [erroValidacao, setErroValidacao] = useState<string | null>(null);
-    const requisicao = useRef(0); // descarta respostas de uma sessão que já foi trocada
+    const guarda = useRef(criarGuardaSessao()); // descarta respostas de outra sessão; ações não se invalidam por recargas
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
-        const minha = ++requisicao.current;
+        const minha = guarda.current.iniciarCarga();
         try {
             const d = await chamar(`/api/atendente/${sessionId}/treino`, "GET");
-            if (minha !== requisicao.current) return;
+            if (!guarda.current.cargaVigente(minha)) return;
             setErroCarga(false);
             setSalvo(d.rascunho ?? null);
             setTreino(d.rascunho ? copia(d.rascunho as Treino) : copia(MODELOS.branco));
@@ -61,7 +61,7 @@ export default function AtendenteTreinoPage() {
             setPublicadoVersao(d.publicadoVersao ?? null);
             setDadosSessionId(sessionId);
         } catch (e) {
-            if (minha !== requisicao.current) return;
+            if (!guarda.current.cargaVigente(minha)) return;
             setErroCarga(true);
             toast.error(errorMessage(e, "Falha ao carregar o treino"));
         }
@@ -69,7 +69,7 @@ export default function AtendenteTreinoPage() {
 
     // Trocou de sessão: zera tudo para nunca salvar o treino de uma sessão em outra.
     useEffect(() => {
-        requisicao.current++;
+        guarda.current.trocar(sessionId);
         setTreino(null);
         setSalvo(null);
         setDadosSessionId(null);
@@ -81,9 +81,16 @@ export default function AtendenteTreinoPage() {
         setConfirmar(null);
         setOcupado(false);
         carregar();
-    }, [carregar]);
+    }, [carregar, sessionId]);
 
     const alterado = temAlteracoes(treino, salvo);
+    // Avisa ao fechar a aba com alterações não salvas.
+    useEffect(() => {
+        if (!alterado) return;
+        const aviso = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+        window.addEventListener("beforeunload", aviso);
+        return () => window.removeEventListener("beforeunload", aviso);
+    }, [alterado]);
     const liberado = !!treino && podeSalvar(sessionId, dadosSessionId, ocupado);
 
     /** Salva o rascunho; devolve true se gravou. */
@@ -95,55 +102,55 @@ export default function AtendenteTreinoPage() {
             toast.error(problema);
             return false;
         }
-        const minha = requisicao.current;
+        const acao = guarda.current.iniciarAcao();
         setOcupado(true);
         try {
             await chamar(`/api/atendente/${sessionId}/treino`, "PUT", treino);
-            if (minha !== requisicao.current) return false;
+            if (!acao.vigente()) return false;
             setSalvo(copia(treino));
             toast.success("Rascunho salvo.");
             return true;
         } catch (e) {
-            if (minha === requisicao.current) {
+            if (acao.vigente()) {
                 setErroValidacao(errorMessage(e, ""));
                 toast.error(errorMessage(e, "Falha ao salvar"));
             }
             return false;
         } finally {
-            if (minha === requisicao.current) setOcupado(false);
+            if (acao.vigente()) setOcupado(false);
         }
     };
 
     const publicar = async () => {
         if (!treino || !liberado) return;
         if (alterado && !(await salvar())) return;
-        const minha = requisicao.current;
+        const acao = guarda.current.iniciarAcao();
         setOcupado(true);
         try {
             const d = await chamar(`/api/atendente/${sessionId}/publicar`, "POST");
-            if (minha !== requisicao.current) return;
+            if (!acao.vigente()) return;
             toast.success(`Versão ${d.versao} publicada.`);
             await carregar();
         } catch (e) {
-            if (minha === requisicao.current) toast.error(errorMessage(e, "Falha ao publicar"));
+            if (acao.vigente()) toast.error(errorMessage(e, "Falha ao publicar"));
         } finally {
-            if (minha === requisicao.current) setOcupado(false);
+            if (acao.vigente()) setOcupado(false);
         }
     };
 
     const reverter = async (versao: number) => {
         if (!liberado) return;
-        const minha = requisicao.current;
+        const acao = guarda.current.iniciarAcao();
         setOcupado(true);
         try {
             await chamar(`/api/atendente/${sessionId}/reverter`, "POST", { versao });
-            if (minha !== requisicao.current) return;
+            if (!acao.vigente()) return;
             toast.success(`Voltou para a versão ${versao}.`);
             await carregar();
         } catch (e) {
-            if (minha === requisicao.current) toast.error(errorMessage(e, "Falha ao voltar de versão"));
+            if (acao.vigente()) toast.error(errorMessage(e, "Falha ao voltar de versão"));
         } finally {
-            if (minha === requisicao.current) setOcupado(false);
+            if (acao.vigente()) setOcupado(false);
         }
     };
 
@@ -214,7 +221,7 @@ export default function AtendenteTreinoPage() {
                         </div>
 
                         <aside className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start">
-                            <ChatTeste key={sessionId} sessionId={sessionId} podeTestar={salvo !== null && !ocupado} />
+                            <ChatTeste key={sessionId} sessionId={sessionId} podeTestar={salvo !== null && !ocupado} alterado={alterado} />
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Versões publicadas</CardTitle>

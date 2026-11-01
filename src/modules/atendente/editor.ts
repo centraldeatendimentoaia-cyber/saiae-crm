@@ -1,9 +1,7 @@
 import type { ZodError } from "zod";
-import { LIMITE_EXEMPLOS, LIMITE_GATILHOS, LIMITE_OBJECOES, TreinoSchema, type Treino } from "./treino";
+import { GATILHOS_PADRAO_IDS, LIMITE_EXEMPLOS, LIMITE_GATILHOS, LIMITE_OBJECOES, TreinoSchema, type Treino } from "./treino";
 
 /** Funções puras que a tela de treino usa para editar o rascunho (sem React, testáveis em node). */
-
-export const GATILHOS_PADRAO_IDS: readonly string[] = ["reclamacao", "desconto", "pedido-humano", "assunto-sensivel", "audio", "sem-avanco"];
 
 export const removerEm = <T>(lista: readonly T[], i: number): T[] => lista.filter((_, k) => k !== i);
 
@@ -49,4 +47,28 @@ export const temAlteracoes = (atual: Treino | null, salvo: Treino | null): boole
 /** Desfecho: trocar o tipo mantém o link só quando é "link". */
 export function trocarDesfecho(t: Treino, tipo: "link" | "pessoa", link = ""): Treino {
     return { ...t, roteiro: { ...t.roteiro, desfecho: tipo === "link" ? { tipo, link } : { tipo } } };
+}
+
+/**
+ * Controle de respostas atrasadas da tela. Carga (GET) e ações (salvar, publicar, voltar) têm contadores separados:
+ * recarregar depois de uma ação não pode invalidar a própria ação (senão a tela ficaria travada), mas uma resposta de
+ * outra sessão é sempre descartada.
+ */
+export function criarGuardaSessao() {
+    let sessao: string | null = null;
+    let carga = 0;
+    return {
+        /** Chamar ao entrar numa sessão (e na troca). Invalida tudo o que estava em voo. */
+        trocar(id: string | null) {
+            sessao = id;
+            carga++;
+        },
+        iniciarCarga: () => ++carga,
+        cargaVigente: (ticket: number) => ticket === carga,
+        /** Ação em voo: vigente enquanto a sessão não mudou, mesmo que ocorram recargas no meio. */
+        iniciarAcao() {
+            const minha = sessao;
+            return { vigente: () => sessao === minha };
+        },
+    };
 }

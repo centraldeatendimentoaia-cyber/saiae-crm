@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MODELOS } from "./modelos-prontos";
-import { LIMITE_GATILHOS } from "./treino";
+import { GATILHOS_PADRAO_IDS, LIMITE_GATILHOS } from "./treino";
 import {
-    atualizarEm, mensagemErroTreino, novoGatilho, novaBase, podeAdicionarGatilho, podeRemoverGatilho, removerEm, temAlteracoes, trocarDesfecho, validarTreino,
+    atualizarEm, criarGuardaSessao, mensagemErroTreino, novoGatilho, novaBase, podeAdicionarGatilho, podeRemoverGatilho, removerEm, temAlteracoes, trocarDesfecho, validarTreino,
 } from "./editor";
 import { TreinoSchema } from "./treino";
 
@@ -45,5 +45,23 @@ describe("editor do treino", () => {
         const t = trocarDesfecho(MODELOS.salao, "pessoa");
         expect(t.roteiro.desfecho).toEqual({ tipo: "pessoa" });
         expect(trocarDesfecho(t, "link", "https://x.com").roteiro.desfecho).toEqual({ tipo: "link", link: "https://x.com" });
+    });
+    it("recarregar durante uma ação não invalida a ação (a tela é liberada), mas a troca de sessão invalida", () => {
+        const g = criarGuardaSessao();
+        g.trocar("s1");
+        const acao = g.iniciarAcao();
+        const carga = g.iniciarCarga(); // publicar chama carregar()
+        expect(g.cargaVigente(carga)).toBe(true);
+        expect(acao.vigente()).toBe(true);
+        g.iniciarCarga(); // outra recarga no meio
+        expect(g.cargaVigente(carga)).toBe(false);
+        expect(acao.vigente()).toBe(true);
+        g.trocar("s2");
+        expect(acao.vigente()).toBe(false);
+        expect(g.cargaVigente(g.iniciarCarga())).toBe(true);
+    });
+    it("a lista de gatilhos padrão vem do schema", () => {
+        expect(GATILHOS_PADRAO_IDS).toHaveLength(6);
+        expect(podeRemoverGatilho(GATILHOS_PADRAO_IDS[0])).toBe(false);
     });
 });

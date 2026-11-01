@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { guardAtendente, type Ctx } from "@/modules/atendente/guard-rota";
+import { guardAtendente, respostaErroAcao, type Ctx } from "@/modules/atendente/guard-rota";
 import { publicar } from "@/modules/atendente/armazenamento";
 import { limparCacheAtendente } from "@/modules/atendente/integracao";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
         const versao = await publicar(sessionId);
         limparCacheAtendente(sessionId);
         return NextResponse.json({ status: true, data: { versao } });
-    } catch {
-        return NextResponse.json({ status: false, message: "Não foi possível publicar. Confira se o rascunho está válido e tente de novo." }, { status: 409 });
+    } catch (e) {
+        return respostaErroAcao(e);
     }
 }

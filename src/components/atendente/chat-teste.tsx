@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 interface Msg { papel: "cliente" | "atendente"; texto: string }
 
 /** Chat de teste: conversa com o RASCUNHO salvo. Não envia nada pelo WhatsApp. A página usa key={sessionId}, então remonta ao trocar de sessão. */
-export function ChatTeste({ sessionId, podeTestar }: { sessionId: string; podeTestar: boolean }) {
+export function ChatTeste({ sessionId, podeTestar, alterado }: { sessionId: string; podeTestar: boolean; alterado: boolean }) {
     const [msgs, setMsgs] = useState<Msg[]>([]);
     const [texto, setTexto] = useState("");
     const [enviando, setEnviando] = useState(false);
@@ -61,6 +61,7 @@ export function ChatTeste({ sessionId, podeTestar }: { sessionId: string; podeTe
                     {enviando && <p className="text-sm text-muted-foreground">Digitando...</p>}
                 </div>
                 {aviso && <p className="flex items-center gap-1 text-xs text-amber-600"><UserRound className="h-3 w-3" />{aviso}</p>}
+                {alterado && podeTestar && <p className="text-xs text-amber-600">Você tem alterações não salvas: o teste usa o rascunho SALVO, sem elas.</p>}
                 {!podeTestar && <p className="text-xs text-muted-foreground">Salve o rascunho para poder testar.</p>}
                 <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); enviar(); }}>
                     <Input value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={2000} placeholder="Mensagem do cliente" aria-label="Mensagem do cliente" disabled={enviando || !podeTestar} />

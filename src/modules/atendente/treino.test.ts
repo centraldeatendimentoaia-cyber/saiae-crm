@@ -96,7 +96,7 @@ describe("TreinoSchema", () => {
     it("aceita até 18 gatilhos (6 padrão + 12 extras) e rejeita 19", () => {
         const t = base();
         const g = (i: number) => ({ id: `g${i}`, ativo: true, descricao: "d", frase: "f" });
-        t.gatilhos = Array.from({ length: 18 }, (_, i) => g(i));
+        t.gatilhos = [...base().gatilhos.slice(0, 6), ...Array.from({ length: 12 }, (_, i) => g(i))];
         expect(TreinoSchema.safeParse(t).success).toBe(true);
         t.gatilhos.push(g(99));
         expect(TreinoSchema.safeParse(t).success).toBe(false);
@@ -185,16 +185,28 @@ describe("regras adicionais do schema", () => {
     });
     it("gatilho ativo exige frase; inativo pode ficar sem", () => {
         const t = base();
-        t.gatilhos = [{ id: "a", ativo: true, descricao: "d", frase: "" }];
+        const padrao = base().gatilhos;
+        t.gatilhos = [...padrao, { id: "a", ativo: true, descricao: "d", frase: "" }];
         const r = TreinoSchema.safeParse(t);
         expect(r.success).toBe(false);
         if (!r.success) expect(r.error.message).toMatch(/frase/);
-        t.gatilhos = [{ id: "a", ativo: false, descricao: "d", frase: "" }];
+        t.gatilhos = [...padrao, { id: "a", ativo: false, descricao: "d", frase: "" }];
         expect(TreinoSchema.safeParse(t).success).toBe(true);
+    });
+    it("exige os 6 gatilhos padrão (desligar pode, remover não)", () => {
+        const t = base();
+        t.gatilhos = t.gatilhos.filter((g) => g.id !== "desconto");
+        const r = TreinoSchema.safeParse(t);
+        expect(r.success).toBe(false);
+        if (!r.success) expect(r.error.message).toMatch(/desconto/);
+        const u = base();
+        u.gatilhos = u.gatilhos.map((g) => ({ ...g, ativo: false }));
+        expect(TreinoSchema.safeParse(u).success).toBe(true);
     });
     it("rejeita ids de gatilho repetidos", () => {
         const t = base();
         t.gatilhos = [
+            ...base().gatilhos,
             { id: "a", ativo: true, descricao: "d", frase: "f" },
             { id: "a", ativo: true, descricao: "d2", frase: "f2" },
         ];

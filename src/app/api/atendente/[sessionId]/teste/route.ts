@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { guardAtendente, type Ctx } from "@/modules/atendente/guard-rota";
-import { liberarUso, lerRascunho, obterLlm, simular } from "@/modules/atendente/teste";
+import { liberarUso, lerRascunho, obterLlm, PESO_TESTE, simular } from "@/modules/atendente/teste";
 
 const corpo = z.object({
     mensagens: z
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
     if ("negado" in g) return g.negado;
     const p = corpo.safeParse(await request.json().catch(() => null));
     if (!p.success) return NextResponse.json({ status: false, message: p.error.issues[0]?.message || "Dados inválidos" }, { status: 400 });
-    if (!liberarUso(g.userId)) return NextResponse.json({ status: false, message: "Muitos testes em pouco tempo. Aguarde um minuto." }, { status: 429 });
+    if (!liberarUso(g.userId, PESO_TESTE)) return NextResponse.json({ status: false, message: "Muitos testes em pouco tempo. Aguarde um minuto." }, { status: 429 });
     const r = await lerRascunho(sessionId);
     if ("erro" in r) return NextResponse.json({ status: false, message: r.mensagem }, { status: r.erro });
     const llm = obterLlm();
