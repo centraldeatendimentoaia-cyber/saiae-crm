@@ -8,7 +8,7 @@ import { waManager } from "@/modules/whatsapp/manager";
 import { aplicarEtiquetaNaSessao, carregarConfigAgente } from "./agente";
 import { devidoFollowUp, FOLLOWUP_MAX_HORAS, primeiroNome, salaoAberto, textoFollowUp } from "./estado";
 import { usarAtendenteNovo } from "@/modules/atendente/integracao";
-import { proximoFollowUp } from "@/modules/atendente/followup";
+import { intervaloEfetivo, proximoFollowUp } from "@/modules/atendente/followup";
 import type { Treino } from "@/modules/atendente/treino";
 
 /**
@@ -44,7 +44,11 @@ export async function rodarFollowUps(agora: Date = new Date()): Promise<number> 
             // Sessão com treino publicado segue o follow-up configurado pelo dono; sem treino (ou erro), o caminho abaixo, igual a antes.
             const treino = await usarAtendenteNovo(sessionId).catch(() => null);
             if (treino) {
-                enviados += await rodarComTreino(sessionId, sock, cfg, treino, agora, restante);
+                try {
+                    enviados += await rodarComTreino(sessionId, sock, cfg, treino, agora, restante);
+                } catch (e) {
+                    logger.warn(TAG, `follow-up com treino falhou na sessão: ${(e as { name?: string })?.name ?? "erro"}`);
+                }
                 continue;
             }
 
@@ -93,35 +97,59 @@ async function rodarComTreino(
     const followUp = treino.followUp;
     const max = Math.min(followUp.maxMensagens, followUp.textos.length);
     if (max <= 0 || !sock) return 0;
-    const ate = new Date(agora.getTime() - followUp.intervaloHoras * 3_600_000);
+    const ate = new Date(agora.getTime() - intervaloEfetivo(followUp) * 3_600_000);
     const desde = new Date(ate.getTime() - FOLLOWUP_MAX_HORAS * 3_600_000);
-    const candidatas = await prisma.agenteConversa.findMany({
-        where: {
-            sessionId,
-            estado: { not: "humano" },
-            OR: [
-                { followUpEm: null, ultimaIaAt: { gte: desde, lte: ate } },
-                { followUpEm: { gte: desde, lte: ate }, followUpEnvios: { lt: max } },
-            ],
-        },
-        orderBy: { ultimaIaAt: "asc" },
-        take: 30,
-    });
+    const expedienteAberto = salaoAberto(cfg, agora);
+    if (!expedienteAberto) return 0;
+    // Janela maior que a rodada, já filtrada pela regra pura antes do corte, para as primeiras da fila não travarem as demais.
+    const candidatas = (
+        await prisma.agenteConversa.findMany({
+            where: {
+                sessionId,
+                estado: { not: "humano" },
+                telefone: { not: null },
+                OR: [
+                    { followUpEm: null, ultimaIaPerguntou: true, ultimaIaAt: { gte: desde, lte: ate } },
+                    { followUpEm: { gte: desde, lte: ate }, followUpEnvios: { gte: 1, lt: max } },
+                ],
+            },
+            orderBy: { ultimaIaAt: "asc" },
+            take: 100,
+        })
+    ).filter((c) => proximoFollowUp({ conv: c, followUp, agora, expedienteAberto }).enviar);
     let enviados = 0;
     for (const c of candidatas) {
         if (restante <= 0) break;
-        const p = proximoFollowUp({ conv: c, followUp, agora, expedienteAberto: salaoAberto(cfg, agora) });
-        if (!p.enviar || !p.texto) continue;
-        if (c.telefone && (await isOptedOut(sessionId, `${c.telefone}@s.whatsapp.net`))) continue;
+        const p = proximoFollowUp({ conv: c, followUp, agora, expedienteAberto });
+        // Sem telefone não dá para conferir o descadastro: não envia.
+        if (!p.enviar || !p.texto || !c.telefone) continue;
+        if (await isOptedOut(sessionId, `${c.telefone}@s.whatsapp.net`)) continue;
+        // Reserva antes de enviar (só vence quem leu o mesmo estado): evita envio duplicado entre rodadas ou se o update falhar.
+        // followUpEm nulo (a cliente respondeu) recomeça a sequência do zero.
+        const reservadoEm = new Date();
+        const antes = { followUpEm: c.followUpEm, followUpEnvios: c.followUpEnvios };
+        const reserva = await prisma.agenteConversa.updateMany({
+            where: { id: c.id, ...antes },
+            data: { followUpEm: reservadoEm, followUpEnvios: (antes.followUpEm ? antes.followUpEnvios : 0) + 1 },
+        });
+        if (reserva.count === 0) continue;
         try {
             await sock.sendMessage(c.jid, { text: p.texto });
-            // Envios que valem são os da sequência atual: followUpEm nulo (a cliente respondeu) recomeça do zero.
-            await prisma.agenteConversa.update({ where: { id: c.id }, data: { followUpEm: new Date(), followUpEnvios: (c.followUpEm ? c.followUpEnvios : 0) + 1 } });
-            if (cfg.etiquetaFollowUp) await aplicarEtiquetaNaSessao(sock, sessionId, c.jid, cfg.etiquetaFollowUp);
-            enviados++;
-            restante--;
         } catch (e) {
             logger.warn(TAG, `follow-up falhou: ${(e as { name?: string })?.name ?? "erro"}`);
+            // Desfaz só se ninguém mexeu depois (ex.: a cliente respondeu e zerou followUpEm).
+            await prisma.agenteConversa
+                .updateMany({ where: { id: c.id, followUpEm: reservadoEm }, data: antes })
+                .catch((e2) => logger.warn(TAG, `não consegui desfazer a reserva do follow-up: ${(e2 as { name?: string })?.name ?? "erro"}`));
+            await dormir(20_000 + Math.floor(Math.random() * 40_000));
+            continue;
+        }
+        enviados++;
+        restante--;
+        try {
+            if (cfg.etiquetaFollowUp) await aplicarEtiquetaNaSessao(sock, sessionId, c.jid, cfg.etiquetaFollowUp);
+        } catch (e) {
+            logger.warn(TAG, `etiqueta do follow-up falhou: ${(e as { name?: string })?.name ?? "erro"}`);
         }
         await dormir(20_000 + Math.floor(Math.random() * 40_000));
     }

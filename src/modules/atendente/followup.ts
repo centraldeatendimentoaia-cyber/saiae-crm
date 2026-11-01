@@ -9,6 +9,13 @@ import type { Treino } from "./treino";
  * `followUpEm` (agente.ts), então a resposta dela reinicia a sequência sem nenhuma escrita extra no caminho de entrada;
  * a sequência só volta a correr depois que a IA responder de novo.
  */
+/**
+ * Piso de 12 h entre lembretes: o MAX_POR_DIA da rodada conta conversas, não mensagens, e mensagem não pedida em
+ * excesso arrisca bloqueio do número. Com o piso, cada conversa recebe no máximo 2 lembretes por dia.
+ */
+export const INTERVALO_MIN_HORAS = 12;
+export const intervaloEfetivo = (f: Treino["followUp"]) => Math.max(f.intervaloHoras, INTERVALO_MIN_HORAS);
+
 export function proximoFollowUp(args: {
     conv: ConversaEstado & { followUpEnvios: number; nomePerfil?: string | null };
     followUp: Treino["followUp"];
@@ -21,13 +28,18 @@ export function proximoFollowUp(args: {
     if (c.estado === "humano" || iaPausada(c, agora)) return nao;
     if (c.ultimaIaAt <= c.ultimaInboundAt) return nao; // a cliente falou por último
     if (c.ultimaHumanoAt && c.ultimaHumanoAt >= c.ultimaIaAt) return nao; // uma pessoa falou depois da IA
+    // Troca de motor: followUpEm preenchido com 0 envios é o lembrete do legado; nada mais até a cliente responder.
+    if (c.followUpEm && c.followUpEnvios === 0) return nao;
     const envios = c.followUpEm ? c.followUpEnvios : 0;
     if (envios >= Math.min(followUp.maxMensagens, followUp.textos.length)) return nao;
+    // Mesmo sinal do legado: só abre sequência se a IA terminou perguntando (conversa encerrada não recebe lembrete).
+    if (envios === 0 && !c.ultimaIaPerguntou) return nao;
     const ref = c.followUpEm && c.followUpEm > c.ultimaIaAt ? c.followUpEm : c.ultimaIaAt;
     if (c.ultimaInboundAt >= ref) return nao;
     const horas = (agora.getTime() - ref.getTime()) / 3_600_000;
+    const intervalo = intervaloEfetivo(followUp);
     // Teto como no legado: conversa parada há muito tempo não recebe lembrete ao publicar o treino.
-    if (horas < followUp.intervaloHoras || horas > followUp.intervaloHoras + FOLLOWUP_MAX_HORAS) return nao;
+    if (horas < intervalo || horas > intervalo + FOLLOWUP_MAX_HORAS) return nao;
     if (!args.expedienteAberto) return nao;
     return { enviar: true, texto: textoFollowUp(primeiroNome(c.nomePerfil), null, followUp.textos[envios]) };
 }
