@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { TreinoSchema, type Treino } from "./treino";
@@ -6,10 +7,10 @@ const TAG = "Atendente";
 
 const ehUnicaViolada = (e: unknown) => (e as { code?: string } | null)?.code === "P2002";
 
-/** Grava o rascunho depois de validar; nada inválido chega ao banco. */
-export async function salvarRascunho(sessionId: string, t: Treino): Promise<void> {
+/** Grava o rascunho depois de validar; nada inválido chega ao banco. `db` permite gravar dentro de uma transação. */
+export async function salvarRascunho(sessionId: string, t: Treino, db: Prisma.TransactionClient = prisma): Promise<void> {
     const rascunho = TreinoSchema.parse(t);
-    await prisma.atendenteTreino.upsert({
+    await db.atendenteTreino.upsert({
         where: { sessionId },
         create: { sessionId, rascunho },
         update: { rascunho },

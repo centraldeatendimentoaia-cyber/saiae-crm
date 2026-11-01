@@ -23,6 +23,7 @@ import type { Treino } from "@/modules/atendente/treino";
 type ChaveModelo = keyof typeof MODELOS;
 const NOMES_MODELO: Record<ChaveModelo, string> = { salao: "Salão de beleza", clinica: "Clínica", agencia: "Agência", branco: "Em branco" };
 interface Versao { versao: number; criadoEm: string }
+interface Sugestao { id: string; cliente: string; resposta: string; criadoEm: string }
 type Confirmar = { tipo: "modelo"; chave: ChaveModelo } | { tipo: "versao"; versao: number } | null;
 
 const copia = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -46,14 +47,19 @@ export default function AtendenteTreinoPage() {
     const [modelo, setModelo] = useState<ChaveModelo | "">("");
     const [confirmar, setConfirmar] = useState<Confirmar>(null);
     const [erroValidacao, setErroValidacao] = useState<string | null>(null);
+    const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null); // null = não carregou
     const guarda = useRef(criarGuardaSessao()); // descarta respostas de outra sessão; ações não se invalidam por recargas
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
         const minha = guarda.current.iniciarCarga();
         try {
-            const d = await chamar(`/api/atendente/${sessionId}/treino`, "GET");
+            const [d, sug] = await Promise.all([
+                chamar(`/api/atendente/${sessionId}/treino`, "GET"),
+                chamar(`/api/atendente/${sessionId}/sugestoes`, "GET").catch(() => null), // falha aqui não impede editar o treino
+            ]);
             if (!guarda.current.cargaVigente(minha)) return;
+            setSugestoes(sug);
             setErroCarga(false);
             setSalvo(d.rascunho ?? null);
             setTreino(d.rascunho ? copia(d.rascunho as Treino) : copia(MODELOS.branco));
@@ -75,6 +81,7 @@ export default function AtendenteTreinoPage() {
         setDadosSessionId(null);
         setVersoes([]);
         setPublicadoVersao(null);
+        setSugestoes(null);
         setErroCarga(false);
         setErroValidacao(null);
         setModelo("");
@@ -154,6 +161,27 @@ export default function AtendenteTreinoPage() {
         }
     };
 
+    /** Aprovar grava no rascunho do servidor e recarrega a tela; por isso exige que não haja alterações locais por salvar. */
+    const tratarSugestao = async (id: string, acao: "aprovar" | "descartar", destino?: "exemplo" | "base") => {
+        if (!liberado) return;
+        if (acao === "aprovar" && alterado) {
+            toast.error("Salve o rascunho antes de aprovar uma sugestão.");
+            return;
+        }
+        const acaoVigente = guarda.current.iniciarAcao();
+        setOcupado(true);
+        try {
+            await chamar(`/api/atendente/${sessionId}/sugestoes`, "POST", { id, acao, ...(destino ? { destino } : {}) });
+            if (!acaoVigente.vigente()) return;
+            toast.success(acao === "descartar" ? "Sugestão descartada." : "Sugestão adicionada ao rascunho. Revise e publique quando quiser.");
+            await carregar();
+        } catch (e) {
+            if (acaoVigente.vigente()) toast.error(errorMessage(e, "Falha ao tratar a sugestão"));
+        } finally {
+            if (acaoVigente.vigente()) setOcupado(false);
+        }
+    };
+
     const aplicarConfirmacao = () => {
         if (confirmar?.tipo === "modelo") {
             setTreino(copia(MODELOS[confirmar.chave]));
@@ -222,6 +250,28 @@ export default function AtendenteTreinoPage() {
 
                         <aside className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start">
                             <ChatTeste key={sessionId} sessionId={sessionId} podeTestar={salvo !== null && !ocupado} alterado={alterado} />
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Sugestões</CardTitle>
+                                    <CardDescription>Respostas que a equipe deu pelo celular. Nada entra sozinho: o que você aprovar vai para o rascunho.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-2">
+                                    {sugestoes === null && <p className="text-sm text-muted-foreground">Não foi possível carregar as sugestões.</p>}
+                                    {sugestoes?.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma sugestão pendente.</p>}
+                                    {!!sugestoes?.length && alterado && <p className="text-sm text-amber-600">Salve o rascunho para poder aprovar sugestões.</p>}
+                                    {sugestoes?.map((s) => (
+                                        <div key={s.id} className="space-y-2 rounded-lg border p-2 text-sm">
+                                            <p className="whitespace-pre-wrap break-words"><span className="font-medium">Cliente:</span> {s.cliente}</p>
+                                            <p className="whitespace-pre-wrap break-words"><span className="font-medium">Equipe:</span> {s.resposta}</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button size="sm" variant="outline" disabled={ocupado || alterado || salvo === null} onClick={() => tratarSugestao(s.id, "aprovar", "exemplo")}>Adicionar como exemplo</Button>
+                                                <Button size="sm" variant="outline" disabled={ocupado || alterado || salvo === null} onClick={() => tratarSugestao(s.id, "aprovar", "base")}>Adicionar à base</Button>
+                                                <Button size="sm" variant="ghost" disabled={ocupado} onClick={() => tratarSugestao(s.id, "descartar")}>Descartar</Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Versões publicadas</CardTitle>

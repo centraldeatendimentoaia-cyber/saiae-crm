@@ -7,6 +7,7 @@ import { z } from "zod";
  */
 
 export const LIMITE_BASE_TOTAL = 40_000; // soma dos textos da base de conhecimento
+export const LIMITE_BASE_ITENS = 200;
 export const LIMITE_OBJECOES = 30;
 export const LIMITE_EXEMPLOS = 30;
 // O brief fala em 12 gatilhos "extras"; os 6 gatilhos padrão são à parte, então o teto do array é 6 + 12 = 18.
@@ -63,7 +64,7 @@ export const TreinoSchema = z
                     atualizadoEm: texto(40),
                 }),
             )
-            .max(200),
+            .max(LIMITE_BASE_ITENS),
         roteiro: z.object({
             etapas: z.array(z.object({ nome: texto(NOME, 1), instrucao: texto(FRASE) })).max(20),
             desfecho: z

@@ -17,6 +17,7 @@ import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 import { responderComTreino, usarAtendenteNovo } from "@/modules/atendente/integracao";
+import { registrarCorrecaoHumana } from "@/modules/atendente/sugestoes";
 
 /**
  * Liga o agente do salão ao socket do WhatsApp (QR/Baileys) de UMA sessão.
@@ -439,6 +440,8 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         const p = pendentes.get(jid);
                         if (p?.timer) clearTimeout(p.timer);
                         pendentes.delete(jid);
+                        // sugestão de treino (só sessão com treino publicado); disparar-e-esquecer, nunca lança nem atrasa
+                        if (c.texto) void registrarCorrecaoHumana(sessionId, jid, c.texto, criadaEm).catch(() => {});
                     }
                     continue;
                 }

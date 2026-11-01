@@ -1,5 +1,5 @@
 import type { ZodError } from "zod";
-import { GATILHOS_PADRAO_IDS, LIMITE_EXEMPLOS, LIMITE_GATILHOS, LIMITE_OBJECOES, TreinoSchema, type Treino } from "./treino";
+import { GATILHOS_PADRAO_IDS, LIMITE_BASE_ITENS, LIMITE_BASE_TOTAL, LIMITE_EXEMPLOS, LIMITE_GATILHOS, LIMITE_OBJECOES, TreinoSchema, type Treino } from "./treino";
 
 /** Funções puras que a tela de treino usa para editar o rascunho (sem React, testáveis em node). */
 
@@ -43,6 +43,22 @@ export function validarTreino(t: Treino): string | null {
 /** Indicador de alterações não salvas. */
 export const temAlteracoes = (atual: Treino | null, salvo: Treino | null): boolean =>
     atual !== null && JSON.stringify(atual) !== JSON.stringify(salvo);
+
+/**
+ * Acrescenta uma sugestão aprovada ao treino, sem mutar o original. Devolve o treino novo, ou o texto do problema quando
+ * passaria de um limite (nesse caso nada muda).
+ */
+export function aplicarSugestao(t: Treino, s: { cliente: string; resposta: string }, destino: "exemplo" | "base", hoje: Date = new Date()): Treino | string {
+    if (destino === "exemplo") {
+        if (!podeAdicionarExemplo(t)) return `O treino já tem o máximo de ${LIMITE_EXEMPLOS} exemplos. Remova um no rascunho antes de aprovar.`;
+        return { ...t, exemplos: [...t.exemplos, { cliente: s.cliente, ideal: s.resposta }] };
+    }
+    const total = t.base.reduce((soma, b) => soma + b.texto.length, 0);
+    if (t.base.length >= LIMITE_BASE_ITENS || total + s.resposta.length > LIMITE_BASE_TOTAL) {
+        return `A base de conhecimento já está no máximo (${LIMITE_BASE_ITENS} itens ou ${LIMITE_BASE_TOTAL} caracteres). Enxugue a base no rascunho antes de aprovar.`;
+    }
+    return { ...t, base: [...t.base, { ...novaBase(hoje), titulo: "Correção da equipe", texto: s.resposta }] };
+}
 
 /** Desfecho: trocar o tipo mantém o link só quando é "link". */
 export function trocarDesfecho(t: Treino, tipo: "link" | "pessoa", link = ""): Treino {

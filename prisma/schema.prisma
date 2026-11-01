@@ -888,3 +888,15 @@ model VendaIA {
 
   @@index([sessionId, criadoEm])
 }
+
+/// Sugestao de treino tirada de uma resposta da equipe; so entra no rascunho quando o dono aprova.
+model AtendenteSugestao {
+  id        String   @id @default(cuid())
+  sessionId String
+  cliente   String   @db.Text
+  resposta  String   @db.Text
+  status    String   @default("pendente") // "pendente" | "aprovada" | "descartada"
+  criadoEm  DateTime @default(now())
+
+  @@index([sessionId, status])
+}

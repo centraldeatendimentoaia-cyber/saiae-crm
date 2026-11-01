@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { MODELOS } from "./modelos-prontos";
-import { GATILHOS_PADRAO_IDS, LIMITE_GATILHOS } from "./treino";
+import { GATILHOS_PADRAO_IDS, LIMITE_BASE_TOTAL, LIMITE_EXEMPLOS, LIMITE_GATILHOS } from "./treino";
 import {
-    atualizarEm, criarGuardaSessao, mensagemErroTreino, novoGatilho, novaBase, podeAdicionarGatilho, podeRemoverGatilho, removerEm, temAlteracoes, trocarDesfecho, validarTreino,
+    aplicarSugestao, atualizarEm, criarGuardaSessao, mensagemErroTreino, novoGatilho, novaBase, podeAdicionarGatilho, podeRemoverGatilho, removerEm, temAlteracoes, trocarDesfecho, validarTreino,
 } from "./editor";
 import { TreinoSchema } from "./treino";
 
@@ -63,5 +63,24 @@ describe("editor do treino", () => {
     it("a lista de gatilhos padrão vem do schema", () => {
         expect(GATILHOS_PADRAO_IDS).toHaveLength(6);
         expect(podeRemoverGatilho(GATILHOS_PADRAO_IDS[0])).toBe(false);
+    });
+});
+
+describe("aplicarSugestao", () => {
+    const s = { cliente: "tem horário?", resposta: "Temos amanhã às 10h." };
+    it("não muta o original e acrescenta exemplo ou base", () => {
+        const t = JSON.parse(JSON.stringify(MODELOS.salao));
+        const ex = aplicarSugestao(t, s, "exemplo");
+        const ba = aplicarSugestao(t, s, "base", new Date("2026-11-01T12:00:00Z"));
+        expect(typeof ex).not.toBe("string");
+        expect((ex as typeof t).exemplos.at(-1)).toEqual({ cliente: s.cliente, ideal: s.resposta });
+        expect((ba as typeof t).base.at(-1)).toEqual({ titulo: "Correção da equipe", texto: s.resposta, atualizadoEm: "2026-11-01" });
+        expect(t).toEqual(MODELOS.salao);
+    });
+    it("passou do limite: devolve o problema em PT-BR", () => {
+        const t = { ...MODELOS.salao, exemplos: Array.from({ length: LIMITE_EXEMPLOS }, () => ({ cliente: "c", ideal: "i" })) };
+        expect(aplicarSugestao(t, s, "exemplo")).toMatch(/máximo/);
+        const cheia = { ...MODELOS.salao, base: [{ titulo: "x", texto: "a".repeat(LIMITE_BASE_TOTAL), atualizadoEm: "2026-11-01" }] };
+        expect(aplicarSugestao(cheia, s, "base")).toMatch(/máximo/);
     });
 });

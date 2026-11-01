@@ -21,6 +21,9 @@ const h = vi.hoisted(() => {
         publicar: vi.fn(async () => 3),
         reverter: vi.fn(async () => {}),
         limpar: vi.fn(),
+        aprovar: vi.fn(async (_s: string, _id: string, _d: string) => {}),
+        descartar: vi.fn(async (_s: string, _id: string) => {}),
+        listar: vi.fn(async (_s: string) => [{ id: "g1", cliente: "oi", resposta: "olá, tudo bem por aqui?" }]),
     };
 });
 
@@ -43,6 +46,12 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/modules/atendente/armazenamento", () => ({ salvarRascunho: h.salvar, publicar: h.publicar, reverter: h.reverter }));
 vi.mock("@/modules/atendente/integracao", () => ({ limparCacheAtendente: h.limpar }));
+vi.mock("@/modules/atendente/sugestoes", async (orig) => ({
+    ErroSugestao: (await orig<typeof import("@/modules/atendente/sugestoes")>()).ErroSugestao,
+    aprovarSugestao: h.aprovar,
+    descartarSugestao: h.descartar,
+    listarSugestoesPendentes: h.listar,
+}));
 vi.mock("@/modules/atendente/teste", async (orig) => ({
     ...(await orig<typeof import("@/modules/atendente/teste")>()),
     get PRAZO_REPRODUZIR_MS() {
@@ -62,6 +71,8 @@ import { POST as postPublicar } from "./[sessionId]/publicar/route";
 import { POST as postReverter } from "./[sessionId]/reverter/route";
 import { POST as postTeste } from "./[sessionId]/teste/route";
 import { POST as postReproduzir } from "./[sessionId]/reproduzir/route";
+import { GET as getSugestoes, POST as postSugestoes } from "./[sessionId]/sugestoes/route";
+import { ErroSugestao } from "@/modules/atendente/sugestoes";
 import { zerarLimite } from "@/modules/atendente/teste";
 import { MODELOS } from "@/modules/atendente/modelos-prontos";
 
@@ -89,6 +100,8 @@ const rotas: [string, () => Promise<Response>][] = [
     ["POST reverter", () => postReverter(req({ versao: 1 }), ctx)],
     ["POST teste", () => postTeste(req(cliente()), ctx)],
     ["POST reproduzir", () => postReproduzir(req({ jid: "5511999999999@s.whatsapp.net" }), ctx)],
+    ["GET sugestoes", () => getSugestoes(req(), ctx)],
+    ["POST sugestoes", () => postSugestoes(req({ id: "g1", acao: "descartar" }), ctx)],
 ];
 
 describe.each(rotas)("%s: autorização", (_n, chamar) => {
@@ -180,6 +193,43 @@ describe("teste", () => {
     it("limite de uso: cada teste custa 4 chamadas ao modelo, então a 31ª no minuto dá 429", async () => {
         for (let i = 0; i < 30; i++) expect((await postTeste(req(cliente()), ctx)).status).toBe(200);
         expect((await postTeste(req(cliente()), ctx)).status).toBe(429);
+    });
+});
+
+describe("sugestoes", () => {
+    it("GET lista as pendentes da sessão", async () => {
+        const j = await (await getSugestoes(req(), ctx)).json();
+        expect(j.data).toHaveLength(1);
+        expect(h.listar).toHaveBeenCalledWith("s1");
+    });
+    it("POST inválido: 400 e nada é chamado", async () => {
+        for (const corpo of [null, { id: "g1" }, { id: "g1", acao: "aprovar" }, { id: "g1", acao: "aprovar", destino: "publicado" }, { id: "", acao: "descartar" }]) {
+            expect((await postSugestoes(req(corpo), ctx)).status).toBe(400);
+        }
+        expect(h.aprovar).not.toHaveBeenCalled();
+        expect(h.descartar).not.toHaveBeenCalled();
+    });
+    it("aprovar vai para o rascunho e não limpa o cache da atendente (nada publicado)", async () => {
+        expect((await postSugestoes(req({ id: "g1", acao: "aprovar", destino: "exemplo" }), ctx)).status).toBe(200);
+        expect(h.aprovar).toHaveBeenCalledWith("s1", "g1", "exemplo");
+        expect(h.publicar).not.toHaveBeenCalled();
+        expect(h.limpar).not.toHaveBeenCalled();
+    });
+    it("descartar chama descartarSugestao da sessão", async () => {
+        expect((await postSugestoes(req({ id: "g1", acao: "descartar" }), ctx)).status).toBe(200);
+        expect(h.descartar).toHaveBeenCalledWith("s1", "g1");
+    });
+    it("erros da sugestão viram 404/409 com a mensagem; erro inesperado vira 500 genérico", async () => {
+        h.aprovar.mockRejectedValueOnce(new ErroSugestao("Sugestão não encontrada nesta sessão.", 404));
+        const r404 = await postSugestoes(req({ id: "x", acao: "aprovar", destino: "base" }), ctx);
+        expect(r404.status).toBe(404);
+        expect((await r404.json()).message).toMatch(/não encontrada/);
+        h.aprovar.mockRejectedValueOnce(new ErroSugestao("O treino já tem o máximo de 30 exemplos.", 409));
+        expect((await postSugestoes(req({ id: "g1", acao: "aprovar", destino: "exemplo" }), ctx)).status).toBe(409);
+        h.descartar.mockRejectedValueOnce(new Error("banco caiu"));
+        const r500 = await postSugestoes(req({ id: "g1", acao: "descartar" }), ctx);
+        expect(r500.status).toBe(500);
+        expect((await r500.json()).message).not.toMatch(/banco/);
     });
 });
 
