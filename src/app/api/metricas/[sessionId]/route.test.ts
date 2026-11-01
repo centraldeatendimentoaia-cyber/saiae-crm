@@ -7,11 +7,13 @@ const db = vi.hoisted(() => ({
     origens: [] as { keyId: string; origem: string }[],
     cfg: null as { diasAbertos: string; horaAbre: number; horaFecha: number } | null,
     sessaoExiste: true,
+    vendas: [] as Date[],
 }));
 
 vi.mock("@/lib/prisma", () => ({
     prisma: {
         session: { findFirst: vi.fn(async () => (db.sessaoExiste ? { id: "db-1", sessionId: "s1" } : null)) },
+        vendaIA: { count: vi.fn(async ({ where }: { where: { sessionId: string; criadoEm: { gte: Date; lte: Date } } }) => db.vendas.filter((d) => d >= where.criadoEm.gte && d <= where.criadoEm.lte).length) },
         agenteConfig: { findUnique: vi.fn(async () => db.cfg) },
         message: {
             findMany: vi.fn(async (args: { select: Record<string, boolean> }) => db.mensagens.map((m) => Object.fromEntries(Object.keys(args.select).map((k) => [k, (m as Record<string, unknown>)[k]])))),
@@ -41,6 +43,7 @@ beforeEach(() => {
     db.usuario = { id: "u1", role: "USER" };
     db.cfg = null;
     db.sessaoExiste = true;
+    db.vendas = [];
     db.origens = [{ keyId: "K2", origem: "ia" }];
     db.mensagens = [
         { id: "1", remoteJid: "5561999990001@s.whatsapp.net", fromMe: false, timestamp: sp("2026-10-12T10:00:00"), keyId: "K1", content: "segredo: meu cpf é 123" },
@@ -98,6 +101,16 @@ describe("GET /api/metricas/[sessionId]", () => {
         expect(corpo).toContain("dia;mensagens_recebidas;demandas;sem_retorno");
         expect(corpo).toContain("2026-10-12;1;1;0;300");
         expect(corpo).toContain("2026-10-13;0;0;0;");
+    });
+
+    it("vendasFechadas conta as VendaIA do período, e o anterior usa o seu próprio intervalo", async () => {
+        db.vendas = [sp("2026-10-12T11:00:00"), sp("2026-10-13T11:00:00"), sp("2026-10-06T11:00:00"), sp("2026-09-01T11:00:00")];
+        const { data } = await (await chamar("de=2026-10-12&ate=2026-10-18")).json();
+        expect(data.vendasFechadas).toBe(2);
+        const c = (await (await chamar("de=2026-10-12&ate=2026-10-18&comparar=1")).json()).data;
+        expect(c.atual.vendasFechadas).toBe(2);
+        expect(c.anterior.vendasFechadas).toBe(1);
+        expect(c.variacoes.vendasFechadas).toEqual({ atual: 2, anterior: 1, variacaoPct: 100 });
     });
 
     describe("comparar=1", () => {

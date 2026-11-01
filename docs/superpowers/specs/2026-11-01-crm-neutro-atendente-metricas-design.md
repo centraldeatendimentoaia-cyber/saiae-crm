@@ -166,3 +166,7 @@ Escolhas minhas (o João pode trocar)
 
 Não verificado
 - Nada foi executado. A leitura do código mostra os riscos, não prova que aconteceram. Os pontos A e D precisam de reprodução no staging.
+
+## Pendências
+
+- Passagens para pessoa: contagem adiada, falta evento com data. `AgenteConversa` só guarda o estado atual (`estado`, `pausadaAte`, `motivoPausa`); nada marca quando a passagem aconteceu. Por isso `passagensParaPessoa` fica em 0 e não aparece na tela nem no resumo.

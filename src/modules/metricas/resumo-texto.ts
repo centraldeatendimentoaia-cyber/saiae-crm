@@ -47,6 +47,7 @@ export function gerarResumoWhatsApp(args: {
         linha(`${capitalizar(vocabulario.clientes)} reativados`, "reativados"),
         linhaTempo,
         linha("Sem retorno", "demandasSemRetorno"),
+        ...(comparacao.vendasFechadas && (comparacao.vendasFechadas.atual > 0 || comparacao.vendasFechadas.anterior > 0) ? [linha("Vendas fechadas pela IA", "vendasFechadas")] : []),
         "",
         `Comparado com ${limpar(args.comparadoCom ?? "o período anterior de mesma duração")}.`,
     ].join("\n");

@@ -328,6 +328,11 @@ export default function MetricasPage() {
                                 {b && <Variacao contra={contra} atual={p.mediana} anterior={b.mediana} menorMelhor unidade="s" />}
                                 <p className="text-xs text-muted-foreground">90% das respostas em até {formatarDuracao(principal.tempoPrimeiraResposta.geral.p90)}</p>
                             </Cartao>
+                            {(principal.vendasFechadas > 0 || (base?.vendasFechadas ?? 0) > 0) && (
+                                <Cartao titulo="Vendas fechadas pela IA" valor={String(principal.vendasFechadas)} detalhe="Vendas que a atendente registrou no período">
+                                    {base && <Variacao contra={contra} atual={principal.vendasFechadas} anterior={base.vendasFechadas} />}
+                                </Cartao>
+                            )}
                             <Cartao
                                 titulo="Quem respondeu primeiro"
                                 valor={`${p.ia} IA · ${p.humano} pessoas`}

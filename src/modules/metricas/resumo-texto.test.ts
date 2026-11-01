@@ -42,6 +42,14 @@ describe("gerarResumoWhatsApp", () => {
         expect(t).toMatch(/primeira resposta: sem dados/i);
     });
 
+    it("inclui vendas fechadas só quando houve venda", () => {
+        const com = gerarResumoWhatsApp({ ...base, comparacao: { ...comparacao, vendasFechadas: v(6, 4, 50) } });
+        expect(com).toContain("Vendas fechadas pela IA: 6 (+50%)");
+        const semBase = gerarResumoWhatsApp({ ...base, comparacao: { ...comparacao, vendasFechadas: v(3, 0, null) } });
+        expect(semBase).toContain("Vendas fechadas pela IA: 3 (sem base de comparação)");
+        expect(texto).not.toMatch(/vendas/i);
+        expect(gerarResumoWhatsApp({ ...base, comparacao: { ...comparacao, vendasFechadas: v(0, 0, null) } })).not.toMatch(/vendas/i);
+    });
     it("tira telefone e JID que vierem no nome do negócio", () => {
         const t = gerarResumoWhatsApp({ ...base, negocio: "Salão 5561999990001@s.whatsapp.net (61) 99999-0001 Bela" });
         expect(t).not.toContain("@s.whatsapp.net");

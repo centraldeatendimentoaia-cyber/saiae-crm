@@ -16,7 +16,11 @@ import type { Treino } from "./treino";
 
 const TAG = "Atendente";
 const CACHE_MS = 30_000;
-const cache = new Map<string, { em: number; treino: Treino | null }>();
+// Em globalThis: uma rota do Next (que limpa o cache ao publicar) e o agente do WhatsApp podem carregar este módulo em grafos
+// separados do mesmo processo; sem isso cada um teria o seu cache e a limpeza não chegaria no agente.
+const g = globalThis as { [k: symbol]: unknown };
+const CHAVE_CACHE = Symbol.for("saiae.atendente.cache");
+const cache = (g[CHAVE_CACHE] ??= new Map<string, { em: number; treino: Treino | null }>()) as Map<string, { em: number; treino: Treino | null }>;
 
 /** Publicar ou reverter um treino chama isto para a troca valer na próxima mensagem. */
 export function limparCacheAtendente(sessionId?: string): void {

@@ -46,8 +46,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const mensagens = await carregarMensagens({ dbSessionId: sessao.id, sessionId: sessao.sessionId, desde, ate: p.fim });
             const contatos = [...new Set(mensagens.map((m) => m.contato))];
             const contexto = await carregarContextoMetricas({ dbSessionId: sessao.id, sessionId: sessao.sessionId, contatos, inicio: p.inicio, ate: p.fim });
-            // vendasFechadas e passagensParaPessoa ficam em 0 até as tabelas do atendente existirem
-            return calcularMetricas(mensagens, { inicio: p.inicio, fim: p.fim, expediente, ...contexto });
+            // Vendas registradas pela atendente (VendaIA) no intervalo deste período.
+            // shortcut: passagensParaPessoa fica em 0 porque não há evento com data da passagem (ver "Pendências" na spec).
+            const vendasFechadas = await prisma.vendaIA.count({ where: { sessionId: sessao.sessionId, criadoEm: { gte: p.inicio, lte: p.fim } } });
+            return calcularMetricas(mensagens, { inicio: p.inicio, fim: p.fim, expediente, vendasFechadas, ...contexto });
         };
         const relatorio = await calcular(periodo);
 

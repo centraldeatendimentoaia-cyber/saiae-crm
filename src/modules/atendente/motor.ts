@@ -5,7 +5,7 @@ import { MAX_PASSOS, montarMensagens, MSG_FALHA } from "@/modules/ia-atendimento
 import { protegerSaida } from "@/modules/ia-atendimento/vendas/saida";
 import { deveChamarPessoa } from "./gatilhos";
 import { escaparMarcas, marcarMensagemRecebida, montarPromptAtendente } from "./prompt";
-import type { Treino } from "./treino";
+import { GATILHOS_PADRAO_IDS, type Treino } from "./treino";
 
 /**
  * Motor da atendente neutra. Mesmas defesas do motor legado: o que vem do cliente é DADO, o treino é a única fonte do que
@@ -22,8 +22,6 @@ export const MSG_AVISO_FALHOU = "A equipe vai responder assim que possível.";
 /** Teto de sanidade para o valor de uma venda informada pela IA: R$ 100.000,00. */
 export const MAX_VALOR_VENDA_CENTAVOS = 100_000_00;
 
-/** Ids dos gatilhos padrão (modelos-prontos.ts), usados quando a lista de motivos não é informada. */
-const GATILHOS_PADRAO = ["reclamacao", "desconto", "pedido-humano", "assunto-sensivel", "audio", "sem-avanco"] as const;
 const FORA_DA_BASE = "fora_da_base";
 
 export interface PedidoPessoa {
@@ -82,7 +80,7 @@ export function ferramentasAtendente(opcoes: { etiquetas: readonly string[]; tem
             esquema: {
                 type: "object",
                 properties: {
-                    motivo: { type: "string", enum: [...(opcoes.gatilhos ?? GATILHOS_PADRAO), FORA_DA_BASE] },
+                    motivo: { type: "string", enum: [...(opcoes.gatilhos ?? GATILHOS_PADRAO_IDS), FORA_DA_BASE] },
                     nome: { type: "string", maxLength: 60 },
                     interesse: { type: "string", maxLength: 120 },
                     resumo: { type: "string", maxLength: 300 },

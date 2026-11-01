@@ -19,7 +19,10 @@ export const PESO_REPRODUZIR = MAX_MENSAGENS_REPRODUZIR * MAX_PASSOS; // 14 simu
 /** Prazo total de uma reprodução e de cada simulação. */
 export const PRAZO_REPRODUZIR_MS = 45_000;
 export const PRAZO_SIMULACAO_MS = 30_000;
-const usos = new Map<string, { inicio: number; gasto: number }>();
+// Em globalThis: o limite vale por processo mesmo que o módulo seja carregado em mais de um grafo do Next.
+const CHAVE_USOS = Symbol.for("saiae.atendente.limite");
+const g = globalThis as { [k: symbol]: unknown };
+const usos = (g[CHAVE_USOS] ??= new Map<string, { inicio: number; gasto: number }>()) as Map<string, { inicio: number; gasto: number }>;
 
 /** Limite por usuário porque cada simulação gasta tokens. `peso` conta quantas chamadas ao modelo o pedido pode fazer. */
 // shortcut: contador em memória, por processo; com várias instâncias o teto efetivo multiplica, trocar por Redis se isso importar.
