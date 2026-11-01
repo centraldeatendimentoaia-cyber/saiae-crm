@@ -23,6 +23,7 @@ import { bindOptOut } from "./store/optout";
 import { bindAgenteSalao } from "@/modules/agente-salao/agente";
 import { bindBotPedidos } from "@/modules/bot-pedidos/entrada";
 import { marcarEnviadaPeloCrm } from "@/modules/agente-salao/enviados";
+import { registrarOrigem } from "@/modules/agente-salao/origem";
 import { bindPpGuard } from "./store/ppguard";
 import { antispam } from "./antispam";
 import { logger } from "@/lib/logger";
@@ -93,6 +94,7 @@ export class WhatsAppInstance {
             // registra o ID: o agente do salão distingue o que o CRM enviou do que uma pessoa escreveu pelo celular
             const messageId = options?.messageId || generateMessageID();
             marcarEnviadaPeloCrm(messageId);
+            if (!jid.endsWith("@g.us")) registrarOrigem(sessionId, messageId, "crm"); // a IA promove para "ia" depois
             return originalSendMessage(jid, content, { ...options, messageId });
         } as WASocket["sendMessage"];
 

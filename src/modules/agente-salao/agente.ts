@@ -10,6 +10,8 @@ import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
 import { MAX_TEXTO } from "@/modules/atendimento-comum/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm } from "./enviados";
+import { sessaoEhDeBarraca } from "./barraca";
+import { registrarOrigem } from "./origem";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
@@ -268,7 +270,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
 
     const enviar = async (jid: string, texto: string) => {
         if (over.rapido) {
-            await sock.sendMessage(jid, { text: texto });
+            registrarOrigem(sessionId, (await sock.sendMessage(jid, { text: texto }))?.key?.id, "ia");
             return;
         }
         try {
@@ -276,12 +278,13 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             await dormir(Math.min(6000, 1200 + texto.length * 25));
             await sock.sendPresenceUpdate("paused", jid);
         } catch { /* presença é só efeito visual */ }
-        await sock.sendMessage(jid, { text: texto });
+        registrarOrigem(sessionId, (await sock.sendMessage(jid, { text: texto }))?.key?.id, "ia");
     };
 
     const processar = async (jid: string, p: Pendente) => {
         const cfg = await carregarConfigAgente(sessionId);
         if (!cfg?.ativo) return;
+        if (await sessaoEhDeBarraca(sessionId)) return; // número de restaurante do Sai aê: quem responde é o bot de pedidos
         const llm = over.llm ?? obterLlm();
         if (!llm) return;
         const agora = new Date();
@@ -443,6 +446,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 if (Date.now() - criadaEm.getTime() > IDADE_MAX_MS) continue;
                 const cfg = await carregarConfigAgente(sessionId);
                 if (!cfg?.ativo) continue;
+                if (await sessaoEhDeBarraca(sessionId)) continue;
 
                 const telefone = telefoneDe(jid, (msg.key as { remoteJidAlt?: string }).remoteJidAlt);
                 if (telefone && cfg.numerosIgnorados.some((n) => canonicalPhone(n) === canonicalPhone(telefone))) continue;

@@ -7,10 +7,11 @@ vi.mock("@/lib/mailer", () => ({ sendMail: mailer.sendMail }));
 const db = vi.hoisted(() => {
     const convs = new Map<string, Record<string, any>>();
     const key = (w: any) => `${w.sessionId_jid.sessionId}|${w.sessionId_jid.jid}`;
-    const estado = { config: null as Record<string, any> | null, historico: [] as { fromMe: boolean; content: string }[], convs };
+    const estado = { barraca: false, config: null as Record<string, any> | null, historico: [] as { fromMe: boolean; content: string }[], convs };
     const prisma = {
         agenteConfig: { findUnique: vi.fn(async () => estado.config) },
         session: { findUnique: vi.fn(async () => ({ id: "db-1" })) },
+        barracaSessao: { findUnique: vi.fn(async () => (estado.barraca ? { id: "b1" } : null)) },
         message: { findMany: vi.fn(async () => [...estado.historico].reverse()) },
         label: { findFirst: vi.fn(async () => null) },
         chatLabel: { upsert: vi.fn(async () => ({})) },
@@ -41,6 +42,7 @@ import type { WAMessage, WASocket } from "@whiskeysockets/baileys";
 import type { Llm } from "@/modules/ia-atendimento/llm";
 import { bindAgenteSalao, limparCacheConfigAgente } from "./agente";
 import { _zerarEnviados, marcarEnviadaPeloCrm } from "./enviados";
+import { limparCacheBarraca } from "./barraca";
 import { MSG_AUDIO } from "./motor";
 
 const SESSAO = "sessao-salao";
@@ -73,6 +75,8 @@ beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(T0);
     limparCacheConfigAgente();
+    limparCacheBarraca();
+    db.estado.barraca = false;
     _zerarEnviados();
     db.estado.convs.clear();
     db.estado.historico = [];
@@ -84,6 +88,14 @@ afterEach(() => vi.useRealTimers());
 const esperar = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
 describe("agente do salão (integração com socket falso)", () => {
+    it("sessão ligada a uma barraca do Sai aê não é atendida pelo agente, mesmo com ativo=true", async () => {
+        db.estado.barraca = true;
+        const t = montar();
+        await t.emitir(t.msg("oi"));
+        await esperar(10_000);
+        expect(t.enviados).toHaveLength(0);
+        expect(t.llm.responder).not.toHaveBeenCalled();
+    });
     it("responde UMA vez a quem escreveu, depois de juntar as mensagens seguidas", async () => {
         const t = montar();
         await t.emitir(t.msg("oi"));
