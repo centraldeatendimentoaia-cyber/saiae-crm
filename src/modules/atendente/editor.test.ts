@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+import { MODELOS } from "./modelos-prontos";
+import { LIMITE_GATILHOS } from "./treino";
+import {
+    atualizarEm, mensagemErroTreino, novoGatilho, novaBase, podeAdicionarGatilho, podeRemoverGatilho, removerEm, temAlteracoes, trocarDesfecho, validarTreino,
+} from "./editor";
+import { TreinoSchema } from "./treino";
+
+describe("editor do treino", () => {
+    it("removerEm e atualizarEm não mexem na lista original", () => {
+        const l = [{ a: 1 }, { a: 2 }];
+        expect(removerEm(l, 0)).toEqual([{ a: 2 }]);
+        expect(atualizarEm(l, 1, { a: 9 })).toEqual([{ a: 1 }, { a: 9 }]);
+        expect(l).toEqual([{ a: 1 }, { a: 2 }]);
+    });
+    it("gatilhos padrão não saem; extras saem", () => {
+        expect(podeRemoverGatilho("desconto")).toBe(false);
+        expect(podeRemoverGatilho("extra-1")).toBe(true);
+    });
+    it("novoGatilho gera id único e respeita o teto", () => {
+        const t = MODELOS.branco;
+        expect(novoGatilho(t.gatilhos).id).toBe("extra-1");
+        expect(novoGatilho([...t.gatilhos, { id: "extra-1" }]).id).toBe("extra-2");
+        const cheio = { ...t, gatilhos: Array.from({ length: LIMITE_GATILHOS }, (_, i) => ({ ...t.gatilhos[0], id: `g${i}` })) };
+        expect(podeAdicionarGatilho(cheio)).toBe(false);
+        expect(podeAdicionarGatilho(t)).toBe(true);
+    });
+    it("novaBase traz a data de hoje em AAAA-MM-DD", () => {
+        expect(novaBase(new Date("2026-11-01T12:00:00Z")).atualizadoEm).toBe("2026-11-01");
+    });
+    it("validarTreino: null quando válido, mensagem PT-BR com o caminho quando não", () => {
+        expect(validarTreino(MODELOS.salao)).toBeNull();
+        const ruim = { ...MODELOS.branco, identidade: { ...MODELOS.branco.identidade, nome: "" } };
+        expect(validarTreino(ruim)).toMatch(/^Treino inválido: .*\(identidade > nome\)$/);
+        const r = TreinoSchema.safeParse({});
+        expect(r.success).toBe(false);
+        if (!r.success) expect(mensagemErroTreino(r.error)).toMatch(/^Treino inválido:/);
+    });
+    it("temAlteracoes compara o conteúdo", () => {
+        expect(temAlteracoes(MODELOS.salao, structuredClone(MODELOS.salao))).toBe(false);
+        expect(temAlteracoes({ ...MODELOS.salao, identidade: { ...MODELOS.salao.identidade, nome: "X" } }, MODELOS.salao)).toBe(true);
+        expect(temAlteracoes(null, MODELOS.salao)).toBe(false);
+    });
+    it("trocarDesfecho descarta o link ao virar pessoa", () => {
+        const t = trocarDesfecho(MODELOS.salao, "pessoa");
+        expect(t.roteiro.desfecho).toEqual({ tipo: "pessoa" });
+        expect(trocarDesfecho(t, "link", "https://x.com").roteiro.desfecho).toEqual({ tipo: "link", link: "https://x.com" });
+    });
+});

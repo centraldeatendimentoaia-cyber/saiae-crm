@@ -9,6 +9,7 @@ export const PAGINAS_SO_SUPERADMIN = [
     "/dashboard/system-monitor",
     "/dashboard/atendente-ia",
     "/dashboard/agente-ia",
+    "/dashboard/atendente-treino",
 ] as const;
 
 export function paginaSoParaSuperadmin(pathname: string): boolean {
