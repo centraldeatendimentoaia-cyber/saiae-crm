@@ -26,3 +26,13 @@ export function registrarOrigemConversa(sessionId: string, jid: string, origem: 
         }
     })();
 }
+
+const JANELA_AO_VIVO_MS = 10 * 60_000;
+interface PrimeiraRecebida { fromMe: boolean; triggerWebhook: boolean; timestamp: Date; agora: number }
+
+/** Checagem barata (sem banco): só mensagem recebida, ao vivo (não histórico) e recente pode ser a primeira de um contato novo. */
+export const podeSerPrimeiraRecebida = (p: PrimeiraRecebida): boolean =>
+    !p.fromMe && p.triggerWebhook && p.agora - p.timestamp.getTime() < JANELA_AO_VIVO_MS;
+
+/** `recebidas` = mensagens recebidas do contato já salvas, contando a atual. */
+export const ehPrimeiraRecebida = (p: PrimeiraRecebida & { recebidas: number }): boolean => podeSerPrimeiraRecebida(p) && p.recebidas === 1;
