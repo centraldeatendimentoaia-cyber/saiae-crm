@@ -856,3 +856,23 @@ model ConversaOrigem {
   @@unique([sessionId, jid])
   @@index([sessionId, criadoEm])
 }
+
+/// Treino da atendente de IA de uma sessao: rascunho em edicao e a versao publicada. `sessionId` e a string do Baileys
+/// (Session.sessionId, mesma chave de AgenteConfig), sem relacao Prisma.
+model AtendenteTreino {
+  sessionId       String   @id
+  rascunho        Json
+  publicadoVersao Int?
+  atualizadoEm    DateTime @updatedAt
+}
+
+/// Foto imutavel do treino a cada publicacao; permite reverter. Versao cresce 1, 2, 3... por sessao.
+model AtendenteVersao {
+  id        String   @id @default(cuid())
+  sessionId String
+  versao    Int
+  conteudo  Json
+  criadoEm  DateTime @default(now())
+
+  @@unique([sessionId, versao])
+}
