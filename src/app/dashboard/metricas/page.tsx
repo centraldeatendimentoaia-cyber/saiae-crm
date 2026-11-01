@@ -281,7 +281,7 @@ export default function MetricasPage() {
                             <Button variant="outline" size="sm" onClick={() => void copiarResumo()} disabled={copiando || loading || !sessionId}>
                                 <ClipboardCopy className="h-4 w-4" /> {copiando ? "Montando..." : "Copiar resumo"}
                             </Button>
-                            <p className="mt-1 text-xs text-muted-foreground">Texto pronto para o WhatsApp, com a variação contra o período anterior de mesma duração.</p>
+                            <p className="mt-1 text-xs text-muted-foreground">Texto pronto para o WhatsApp, com a variação contra o período anterior (mês civil anterior em "Este mês" e "Mês passado"; nos demais, período de mesma duração).</p>
                         </div>
                         <div className="flex flex-wrap gap-6">
                             {comparar && campoPeriodo("Período A (antes)", periodoA, setPeriodoA, "a")}
