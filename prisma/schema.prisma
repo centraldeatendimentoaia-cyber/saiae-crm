@@ -710,6 +710,7 @@ model AgenteConversa {
   ultimaIaPerguntou Boolean   @default(false)
   ultimaHumanoAt    DateTime?
   followUpEm        DateTime?
+  followUpEnvios    Int       @default(0) // follow-ups da sequência atual (atendente com treino); vale enquanto followUpEm != null
   criadoEm          DateTime  @default(now())
   atualizadoEm      DateTime  @updatedAt
 
