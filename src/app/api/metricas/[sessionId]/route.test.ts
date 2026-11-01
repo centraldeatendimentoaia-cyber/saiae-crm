@@ -116,6 +116,21 @@ describe("GET /api/metricas/[sessionId]", () => {
                 "passagensParaPessoa", "demandas", "demandasForaExpediente", "demandasSemRetorno", "demandasPendentes", "tempoMedianoPrimeiraResposta",
             ]);
         });
+        it("anteriorDe/anteriorAte escolhem o período de comparação (mês anterior inteiro)", async () => {
+            const r = await chamar("de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-01&anteriorAte=2026-09-30");
+            expect(r.status).toBe(200);
+            const { data } = await r.json();
+            expect(data.anterior.porDia).toHaveLength(30);
+            expect(data.anterior.porDia[0].dia).toBe("2026-09-01");
+        });
+        it("anteriorDe/anteriorAte inválidos: 400 (sem comparar, só um deles, datas ruins ou sobrepostas ao período)", async () => {
+            for (const qs of [
+                "de=2026-10-01&ate=2026-10-12&anteriorDe=2026-09-01&anteriorAte=2026-09-30",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-01",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=x&anteriorAte=y",
+                "de=2026-10-01&ate=2026-10-12&comparar=1&anteriorDe=2026-09-15&anteriorAte=2026-10-02",
+            ]) expect((await chamar(qs)).status, qs).toBe(400);
+        });
         it("comparar diferente de 1: 400; com formato=csv: 400", async () => {
             const r = await chamar("de=2026-10-12&ate=2026-10-18&comparar=2");
             expect(r.status).toBe(400);

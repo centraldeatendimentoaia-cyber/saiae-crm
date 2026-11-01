@@ -9,13 +9,27 @@ function textoVariacao(v: VariacaoMetrica): string {
     return `${v.variacaoPct > 0 ? "+" : "-"}${Math.abs(v.variacaoPct)}%`;
 }
 
+/** Texto livre que vai para o resumo não pode carregar JID nem telefone. */
+function limpar(texto: string): string {
+    return texto
+        .replace(/\S*@\S+/g, "")
+        .replace(/\+?\d[\d\s().-]{8,}\d/g, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+}
+
 export function gerarResumoWhatsApp(args: {
     negocio: string;
     mes: string;
     vocabulario: { cliente: string; clientes: string };
     comparacao: Record<string, VariacaoMetrica>;
+    /** Com o que as variações foram calculadas, ex.: "setembro de 2026". Padrão: período anterior de mesma duração. */
+    comparadoCom?: string;
 }): string {
-    const { negocio, mes, vocabulario, comparacao } = args;
+    const { comparacao } = args;
+    const negocio = limpar(args.negocio);
+    const mes = limpar(args.mes);
+    const vocabulario = { cliente: limpar(args.vocabulario.cliente), clientes: limpar(args.vocabulario.clientes) };
     const linha = (rotulo: string, chave: string, formatar: (n: number) => string = String) => {
         const v = comparacao[chave];
         if (!v) return `- ${rotulo}: sem dados`;
@@ -34,7 +48,7 @@ export function gerarResumoWhatsApp(args: {
         linhaTempo,
         linha("Sem retorno", "demandasSemRetorno"),
         "",
-        "Variação em relação ao período anterior de mesma duração.",
+        `Comparado com ${limpar(args.comparadoCom ?? "o período anterior de mesma duração")}.`,
     ].join("\n");
 }
 

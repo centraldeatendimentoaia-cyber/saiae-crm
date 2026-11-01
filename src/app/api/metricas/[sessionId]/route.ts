@@ -27,6 +27,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { periodo } = lido;
     const comparar = z.literal("1").nullable().safeParse(q.get("comparar"));
     if (!comparar.success) return NextResponse.json({ status: false, message: "Parâmetro comparar inválido. Use comparar=1." }, { status: 400 });
+    const anteriorDe = q.get("anteriorDe");
+    const anteriorAte = q.get("anteriorAte");
+    if ((anteriorDe !== null || anteriorAte !== null) && !comparar.data) return NextResponse.json({ status: false, message: "anteriorDe e anteriorAte só valem com comparar=1." }, { status: 400 });
+    if ((anteriorDe === null) !== (anteriorAte === null)) return NextResponse.json({ status: false, message: "Informe anteriorDe e anteriorAte juntos." }, { status: 400 });
     if (comparar.data && formato === "csv") return NextResponse.json({ status: false, message: "O CSV não aceita comparar: ele traz só a série diária do período atual." }, { status: 400 });
 
     // o canAccessSession aceita o id do banco ou a string do Baileys; as métricas sempre usam a string do Baileys
@@ -48,10 +52,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const relatorio = await calcular(periodo);
 
         if (comparar.data) {
+            // padrão: mesma duração, terminando na véspera; anteriorDe/anteriorAte permitem comparar com o mês anterior inteiro
             const fimAnterior = new Date(periodo.inicio.getTime() - 86_400_000).toISOString().slice(0, 10);
             const inicioAnterior = new Date(periodo.inicio.getTime() - periodo.dias * 86_400_000).toISOString().slice(0, 10);
-            const anteriorLido = lerPeriodo({ de: inicioAnterior, ate: fimAnterior });
+            const anteriorLido = lerPeriodo(anteriorDe !== null ? { de: anteriorDe, ate: anteriorAte } : { de: inicioAnterior, ate: fimAnterior });
             if (!anteriorLido.ok) return NextResponse.json({ status: false, message: anteriorLido.mensagem }, { status: 400 });
+            if (anteriorDe !== null && anteriorLido.periodo.ate >= periodo.de) return NextResponse.json({ status: false, message: "O período de comparação deve terminar antes do período atual." }, { status: 400 });
             const anterior = await calcular(anteriorLido.periodo);
             return NextResponse.json({ status: true, data: { atual: relatorio, anterior, variacoes: compararPeriodos(relatorio, anterior) } });
         }

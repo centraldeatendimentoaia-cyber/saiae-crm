@@ -42,6 +42,18 @@ describe("gerarResumoWhatsApp", () => {
         expect(t).toMatch(/primeira resposta: sem dados/i);
     });
 
+    it("tira telefone e JID que vierem no nome do negócio", () => {
+        const t = gerarResumoWhatsApp({ ...base, negocio: "Salão 5561999990001@s.whatsapp.net (61) 99999-0001 Bela" });
+        expect(t).not.toContain("@s.whatsapp.net");
+        expect(t).not.toMatch(/d{10,}/);
+        expect(t).not.toMatch(/99999-0001/);
+        expect(t).toContain("Salão");
+        expect(t).toContain("Bela");
+    });
+    it("diz com o que comparou", () => {
+        expect(gerarResumoWhatsApp({ ...base, comparadoCom: "setembro de 2026" })).toContain("Comparado com setembro de 2026.");
+        expect(texto).toContain("Comparado com o período anterior de mesma duração.");
+    });
     it("não vaza identificador de WhatsApp nem número de telefone", () => {
         const t = gerarResumoWhatsApp({ ...base, negocio: "Salão Bela" });
         expect(t).not.toContain("@s.whatsapp.net");
