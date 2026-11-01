@@ -15,7 +15,10 @@ vi.mock("@/lib/prisma", () => ({
         agenteConfig: { findUnique: vi.fn(async () => db.cfg) },
         message: {
             findMany: vi.fn(async (args: { select: Record<string, boolean> }) => db.mensagens.map((m) => Object.fromEntries(Object.keys(args.select).map((k) => [k, (m as Record<string, unknown>)[k]])))),
+            groupBy: vi.fn(async () => []),
         },
+        conversaOrigem: { findMany: vi.fn(async () => [{ jid: "5561999990001@s.whatsapp.net", origem: "anuncio" }]) },
+        contact: { findMany: vi.fn(async () => []) },
         mensagemOrigem: {
             findFirst: vi.fn(async () => ({ criadoEm: new Date("2026-10-01T00:00:00Z") })),
             findMany: vi.fn(async () => db.origens),
@@ -95,5 +98,42 @@ describe("GET /api/metricas/[sessionId]", () => {
         expect(corpo).toContain("dia;mensagens_recebidas;demandas;sem_retorno");
         expect(corpo).toContain("2026-10-12;1;1;0;300");
         expect(corpo).toContain("2026-10-13;0;0;0;");
+    });
+
+    describe("comparar=1", () => {
+        const base = "de=2026-10-12&ate=2026-10-18&comparar=1";
+        it("devolve atual, anterior (mesma duração, termina na véspera) e variações", async () => {
+            const r = await chamar(base);
+            expect(r.status).toBe(200);
+            const { data } = await r.json();
+            expect(data.atual.demandas).toBe(1);
+            expect(data.atual.clientesDeAnuncio).toBe(1);
+            expect(data.anterior.porDia).toHaveLength(7);
+            expect(data.anterior.porDia[0].dia).toBe("2026-10-05");
+            expect(data.anterior.porDia[6].dia).toBe("2026-10-11");
+            expect(Object.keys(data.variacoes)).toEqual([
+                "mensagensRecebidas", "mensagensEnviadas", "contatosUnicos", "contatosNovos", "clientesDeAnuncio", "reativados", "vendasFechadas",
+                "passagensParaPessoa", "demandas", "demandasForaExpediente", "demandasSemRetorno", "demandasPendentes", "tempoMedianoPrimeiraResposta",
+            ]);
+        });
+        it("comparar diferente de 1: 400; com formato=csv: 400", async () => {
+            const r = await chamar("de=2026-10-12&ate=2026-10-18&comparar=2");
+            expect(r.status).toBe(400);
+            expect((await r.json()).message).toContain("comparar");
+            expect((await chamar(base + "&formato=csv")).status).toBe(400);
+        });
+        it("401 e 403 continuam valendo", async () => {
+            db.usuario = null;
+            expect((await chamar(base)).status).toBe(401);
+            db.usuario = { id: "u1", role: "USER" };
+            db.acesso = false;
+            expect((await chamar(base)).status).toBe(403);
+        });
+        it("a resposta não tem jid nem telefone", async () => {
+            const texto = await (await chamar(base)).text();
+            expect(texto).not.toContain("@s.whatsapp.net");
+            expect(texto).not.toContain("@lid");
+            expect(texto).not.toMatch(/d{10,}/);
+        });
     });
 });

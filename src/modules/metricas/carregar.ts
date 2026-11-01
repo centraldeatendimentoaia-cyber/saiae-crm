@@ -64,3 +64,48 @@ export function origemDe(registrada: string | undefined, quando: Date, desde: Da
     if (registrada === "ia" || registrada === "crm") return registrada;
     return desde && quando >= desde ? "humano" : "desconhecido";
 }
+
+const LOTE_CONTATOS = 1000;
+
+/**
+ * Contexto que as métricas de crescimento precisam sobre o que veio ANTES de `inicio`: origem da conversa, e a última mensagem de cada
+ * contato (de onde saem "novo" e "reativado"). As duas coleções saem da mesma fonte, então um contato nunca é novo e reativado ao mesmo tempo.
+ * Mensagens antigas apagadas pela retenção deixam rastro em Contact.lastInboundAt, usado quando não sobrou nenhuma Message.
+ */
+export async function carregarContextoMetricas(args: { dbSessionId: string; sessionId: string; contatos: string[]; inicio: Date; ate: Date }): Promise<{
+    origensConversa: Map<string, "anuncio" | "organico">;
+    primeiraMensagemAntes: Set<string>;
+    ultimaMensagemAntes: Map<string, Date>;
+}> {
+    const { dbSessionId, sessionId, contatos, inicio } = args;
+    const origensConversa = new Map<string, "anuncio" | "organico">();
+    const ultimaMensagemAntes = new Map<string, Date>();
+    const ultima = (jid: string, d: Date) => {
+        const atual = ultimaMensagemAntes.get(jid);
+        if (!atual || d > atual) ultimaMensagemAntes.set(jid, d);
+    };
+
+    for (let i = 0; i < contatos.length; i += LOTE_CONTATOS) {
+        const lote = contatos.slice(i, i + LOTE_CONTATOS);
+        const origens = await prisma.conversaOrigem.findMany({ where: { sessionId, jid: { in: lote } }, select: { jid: true, origem: true } });
+        for (const o of origens) origensConversa.set(o.jid, o.origem === "anuncio" ? "anuncio" : "organico");
+
+        const grupos = await prisma.message.groupBy({
+            by: ["remoteJid"],
+            where: { sessionId: dbSessionId, remoteJid: { in: lote }, timestamp: { lt: inicio } },
+            _max: { timestamp: true },
+        });
+        for (const g of grupos) if (g._max.timestamp) ultima(g.remoteJid, g._max.timestamp);
+
+        const doLote = new Set(lote);
+        const registros = await prisma.contact.findMany({
+            where: { sessionId: dbSessionId, lastInboundAt: { lt: inicio }, OR: [{ jid: { in: lote } }, { lid: { in: lote } }] },
+            select: { jid: true, lid: true, lastInboundAt: true },
+        });
+        for (const c of registros) {
+            if (!c.lastInboundAt) continue;
+            for (const chave of [c.jid, c.lid]) if (chave && doLote.has(chave)) ultima(chave, c.lastInboundAt);
+        }
+    }
+    return { origensConversa, primeiraMensagemAntes: new Set(ultimaMensagemAntes.keys()), ultimaMensagemAntes };
+}
