@@ -42,6 +42,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: { ...db, $transaction: async (fn: (t: t
 vi.mock("@/lib/logger", () => ({ logger: { warn: (...a: unknown[]) => logWarn(...a), error: vi.fn(), info: vi.fn() } }));
 
 import { carregarPublicado, publicar, reverter, salvarRascunho } from "./armazenamento";
+import { MSG_TRANSFERENCIA } from "../agente-salao/motor";
 import { MODELOS } from "./modelos-prontos";
 import { TreinoSchema } from "./treino";
 
@@ -175,5 +176,50 @@ describe("armazenamento", () => {
     });
     it("publicar sem rascunho dá erro claro", async () => {
         await expect(publicar("nada")).rejects.toThrow(/rascunho/);
+    });
+});
+
+describe("regras adicionais do schema", () => {
+    it("modelo salao usa a mesma mensagem de transferência do agente do salão", () => {
+        expect(MODELOS.salao.gatilhos[0].frase).toBe(MSG_TRANSFERENCIA);
+    });
+    it("gatilho ativo exige frase; inativo pode ficar sem", () => {
+        const t = base();
+        t.gatilhos = [{ id: "a", ativo: true, descricao: "d", frase: "" }];
+        const r = TreinoSchema.safeParse(t);
+        expect(r.success).toBe(false);
+        if (!r.success) expect(r.error.message).toMatch(/frase/);
+        t.gatilhos = [{ id: "a", ativo: false, descricao: "d", frase: "" }];
+        expect(TreinoSchema.safeParse(t).success).toBe(true);
+    });
+    it("rejeita ids de gatilho repetidos", () => {
+        const t = base();
+        t.gatilhos = [
+            { id: "a", ativo: true, descricao: "d", frase: "f" },
+            { id: "a", ativo: true, descricao: "d2", frase: "f2" },
+        ];
+        const r = TreinoSchema.safeParse(t);
+        expect(r.success).toBe(false);
+        if (!r.success) expect(r.error.message).toMatch(/repetid/);
+    });
+    it("rejeita nulo, bidi, largura zero e separadores de linha; mantém \n e \t", () => {
+        for (const c of ["\u0000", "‮", "​", " ", "⁦", "﻿", "\u0085"]) {
+            const t = base();
+            t.identidade.tom = `oi${c}tchau`;
+            expect(TreinoSchema.safeParse(t).success, JSON.stringify(c)).toBe(false);
+        }
+        const t = base();
+        t.identidade.tom = "a\nb\tc";
+        expect(TreinoSchema.safeParse(t).success).toBe(true);
+    });
+    it("rejeita links https com host vazio ou malformado", () => {
+        for (const link of ["https://.", "https://@x", "https://x.", "https://.x.com", "https:///x"]) {
+            const t = base();
+            t.roteiro.desfecho = { tipo: "link", link };
+            expect(TreinoSchema.safeParse(t).success, link).toBe(false);
+        }
+        const t = base();
+        t.roteiro.desfecho = { tipo: "link", link: "https://agendamento.avec.beauty/?slug=lavi-concept" };
+        expect(TreinoSchema.safeParse(t).success).toBe(true);
     });
 });

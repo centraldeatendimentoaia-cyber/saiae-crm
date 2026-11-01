@@ -12,7 +12,9 @@ export const LIMITE_EXEMPLOS = 30;
 // O brief fala em 12 gatilhos "extras"; os 6 gatilhos padrão são à parte, então o teto do array é 6 + 12 = 18.
 export const LIMITE_GATILHOS = 18;
 
-const CONTROLE = /[\u0000-\u0008\u000B-\u001F\u007F]/;
+// Controle C0/C1 (menos \n e \t), largura zero, marcas bidi, separadores de linha/parágrafo e BOM: nada disso é texto
+// legítimo do dono, e todos servem para esconder instruções dentro do prompt.
+const CONTROLE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/;
 
 /** String aparada, com \r\n virando \n, tamanho entre min e max e sem caracteres de controle. */
 const texto = (max: number, min = 0) =>
@@ -31,7 +33,18 @@ const NOME = 200; // nomes e títulos curtos
 const FRASE = 2000; // instruções, respostas e textos corridos
 const HTTPS = /^https:\/\/\S+$/i;
 
-const Link = texto(2000, 1).refine((s) => HTTPS.test(s), "o link precisa começar com https://");
+const hostValido = (s: string) => {
+    try {
+        const u = new URL(s);
+        const h = u.hostname;
+        return u.protocol === "https:" && !u.username && !u.password && h.includes(".") && !h.startsWith(".") && !h.endsWith(".");
+    } catch {
+        return false;
+    }
+};
+const Link = texto(2000, 1)
+    .refine((s) => HTTPS.test(s), "o link precisa começar com https://")
+    .refine(hostValido, "o link precisa ser um endereço https válido, sem usuário e senha");
 
 export const TreinoSchema = z
     .object({
@@ -79,6 +92,13 @@ export const TreinoSchema = z
         vocabulario: z.object({ cliente: texto(100, 1), clientes: texto(100, 1) }),
     })
     .superRefine((t, ctx) => {
+        const vistos = new Set<string>();
+        t.gatilhos.forEach((g, i) => {
+            if (vistos.has(g.id)) ctx.addIssue({ code: "custom", path: ["gatilhos", i, "id"], message: `id de gatilho repetido: ${g.id}` });
+            vistos.add(g.id);
+            // A frase é a mensagem que o motor envia ao passar para uma pessoa; gatilho ligado sem ela deixaria o cliente sem resposta.
+            if (g.ativo && !g.frase) ctx.addIssue({ code: "custom", path: ["gatilhos", i, "frase"], message: "gatilho ativo precisa ter a frase de transferência" });
+        });
         const total = t.base.reduce((soma, b) => soma + b.texto.length, 0);
         if (total > LIMITE_BASE_TOTAL) {
             ctx.addIssue({ code: "custom", path: ["base"], message: `a base passa de ${LIMITE_BASE_TOTAL} caracteres no total` });
