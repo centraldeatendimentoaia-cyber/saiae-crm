@@ -27,6 +27,17 @@ export interface OpcoesMetricas {
     expediente: Expediente;
     /** Prazo para a primeira resposta; passou disso = "sem retorno". Padrão 24. */
     horasSemRetorno?: number;
+    /** Origem da conversa por contato (mesma chave de `MsgMetrica.contato`). Sem isso, nenhum cliente é de anúncio. */
+    origensConversa?: Map<string, "anuncio" | "organico">;
+    /** Contatos que já tinham mensagem antes de `inicio`. Quando informado, define "novo"; senão vale a 1ª mensagem da lista. */
+    primeiraMensagemAntes?: Set<string>;
+    /** Última mensagem de cada contato antes de `inicio`, para detectar reativação. */
+    ultimaMensagemAntes?: Map<string, Date>;
+    /** Dias sem falar para o retorno contar como reativação. Padrão 30. */
+    diasReativacao?: number;
+    /** Repassados ao relatório sem alteração. Padrão 0. */
+    vendasFechadas?: number;
+    passagensParaPessoa?: number;
 }
 
 export interface EstatisticaTempo {
@@ -50,6 +61,10 @@ export interface RelatorioMetricas {
     mensagensEnviadas: number;
     contatosUnicos: number;
     contatosNovos: number;
+    clientesDeAnuncio: number;
+    reativados: number;
+    vendasFechadas: number;
+    passagensParaPessoa: number;
     demandas: number;
     demandasForaExpediente: number;
     demandasSemRetorno: number;
@@ -62,6 +77,7 @@ export interface RelatorioMetricas {
 }
 
 export const HORAS_SEM_RETORNO_PADRAO = 24;
+export const DIAS_REATIVACAO_PADRAO = 30;
 
 /** Grupos, status, listas de transmissão e canais ficam fora das métricas. */
 export function contatoIgnorado(jid: string): boolean {
@@ -104,6 +120,7 @@ function diasEntre(de: string, ate: string): string[] {
 export function calcularMetricas(mensagens: MsgMetrica[], opcoes: OpcoesMetricas): RelatorioMetricas {
     const { inicio, fim, expediente } = opcoes;
     const prazoMs = (opcoes.horasSemRetorno ?? HORAS_SEM_RETORNO_PADRAO) * 3_600_000;
+    const diasReativacaoMs = (opcoes.diasReativacao ?? DIAS_REATIVACAO_PADRAO) * 86_400_000;
     const naJanela = (d: Date) => d >= inicio && d <= fim;
 
     // agrupa por contato; o que passou do fim do período não existe para este relatório
@@ -124,17 +141,25 @@ export function calcularMetricas(mensagens: MsgMetrica[], opcoes: OpcoesMetricas
     let enviadas = 0;
     let contatosUnicos = 0;
     let contatosNovos = 0;
+    let clientesDeAnuncio = 0;
+    let reativados = 0;
     let demandas = 0;
     let foraExpediente = 0;
     let semRetorno = 0;
     let pendentes = 0;
     const tempos = { geral: [] as number[], dentro: [] as number[], fora: [] as number[] };
 
-    for (const lista of porContato.values()) {
+    for (const [contato, lista] of porContato) {
         lista.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
         if (lista.some((m) => naJanela(m.timestamp))) contatosUnicos++;
-        if (naJanela(lista[0].timestamp)) contatosNovos++;
+        const novo = opcoes.primeiraMensagemAntes ? !opcoes.primeiraMensagemAntes.has(contato) && lista.some((m) => naJanela(m.timestamp)) : naJanela(lista[0].timestamp);
+        if (novo) {
+            contatosNovos++;
+            if (opcoes.origensConversa?.get(contato) === "anuncio") clientesDeAnuncio++;
+        }
+        const ultimaAntes = opcoes.ultimaMensagemAntes?.get(contato);
+        if (ultimaAntes && inicio.getTime() - ultimaAntes.getTime() >= diasReativacaoMs && lista.some((m) => !m.fromMe && naJanela(m.timestamp))) reativados++;
 
         const todas: Demanda[] = [];
         let atual: Demanda | null = null;
@@ -194,6 +219,10 @@ export function calcularMetricas(mensagens: MsgMetrica[], opcoes: OpcoesMetricas
         mensagensEnviadas: enviadas,
         contatosUnicos,
         contatosNovos,
+        clientesDeAnuncio,
+        reativados,
+        vendasFechadas: opcoes.vendasFechadas ?? 0,
+        passagensParaPessoa: opcoes.passagensParaPessoa ?? 0,
         demandas,
         demandasForaExpediente: foraExpediente,
         demandasSemRetorno: semRetorno,
@@ -210,4 +239,40 @@ export function calcularMetricas(mensagens: MsgMetrica[], opcoes: OpcoesMetricas
             return { dia, recebidas: s.recebidas, demandas: s.demandas, semRetorno: s.semRetorno, tempoMediano: estatisticaTempo(s.tempos).mediana };
         }),
     };
+}
+
+export interface VariacaoMetrica {
+    atual: number;
+    anterior: number;
+    /** Variação percentual com 1 casa; null quando não há base de comparação (anterior 0 ou tempo sem amostras). */
+    variacaoPct: number | null;
+}
+
+const CAMPOS_COMPARADOS = [
+    "mensagensRecebidas",
+    "mensagensEnviadas",
+    "contatosUnicos",
+    "contatosNovos",
+    "clientesDeAnuncio",
+    "reativados",
+    "vendasFechadas",
+    "passagensParaPessoa",
+    "demandas",
+    "demandasForaExpediente",
+    "demandasSemRetorno",
+    "demandasPendentes",
+] as const;
+
+export function compararPeriodos(atual: RelatorioMetricas, anterior: RelatorioMetricas): Record<string, VariacaoMetrica> {
+    const variacao = (a: number, b: number, semBase = false): VariacaoMetrica => ({
+        atual: a,
+        anterior: b,
+        variacaoPct: semBase || b === 0 ? null : Math.round(((a - b) / b) * 1000) / 10,
+    });
+    const out: Record<string, VariacaoMetrica> = {};
+    for (const c of CAMPOS_COMPARADOS) out[c] = variacao(atual[c], anterior[c]);
+    const ma = atual.tempoPrimeiraResposta.geral.mediana;
+    const mb = anterior.tempoPrimeiraResposta.geral.mediana;
+    out.tempoMedianoPrimeiraResposta = variacao(ma ?? 0, mb ?? 0, ma === null || mb === null);
+    return out;
 }

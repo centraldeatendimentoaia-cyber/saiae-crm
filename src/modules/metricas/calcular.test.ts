@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularMetricas, estatisticaTempo, type MsgMetrica, type OrigemResposta } from "./calcular";
+import { calcularMetricas, compararPeriodos, estatisticaTempo, type MsgMetrica, type OrigemResposta } from "./calcular";
 
 // São Paulo é UTC-3 o ano todo (sem horário de verão desde 2019).
 // 2026-10-12 é segunda-feira.
@@ -173,5 +173,55 @@ describe("estatisticaTempo", () => {
         expect(estatisticaTempo([10, 20, 30, 40])).toMatchObject({ mediana: 25 });
         const dez = Array.from({ length: 10 }, (_, i) => (i + 1) * 10);
         expect(estatisticaTempo(dez).p90).toBe(90);
+    });
+});
+
+describe("crescimento: anúncio, reativação e passagens", () => {
+    it("clientesDeAnuncio conta só contatos novos com origem anúncio", () => {
+        const origensConversa = new Map<string, "anuncio" | "organico">([[A, "anuncio"], [B, "organico"], [C, "anuncio"]]);
+        const r = calcularMetricas([rec(A, "2026-10-12T10:00:00"), rec(B, "2026-10-12T11:00:00"), rec(C, "2026-10-12T12:00:00"), rec(D, "2026-10-12T13:00:00")], {
+            ...PERIODO,
+            origensConversa,
+            primeiraMensagemAntes: new Set([C]), // C já falava antes: não é novo
+        });
+        expect(r.contatosNovos).toBe(3);
+        expect(r.clientesDeAnuncio).toBe(1);
+    });
+    it("reativado: última mensagem antes há 31 dias sim, 29 dias não, sem registro não", () => {
+        const ultimaMensagemAntes = new Map<string, Date>([
+            [A, sp("2026-09-11T00:00:00")], // 31 dias antes de 12/10
+            [B, sp("2026-09-13T00:00:00")], // 29 dias antes
+        ]);
+        const msgs = [rec(A, "2026-10-13T10:00:00"), rec(B, "2026-10-13T10:00:00"), rec(C, "2026-10-13T10:00:00")];
+        const r = calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes });
+        expect(r.reativados).toBe(1);
+        expect(calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes, diasReativacao: 20 }).reativados).toBe(2);
+    });
+    it("reativado exige mensagem recebida no período", () => {
+        const r = calcularMetricas([env(A, "2026-10-13T10:00:00")], { ...PERIODO, ultimaMensagemAntes: new Map([[A, sp("2026-08-01T10:00:00")]]) });
+        expect(r.reativados).toBe(0);
+    });
+    it("opções novas omitidas dão zero e vendas/passagens passam direto", () => {
+        const msgs = [rec(A, "2026-10-12T10:00:00"), env(A, "2026-10-12T10:05:00")];
+        const r = calcularMetricas(msgs, PERIODO);
+        expect(r).toMatchObject({ clientesDeAnuncio: 0, reativados: 0, vendasFechadas: 0, passagensParaPessoa: 0, contatosNovos: 1 });
+        expect(calcularMetricas(msgs, { ...PERIODO, vendasFechadas: 4, passagensParaPessoa: 2 })).toMatchObject({ vendasFechadas: 4, passagensParaPessoa: 2 });
+    });
+});
+
+describe("compararPeriodos", () => {
+    const base = (msgs: MsgMetrica[]) => calcularMetricas(msgs, PERIODO);
+    it("+50% e anterior zero", () => {
+        const anterior = base([rec(A, "2026-10-12T10:00:00"), rec(B, "2026-10-12T10:00:00")]);
+        const atual = base([rec(A, "2026-10-12T10:00:00"), rec(B, "2026-10-12T10:00:00"), rec(C, "2026-10-12T10:00:00")]);
+        const c = compararPeriodos(atual, anterior);
+        expect(c.contatosUnicos).toEqual({ atual: 3, anterior: 2, variacaoPct: 50 });
+        expect(c.reativados).toEqual({ atual: 0, anterior: 0, variacaoPct: null });
+    });
+    it("mediana nula vira 0 e variação nula", () => {
+        const sem = base([rec(A, "2026-10-12T10:00:00")]);
+        const com = base([rec(A, "2026-10-12T10:00:00"), env(A, "2026-10-12T10:05:00")]);
+        expect(compararPeriodos(com, sem).tempoMedianoPrimeiraResposta).toEqual({ atual: 300, anterior: 0, variacaoPct: null });
+        expect(compararPeriodos(sem, com).tempoMedianoPrimeiraResposta).toEqual({ atual: 0, anterior: 300, variacaoPct: null });
     });
 });
