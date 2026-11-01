@@ -19,6 +19,7 @@ interface SessionContextType {
     setSessionId: (id: string) => void;
     refreshSessions: () => Promise<void>;
     loading: boolean;
+    switchingTo: string | null;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -27,6 +28,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const [sessions, setSessions] = useState<Session[]>([]);
     const [sessionId, setSessionIdState] = useState<string>("");
     const [loading, setLoading] = useState(true);
+    const [switchingTo, setSwitchingTo] = useState<string | null>(null);
     const router = useRouter();
 
     const fetchSessions = async () => {
@@ -66,13 +68,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const setSessionId = (id: string) => {
+        setSwitchingTo(sessions.find((s) => s.sessionId === id)?.name || id);
         setSessionIdState(id);
         setCookie("sessionId", id); // Sync Cookie
         router.refresh(); // Sync Server Components
+        // router.refresh() não devolve promise; o prazo fixo evita o overlay piscar.
+        setTimeout(() => setSwitchingTo(null), 600);
     };
 
     return (
-        <SessionContext.Provider value={{ sessions, sessionId, setSessionId, refreshSessions: fetchSessions, loading }}>
+        <SessionContext.Provider value={{ sessions, sessionId, setSessionId, refreshSessions: fetchSessions, loading, switchingTo }}>
             {children}
         </SessionContext.Provider>
     );
