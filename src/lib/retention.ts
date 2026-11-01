@@ -92,6 +92,17 @@ export async function runRetention(): Promise<void> {
             logger.warn("Retention", `limpeza das imagens falhou: ${e instanceof Error ? e.name : "erro"}`);
         }
 
+        // Origem das mensagens enviadas (métricas): some junto com as mensagens.
+        try {
+            const origemDias = days("MESSAGE_RETENTION_DAYS", 90);
+            if (origemDias > 0) {
+                const r = await prisma.mensagemOrigem.deleteMany({ where: { criadoEm: { lt: new Date(Date.now() - origemDias * 86_400_000) } } });
+                if (r.count) logger.info("Retention", `${r.count} origens de mensagem com mais de ${origemDias} dias apagadas`);
+            }
+        } catch (e) {
+            logger.warn("Retention", `limpeza das origens de mensagem falhou: ${e instanceof Error ? e.name : "erro"}`);
+        }
+
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);
         if (logDays > 0) {
             const r = await prisma.webhookLog.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - logDays * 86_400_000) } } });

@@ -6,6 +6,7 @@ import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "@/modules/agente-salao/conhecimento-lavinia";
 import { limparCacheConfigAgente } from "@/modules/agente-salao/agente";
 import { ETIQUETAS_INTERESSE_PADRAO } from "@/modules/agente-salao/motor";
+import { MSG_SESSAO_DE_BARRACA, limparCacheBarraca } from "@/modules/agente-salao/barraca";
 
 // Só SUPERADMIN, igual à página /dashboard/agente-ia.
 async function guard(request: NextRequest, sessionId: string) {
@@ -106,6 +107,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     };
     // não deixa ligar sem o mínimo para funcionar
     if (dados.ativo === true) {
+        // número de restaurante do Sai aê é atendido pelo bot de pedidos: sem consultar o cache, para valer na hora
+        limparCacheBarraca(sessionId);
+        if (await prisma.barracaSessao.findUnique({ where: { sessionId }, select: { id: true } })) {
+            return NextResponse.json({ status: false, message: MSG_SESSAO_DE_BARRACA }, { status: 409 });
+        }
         const atual = await prisma.agenteConfig.findUnique({ where: { sessionId } });
         const grupo = dados.grupoRecepcaoJid !== undefined ? dados.grupoRecepcaoJid : atual?.grupoRecepcaoJid;
         const email = dados.emailAviso !== undefined ? dados.emailAviso : atual?.emailAviso;

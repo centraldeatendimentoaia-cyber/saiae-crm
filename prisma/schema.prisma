@@ -832,3 +832,15 @@ model AvaliacaoPedido {
   @@index([estado, enviarEm])
   @@index([barracaId, criadoEm])
 }
+
+/// Origem das mensagens enviadas pelo próprio CRM. Mensagem fromMe sem linha aqui = pessoa (celular/WhatsApp Web).
+model MensagemOrigem {
+  id        String   @id @default(cuid())
+  sessionId String // Session.sessionId (string do Baileys)
+  keyId     String // id da mensagem no WhatsApp (= Message.keyId)
+  origem    String // "ia" | "crm" (disparo, agendador, API, painel)
+  criadoEm  DateTime @default(now())
+
+  @@unique([sessionId, keyId])
+  @@index([criadoEm])
+}
