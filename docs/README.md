@@ -36,6 +36,7 @@ Este CRM nasceu de um projeto open source de gateway WhatsApp (Baileys + Next.js
 | Documento | Para que serve |
 | :--- | :--- |
 | [auditoria-crm.md](./auditoria-crm.md) | Diagnóstico do app (2026-10-15): menu, dívida técnica e lista priorizada de melhorias. |
+| [diagnostico-respostas-automaticas.md](./diagnostico-respostas-automaticas.md) | Leitura do caminho das respostas automáticas do WhatsApp, causas candidatas e roteiro de teste no staging. |
 
 ## Operação (herdado do upstream, ainda em uso)
 
