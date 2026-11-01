@@ -844,3 +844,15 @@ model MensagemOrigem {
   @@unique([sessionId, keyId])
   @@index([criadoEm])
 }
+
+// Origem da PRIMEIRA mensagem recebida de cada contato: "anuncio" (clique para WhatsApp) ou "organico". Alimenta as métricas de crescimento.
+model ConversaOrigem {
+  id        String   @id @default(cuid())
+  sessionId String // Session.sessionId (string do Baileys)
+  jid       String
+  origem    String // "anuncio" | "organico"
+  criadoEm  DateTime @default(now())
+
+  @@unique([sessionId, jid])
+  @@index([sessionId, criadoEm])
+}
