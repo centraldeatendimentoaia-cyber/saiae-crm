@@ -133,7 +133,7 @@ describe("GET /api/metricas/[sessionId]", () => {
             const texto = await (await chamar(base)).text();
             expect(texto).not.toContain("@s.whatsapp.net");
             expect(texto).not.toContain("@lid");
-            expect(texto).not.toMatch(/d{10,}/);
+            expect(texto).not.toMatch(/\d{10,}/);
         });
     });
 });
