@@ -30,19 +30,40 @@ export class ErroSugestao extends Error {
     }
 }
 
+/** Dias em que uma sugestão descartada ainda impede a mesma (cliente, resposta) de voltar. */
+export const DIAS_DESCARTE = 90;
+
 const CONTROLE_G = new RegExp(CONTROLE.source, "g");
 const JID = /[\w.:-]+@(?:s\.whatsapp\.net|c\.us|g\.us|lid|broadcast|newsletter)\b/gi;
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
-const TELEFONE = /\+?\(?\d[\d\s().-]{8,}\d/g;
-// Sobrou algo com cara de contato depois de mascarar: descarta a sugestão inteira.
-const RESTO = /\d(?:[\s().-]*\d){9,}|@[\w-]+\.[\w-]|@lid\b/i;
+const EMAIL = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*/gu;
+// "ana @ gmail . com": espaço de algum lado do @ e pelo menos um ponto no domínio.
+const EMAIL_ESPACADO = /[\p{L}\p{N}._%+-]+(?:\s+@\s*|\s*@\s+)[\p{L}\p{N}-]+(?:\s*\.\s*[\p{L}\p{N}-]+)+/gu;
+// Data dd.mm.aaaa ou dd/mm/aaaa fica de fora (grupo 1); qualquer outra sequência de dígitos com separadores é candidata.
+const DATA = /\b\d{1,2}([./])\d{1,2}\1\d{4}\b/gu;
+const NUMERO_OU_DATA = /(\b\d{1,2}([./])\d{1,2}\2\d{4}\b)|\+?\(?\d(?:[\s.\-_/,·()]*\d)+/gu;
+const MARCADOR = /\[(?:telefone|e-mail|contato)\]/g;
 
-/** Troca JID, e-mail e telefone (10 dígitos ou mais, com ou sem máscara) por marcadores. */
+// Varredura final, depois de mascarar: qualquer acerto descarta a sugestão inteira (vazamento aqui é problema de privacidade).
+const RESTO = [
+    /\d(?:[\s.\-_/,·()]*\d){7,}/u, // 8+ dígitos com ou sem separadores
+    /[\p{L}\p{N}]@|@[\p{L}\p{N}]/u, // @ colado em letra ou dígito: e-mail, @perfil
+    /@(?:s\.whatsapp\.net|c\.us|g\.us|lid|broadcast|newsletter)\b/i, // JID
+    /https?:\/\/\S*?(?:\?|\/[^\s/?#]{20,})/i, // link com query ou trecho com cara de token
+];
+
+/** true se o texto (já mascarado) ainda tem algo com cara de contato. Datas dd.mm.aaaa / dd/mm/aaaa não contam. */
+export function contemDadoDeContato(texto: string): boolean {
+    const semDatas = texto.replace(DATA, " ");
+    return RESTO.some((r) => r.test(semDatas));
+}
+
+/** Troca JID, e-mail (inclusive acentuado, sem ponto ou espaçado) e números de 8+ dígitos (telefone, CPF, CNPJ) por marcadores. */
 export function mascararDados(texto: string): string {
     return texto
         .replace(JID, "[contato]")
         .replace(EMAIL, "[e-mail]")
-        .replace(TELEFONE, (m) => (m.replace(/\D/g, "").length >= 10 ? "[telefone]" : m));
+        .replace(EMAIL_ESPACADO, "[e-mail]")
+        .replace(NUMERO_OU_DATA, (m, data?: string) => (!data && m.replace(/\D/g, "").length >= 8 ? "[telefone]" : m));
 }
 
 const cortar = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
@@ -50,9 +71,14 @@ const cortar = (s: string, max: number) => (s.length > max ? `${s.slice(0, max -
 /** Texto limpo e mascarado, ou null quando não dá para garantir que não sobrou dado de contato. */
 function preparar(texto: string, max: number): string | null {
     const limpo = mascararDados(texto.replace(CONTROLE_G, "").replace(/\r\n?/g, "\n").trim());
-    if (!limpo || RESTO.test(limpo)) return null;
+    if (!limpo || contemDadoDeContato(limpo)) return null;
     return cortar(limpo, max);
 }
+
+/** Tamanho do que sobra sem os marcadores: resposta que era só um telefone não ensina nada. */
+const tamanhoUtil = (s: string) => s.replace(MARCADOR, "").trim().length;
+
+const tetoAvisado = new Set<string>();
 
 /** Grava uma sugestão pendente. Nunca lança: qualquer falha só vira aviso no log. */
 export async function criarSugestao(sessionId: string, cliente: string, respostaHumana: string): Promise<void> {
@@ -60,9 +86,20 @@ export async function criarSugestao(sessionId: string, cliente: string, resposta
         if ((respostaHumana ?? "").trim().length < MIN_RESPOSTA) return;
         const c = preparar(cliente ?? "", MAX_CLIENTE);
         const r = preparar(respostaHumana, MAX_RESPOSTA);
-        if (!c || !r) return;
-        if ((await prisma.atendenteSugestao.count({ where: { sessionId, status: "pendente" } })) >= MAX_PENDENTES) return;
-        if (await prisma.atendenteSugestao.findFirst({ where: { sessionId, status: "pendente", cliente: c, resposta: r }, select: { id: true } })) return;
+        if (!c || !r || tamanhoUtil(r) < MIN_RESPOSTA) return;
+        if ((await prisma.atendenteSugestao.count({ where: { sessionId, status: "pendente" } })) >= MAX_PENDENTES) {
+            if (!tetoAvisado.has(sessionId)) logger.warn(TAG, `sessão ${sessionId} chegou a ${MAX_PENDENTES} sugestões pendentes; novas são ignoradas até o dono revisar`);
+            tetoAvisado.add(sessionId);
+            return;
+        }
+        tetoAvisado.delete(sessionId);
+        // Igual a uma pendente, ou a uma descartada recentemente (para o que o dono já recusou não voltar).
+        const recente = new Date(Date.now() - DIAS_DESCARTE * 86_400_000);
+        const repetida = await prisma.atendenteSugestao.findFirst({
+            where: { sessionId, cliente: c, resposta: r, OR: [{ status: "pendente" }, { status: "descartada", criadoEm: { gte: recente } }] },
+            select: { id: true },
+        });
+        if (repetida) return;
         await prisma.atendenteSugestao.create({ data: { sessionId, cliente: c, resposta: r } });
     } catch (e) {
         logger.warn(TAG, `não consegui gravar a sugestão de treino: ${(e as { name?: string })?.name ?? "erro"}`);

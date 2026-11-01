@@ -47,7 +47,8 @@ export default function AtendenteTreinoPage() {
     const [modelo, setModelo] = useState<ChaveModelo | "">("");
     const [confirmar, setConfirmar] = useState<Confirmar>(null);
     const [erroValidacao, setErroValidacao] = useState<string | null>(null);
-    const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null); // null = não carregou
+    const [sugestoes, setSugestoes] = useState<Sugestao[] | null>(null); // null = ainda carregando ou falhou
+    const [erroSugestoes, setErroSugestoes] = useState(false);
     const guarda = useRef(criarGuardaSessao()); // descarta respostas de outra sessão; ações não se invalidam por recargas
 
     const carregar = useCallback(async () => {
@@ -60,6 +61,7 @@ export default function AtendenteTreinoPage() {
             ]);
             if (!guarda.current.cargaVigente(minha)) return;
             setSugestoes(sug);
+            setErroSugestoes(sug === null);
             setErroCarga(false);
             setSalvo(d.rascunho ?? null);
             setTreino(d.rascunho ? copia(d.rascunho as Treino) : copia(MODELOS.branco));
@@ -82,6 +84,7 @@ export default function AtendenteTreinoPage() {
         setVersoes([]);
         setPublicadoVersao(null);
         setSugestoes(null);
+        setErroSugestoes(false);
         setErroCarga(false);
         setErroValidacao(null);
         setModelo("");
@@ -173,8 +176,16 @@ export default function AtendenteTreinoPage() {
         try {
             await chamar(`/api/atendente/${sessionId}/sugestoes`, "POST", { id, acao, ...(destino ? { destino } : {}) });
             if (!acaoVigente.vigente()) return;
-            toast.success(acao === "descartar" ? "Sugestão descartada." : "Sugestão adicionada ao rascunho. Revise e publique quando quiser.");
-            await carregar();
+            if (acao === "descartar") {
+                toast.success("Sugestão descartada.");
+                // Só a lista: recarregar o rascunho apagaria alterações ainda não salvas.
+                const lista: Sugestao[] | null = await chamar(`/api/atendente/${sessionId}/sugestoes`, "GET").catch(() => null);
+                if (!acaoVigente.vigente()) return;
+                setSugestoes((atual) => lista ?? atual?.filter((x) => x.id !== id) ?? null);
+                return;
+            }
+            toast.success("Sugestão adicionada ao rascunho. Revise e publique quando quiser.");
+            await carregar(); // aprovar só é possível sem alterações locais, então recarregar o rascunho não perde nada
         } catch (e) {
             if (acaoVigente.vigente()) toast.error(errorMessage(e, "Falha ao tratar a sugestão"));
         } finally {
@@ -255,8 +266,8 @@ export default function AtendenteTreinoPage() {
                                     <CardTitle>Sugestões</CardTitle>
                                     <CardDescription>Respostas que a equipe deu pelo celular. Nada entra sozinho: o que você aprovar vai para o rascunho.</CardDescription>
                                 </CardHeader>
-                                <CardContent className="space-y-2">
-                                    {sugestoes === null && <p className="text-sm text-muted-foreground">Não foi possível carregar as sugestões.</p>}
+                                <CardContent className="space-y-2" role="status" aria-live="polite">
+                                    {sugestoes === null && <p className="text-sm text-muted-foreground">{erroSugestoes ? "Não foi possível carregar as sugestões." : "Carregando..."}</p>}
                                     {sugestoes?.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma sugestão pendente.</p>}
                                     {!!sugestoes?.length && alterado && <p className="text-sm text-amber-600">Salve o rascunho para poder aprovar sugestões.</p>}
                                     {sugestoes?.map((s) => (

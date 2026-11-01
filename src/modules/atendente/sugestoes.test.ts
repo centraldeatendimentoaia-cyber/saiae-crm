@@ -14,7 +14,17 @@ const db = vi.hoisted(() => {
         erroBanco: false,
         seq: 0,
     };
-    const casa = (s: Sug, w: Record<string, unknown>) => Object.entries(w).every(([k, v]) => (s as Record<string, unknown>)[k] === v);
+    // Filtro do Prisma suficiente para o módulo: igualdade, { in }, { gte } e OR.
+    const casa = (s: Sug, w: Record<string, unknown>): boolean =>
+        Object.entries(w).every(([k, v]) => {
+            if (k === "OR") return (v as Record<string, unknown>[]).some((x) => casa(s, x));
+            const atual = (s as Record<string, unknown>)[k];
+            if (v && typeof v === "object" && !(v instanceof Date)) {
+                const f = v as { in?: unknown[]; gte?: Date };
+                return (f.in === undefined || f.in.includes(atual)) && (f.gte === undefined || (atual as Date) >= f.gte);
+            }
+            return atual === v;
+        });
     const prisma = {
         atendenteSugestao: {
             create: vi.fn(async ({ data }: { data: Omit<Sug, "id" | "status" | "criadoEm"> }) => {
@@ -66,7 +76,7 @@ vi.mock("@/modules/atendente/integracao", () => ({ usarAtendenteNovo: vi.fn(asyn
 
 import { MODELOS } from "./modelos-prontos";
 import { LIMITE_EXEMPLOS, TreinoSchema, type Treino } from "./treino";
-import { aprovarSugestao, criarSugestao, descartarSugestao, mascararDados, MAX_PENDENTES, registrarCorrecaoHumana } from "./sugestoes";
+import { aprovarSugestao, contemDadoDeContato, criarSugestao, descartarSugestao, mascararDados, MAX_PENDENTES, registrarCorrecaoHumana } from "./sugestoes";
 
 const RESP = "Temos horário amanhã às 10h, quer que eu reserve?";
 const copia = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
@@ -90,6 +100,73 @@ describe("mascararDados", () => {
     it("não mexe em preços, horários e números curtos", () => {
         const t = "Custa R$ 150,00, das 9h às 18h, 3 sessões";
         expect(mascararDados(t)).toBe(t);
+    });
+});
+
+describe("mascaramento mais amplo", () => {
+    it.each([
+        ["número local com hífen", "liga 98765-4321", "liga [telefone]"],
+        ["dígitos espaçados", "1 1 9 8 7 6 5 4 3 2 1 ok", "[telefone] ok"],
+        ["separadores / , _ ·", "11/9876/54321 e 11_98765_4321 e 11·98765·4321", "[telefone] e [telefone] e [telefone]"],
+        ["CPF", "cpf 123.456.789-00", "cpf [telefone]"],
+        ["CNPJ", "12.345.678/0001-90", "[telefone]"],
+        ["e-mail acentuado", "joão.ção@exemplo.com.br", "[e-mail]"],
+        ["e-mail sem ponto", "ana@gmail", "[e-mail]"],
+        ["e-mail espaçado", "ana @ gmail . com", "[e-mail]"],
+    ])("%s", (_n, entrada, saida) => {
+        expect(mascararDados(entrada)).toBe(saida);
+    });
+    it("datas e horários não são mascarados", () => {
+        const t = "Fica para 01.11.2026 ou 02/11/2026 às 10:30";
+        expect(mascararDados(t)).toBe(t);
+        expect(contemDadoDeContato(t)).toBe(false);
+    });
+});
+
+// Rede final: estes testes quebram se a varredura depois da máscara for removida.
+describe("contemDadoDeContato (varredura final)", () => {
+    it.each([
+        ["8 dígitos seguidos", "12345678"],
+        ["8 dígitos com separadores", "1.2-3_4/5,6·7(8)"],
+        ["@ colado em letra", "siga @lavi"],
+        ["@ depois de dígito", "123@"],
+        ["e-mail acentuado", "ção@ção"],
+        ["JID", "123@lid"],
+        ["JID com domínio", "@s.whatsapp.net"],
+        ["link com query", "veja https://x.com/p?id=1"],
+        ["link com token", "https://pay.me/abcdefghijklmnopqrstuvwxyz123"],
+    ])("acusa %s", (_n, t) => {
+        expect(contemDadoDeContato(t)).toBe(true);
+    });
+    it("não acusa texto comum, marcadores, datas e links curtos", () => {
+        expect(contemDadoDeContato("Custa R$ 150,00 [telefone] [e-mail] https://lavi.com/agenda em 01/11/2026")).toBe(false);
+    });
+});
+
+describe("criarSugestao: descarte e mínimo depois da máscara", () => {
+    it("resposta que é só telefone não é gravada", async () => {
+        await criarSugestao("s1", "qual o número?", "Me liga: 11 98765-4321");
+        await criarSugestao("s1", "qual o e-mail?", "ana.souza@gmail.com.br");
+        expect(db.estado.sugestoes).toHaveLength(0);
+    });
+    it("link com token, @handle ou JID não mascarável: descarta", async () => {
+        await criarSugestao("s1", "como pago?", `${RESP} https://pay.me/abcdefghijklmnopqrstuvwxyz123`);
+        await criarSugestao("s1", "tem insta?", `${RESP} siga @lavi`);
+        expect(db.estado.sugestoes).toHaveLength(0);
+    });
+    it("lado do cliente também é mascarado (JID, CPF, dígitos espaçados, e-mail acentuado)", async () => {
+        await criarSugestao("s1", "sou 5511987654321@s.whatsapp.net, cpf 123.456.789-00, tel 1 1 9 8 7 6 5 4 3 2 1, joão@exemplo.com", RESP);
+        expect(db.estado.sugestoes[0].cliente).toBe("sou [contato], cpf [telefone], tel [telefone], [e-mail]");
+    });
+    it("cliente com link de token: descarta", async () => {
+        await criarSugestao("s1", "paguei https://x.com/p?token=abc", RESP);
+        expect(db.estado.sugestoes).toHaveLength(0);
+    });
+    it("igual a uma descartada recentemente não volta", async () => {
+        await criarSugestao("s1", "tem horário?", RESP);
+        await descartarSugestao("s1", db.estado.sugestoes[0].id);
+        await criarSugestao("s1", "tem horário?", RESP);
+        expect(db.estado.sugestoes).toHaveLength(1);
     });
 });
 
