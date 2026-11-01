@@ -17,9 +17,17 @@ describe("estado do login da Meta", () => {
         expect(u).toBeTruthy();
     });
     it("a URL de autorização leva app, retorno, estado e as permissões de publicar", () => {
-        const u = new URL(urlDeAutorizacao("123", "https://crm.exemplo.com/api/social/oauth/callback", "abc"));
+        const u = new URL(urlDeAutorizacao("123", "https://crm.exemplo.com/api/social/oauth/callback", "abc", ""));
         expect(u.searchParams.get("client_id")).toBe("123");
         expect(u.searchParams.get("state")).toBe("abc");
         expect(u.searchParams.get("scope")).toContain("instagram_content_publish");
+        expect(u.searchParams.get("config_id")).toBeNull();
+    });
+    it("com config_id usa a configuração do painel e não manda scope", () => {
+        const u = new URL(urlDeAutorizacao("123", "https://crm.exemplo.com/api/social/oauth/callback", "abc", "999"));
+        expect(u.searchParams.get("config_id")).toBe("999");
+        expect(u.searchParams.get("override_default_response_type")).toBe("true");
+        expect(u.searchParams.get("response_type")).toBe("code");
+        expect(u.searchParams.has("scope")).toBe(false);
     });
 });

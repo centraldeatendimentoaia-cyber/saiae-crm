@@ -42,8 +42,16 @@ export function lerEstado(estado: string, secret: string, agora = Date.now()): s
     return Buffer.from(partes[0], "base64url").toString("utf8");
 }
 
-export function urlDeAutorizacao(appId: string, redirectUri: string, estado: string): string {
-    const q = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state: estado, scope: SCOPES, response_type: "code" });
+/**
+ * Com SOCIAL_META_CONFIG_ID (app com "Login do Facebook para Empresas") as permissões vêm da configuração criada no painel
+ * e a Meta recusa o parâmetro `scope`; sem ele, usa o Login do Facebook comum com a lista SCOPES.
+ */
+export function urlDeAutorizacao(appId: string, redirectUri: string, estado: string, configId = process.env.SOCIAL_META_CONFIG_ID?.trim()): string {
+    const q = new URLSearchParams({ client_id: appId, redirect_uri: redirectUri, state: estado, response_type: "code" });
+    if (configId) {
+        q.set("config_id", configId);
+        q.set("override_default_response_type", "true");
+    } else q.set("scope", SCOPES);
     return `https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth?${q}`;
 }
 
