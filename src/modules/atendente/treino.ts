@@ -16,7 +16,7 @@ export const GATILHOS_PADRAO_IDS: readonly string[] = ["reclamacao", "desconto",
 
 // Controle C0/C1 (menos \n e \t), largura zero, marcas bidi, separadores de linha/parágrafo e BOM: nada disso é texto
 // legítimo do dono, e todos servem para esconder instruções dentro do prompt.
-const CONTROLE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/;
+export const CONTROLE = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/;
 
 /** String aparada, com \r\n virando \n, tamanho entre min e max e sem caracteres de controle. */
 const texto = (max: number, min = 0) =>
