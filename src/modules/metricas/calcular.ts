@@ -159,7 +159,7 @@ export function calcularMetricas(mensagens: MsgMetrica[], opcoes: OpcoesMetricas
             if (opcoes.origensConversa?.get(contato) === "anuncio") clientesDeAnuncio++;
         }
         const ultimaAntes = opcoes.ultimaMensagemAntes?.get(contato);
-        if (ultimaAntes && inicio.getTime() - ultimaAntes.getTime() >= diasReativacaoMs && lista.some((m) => !m.fromMe && naJanela(m.timestamp))) reativados++;
+        if (!novo && ultimaAntes && inicio.getTime() - ultimaAntes.getTime() >= diasReativacaoMs && lista.some((m) => !m.fromMe && naJanela(m.timestamp))) reativados++;
 
         const todas: Demanda[] = [];
         let atual: Demanda | null = null;

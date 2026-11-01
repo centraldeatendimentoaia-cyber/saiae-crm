@@ -193,9 +193,14 @@ describe("crescimento: anúncio, reativação e passagens", () => {
             [B, sp("2026-09-13T00:00:00")], // 29 dias antes
         ]);
         const msgs = [rec(A, "2026-10-13T10:00:00"), rec(B, "2026-10-13T10:00:00"), rec(C, "2026-10-13T10:00:00")];
-        const r = calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes });
+        const r = calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes, primeiraMensagemAntes: new Set(ultimaMensagemAntes.keys()) });
         expect(r.reativados).toBe(1);
-        expect(calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes, diasReativacao: 20 }).reativados).toBe(2);
+        expect(calcularMetricas(msgs, { ...PERIODO, ultimaMensagemAntes, primeiraMensagemAntes: new Set(ultimaMensagemAntes.keys()), diasReativacao: 20 }).reativados).toBe(2);
+    });
+    it("contato novo (sem primeiraMensagemAntes) não é novo e reativado ao mesmo tempo", () => {
+        const msgs = [{ contato: "a@s.whatsapp.net", fromMe: false, timestamp: new Date(PERIODO.inicio.getTime() + 3_600_000), origem: "desconhecido" as const }];
+        const r = calcularMetricas(msgs, { ...PERIODO, primeiraMensagemAntes: new Set(), ultimaMensagemAntes: new Map([["a@s.whatsapp.net", new Date(PERIODO.inicio.getTime() - 60 * 86_400_000)]]) });
+        expect(r).toMatchObject({ contatosNovos: 1, reativados: 0 });
     });
     it("reativado exige mensagem recebida no período", () => {
         const r = calcularMetricas([env(A, "2026-10-13T10:00:00")], { ...PERIODO, ultimaMensagemAntes: new Map([[A, sp("2026-08-01T10:00:00")]]) });

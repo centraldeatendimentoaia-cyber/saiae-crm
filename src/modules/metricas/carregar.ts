@@ -68,9 +68,10 @@ export function origemDe(registrada: string | undefined, quando: Date, desde: Da
 const LOTE_CONTATOS = 1000;
 
 /**
- * Contexto que as métricas de crescimento precisam sobre o que veio ANTES de `inicio`: origem da conversa, e a última mensagem de cada
- * contato (de onde saem "novo" e "reativado"). As duas coleções saem da mesma fonte, então um contato nunca é novo e reativado ao mesmo tempo.
- * Mensagens antigas apagadas pela retenção deixam rastro em Contact.lastInboundAt, usado quando não sobrou nenhuma Message.
+ * Contexto que as métricas de crescimento precisam sobre o que veio ANTES de `inicio`: origem da conversa, quem já tinha interagido
+ * (`primeiraMensagemAntes`, qualquer direção) e a última mensagem RECEBIDA de cada contato (`ultimaMensagemAntes`, para reativação).
+ * Mensagens antigas podem ter sido apagadas pela retenção; sem nenhuma Message, Contact.createdAt anterior a `inicio` ainda marca
+ * o contato como já conhecido (não é "novo"), mas sem data de última mensagem, então ele não vira "reativado".
  */
 export async function carregarContextoMetricas(args: { dbSessionId: string; sessionId: string; contatos: string[]; inicio: Date; ate: Date }): Promise<{
     origensConversa: Map<string, "anuncio" | "organico">;
@@ -79,33 +80,26 @@ export async function carregarContextoMetricas(args: { dbSessionId: string; sess
 }> {
     const { dbSessionId, sessionId, contatos, inicio } = args;
     const origensConversa = new Map<string, "anuncio" | "organico">();
+    const primeiraMensagemAntes = new Set<string>();
     const ultimaMensagemAntes = new Map<string, Date>();
-    const ultima = (jid: string, d: Date) => {
-        const atual = ultimaMensagemAntes.get(jid);
-        if (!atual || d > atual) ultimaMensagemAntes.set(jid, d);
-    };
 
     for (let i = 0; i < contatos.length; i += LOTE_CONTATOS) {
         const lote = contatos.slice(i, i + LOTE_CONTATOS);
         const origens = await prisma.conversaOrigem.findMany({ where: { sessionId, jid: { in: lote } }, select: { jid: true, origem: true } });
         for (const o of origens) origensConversa.set(o.jid, o.origem === "anuncio" ? "anuncio" : "organico");
 
-        const grupos = await prisma.message.groupBy({
-            by: ["remoteJid"],
-            where: { sessionId: dbSessionId, remoteJid: { in: lote }, timestamp: { lt: inicio } },
-            _max: { timestamp: true },
-        });
-        for (const g of grupos) if (g._max.timestamp) ultima(g.remoteJid, g._max.timestamp);
+        const antes = { sessionId: dbSessionId, remoteJid: { in: lote }, timestamp: { lt: inicio } };
+        const qualquer = await prisma.message.groupBy({ by: ["remoteJid"], where: antes, _max: { timestamp: true } });
+        for (const g of qualquer) if (g._max.timestamp) primeiraMensagemAntes.add(g.remoteJid);
+        const recebidas = await prisma.message.groupBy({ by: ["remoteJid"], where: { ...antes, fromMe: false }, _max: { timestamp: true } });
+        for (const g of recebidas) if (g._max.timestamp) ultimaMensagemAntes.set(g.remoteJid, g._max.timestamp);
 
         const doLote = new Set(lote);
         const registros = await prisma.contact.findMany({
-            where: { sessionId: dbSessionId, lastInboundAt: { lt: inicio }, OR: [{ jid: { in: lote } }, { lid: { in: lote } }] },
-            select: { jid: true, lid: true, lastInboundAt: true },
+            where: { sessionId: dbSessionId, createdAt: { lt: inicio }, OR: [{ jid: { in: lote } }, { lid: { in: lote } }] },
+            select: { jid: true, lid: true },
         });
-        for (const c of registros) {
-            if (!c.lastInboundAt) continue;
-            for (const chave of [c.jid, c.lid]) if (chave && doLote.has(chave)) ultima(chave, c.lastInboundAt);
-        }
+        for (const c of registros) for (const chave of [c.jid, c.lid]) if (chave && doLote.has(chave)) primeiraMensagemAntes.add(chave);
     }
-    return { origensConversa, primeiraMensagemAntes: new Set(ultimaMensagemAntes.keys()), ultimaMensagemAntes };
+    return { origensConversa, primeiraMensagemAntes, ultimaMensagemAntes };
 }
