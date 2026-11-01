@@ -144,7 +144,7 @@ export default function AgenteIaPage() {
                                             <option value="">Escolha o grupo</option>
                                             {grupos.map((g) => <option key={g.jid} value={g.jid}>{g.subject || "Grupo sem nome"}</option>)}
                                         </select>
-                                        <p className="text-xs text-muted-foreground">O número do salão precisa estar nesse grupo. Os avisos "Cliente aguardando resposta - bot" vão para lá.</p>
+                                        <p className="text-xs text-muted-foreground">O número deste WhatsApp precisa estar nesse grupo. Os avisos "Cliente aguardando resposta - bot" vão para lá.</p>
                                     </div>
                                     <div className="space-y-1">
                                         <Label>E-mail para avisos (opcional)</Label>
@@ -205,7 +205,7 @@ export default function AgenteIaPage() {
                                 <div className="space-y-1">
                                     <Label>Texto do lembrete (opcional)</Label>
                                     <Textarea value={cfg.followUpTexto} onChange={(e) => set("followUpTexto", e.target.value)} className="min-h-[70px]" placeholder={"Oi, {nome}! Passando pra ver se ficou alguma dúvida. Se quiser, é só me chamar 💛"} />
-                                    <p className="text-xs text-muted-foreground">{"{nome}"} vira o primeiro nome da pessoa. Vazio = texto padrão do salão ("...eu passo pra recepção ver um horário").</p>
+                                    <p className="text-xs text-muted-foreground">{"{nome}"} vira o primeiro nome da pessoa. Vazio = texto padrão ("...eu passo pra recepção ver um horário").</p>
                                 </div>
                                 <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
                                     <li>O lembrete é uma única mensagem, só para quem escreveu e não respondeu, e só no horário de atendimento (terça a sábado).</li>

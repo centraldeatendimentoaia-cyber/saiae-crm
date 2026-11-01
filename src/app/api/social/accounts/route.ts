@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { lerObjetoOpcional } from "@/lib/validate";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { encryptToken } from "@/modules/social/crypto";
-import { discoverAccounts, pagesWithoutInstagram } from "@/modules/social/graph";
+import { discoverAccounts } from "@/modules/social/graph";
+import { salvarContas } from "@/modules/social/salvar-contas";
 import { accountPublicSelect, parseTimes } from "@/modules/social/posts";
 
 async function listAccounts(userId: string) {
@@ -37,15 +37,7 @@ export async function POST(request: NextRequest) {
         if (!found.length) {
             return NextResponse.json({ status: false, message: "Nenhuma Página encontrada para esse token. Confira as permissões (pages_show_list) e se você escolheu as Páginas ao gerar o token." }, { status: 400 });
         }
-        for (const a of found) {
-            const data = { name: a.name, username: a.username ?? null, picture: a.picture ?? null, pageId: a.pageId, accessToken: encryptToken(a.accessToken) };
-            await prisma.socialAccount.upsert({
-                where: { userId_provider_externalId: { userId: user.id, provider: a.provider, externalId: a.externalId } },
-                create: { userId: user.id, provider: a.provider, externalId: a.externalId, ...data },
-                update: data,
-            });
-        }
-        const semIg = pagesWithoutInstagram(found);
+        const semIg = await salvarContas(user.id, found);
         const aviso = semIg.length
             ? ` Sem Instagram ligado: ${semIg.join(", ")}. Confira se o Instagram é Business/Creator, está ligado a essa Página e foi marcado ao gerar o token.`
             : "";

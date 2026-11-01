@@ -77,7 +77,7 @@ export const navGroups: NavGroup[] = [
             { href: "/dashboard/bot-settings", label: "Configurações do Bot", icon: Bot },
             { href: "/dashboard/autoreply", label: "Resposta automática", icon: MessageCircleReply },
             { href: "/dashboard/atendente-ia", label: "Conversas da IA", icon: MessagesSquare, superadminOnly: true },
-            { href: "/dashboard/agente-ia", label: "Agente do salão", icon: Sparkles, superadminOnly: true },
+            { href: "/dashboard/agente-ia", label: "Agente de atendimento", icon: Sparkles, superadminOnly: true },
             { href: "/dashboard/atendente-treino", label: "Treinar atendente", icon: GraduationCap, superadminOnly: true },
             { href: "/dashboard/profile", label: "Perfil do bot", icon: UserCircle },
             { href: "/dashboard/scheduler", label: "Agendador", icon: CalendarClock },
