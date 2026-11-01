@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dataBr, formatarDuracao, percentual, periodoAnterior, somarDias, ultimosDias, variacao } from "./formato";
+import { dataBr, formatarDuracao, percentual, periodoAnterior, somarDias, mesAtual, mesPassado, nomeDoMes, ultimosDias, variacao } from "./formato";
 
 describe("formatarDuracao", () => {
     it("escolhe a unidade pelo tamanho", () => {
@@ -47,4 +47,14 @@ describe("datas", () => {
     it("dataBr", () => {
         expect(dataBr("2026-10-12")).toBe("12/10/2026");
     });
+});
+
+describe("meses", () => {
+    const hoje = new Date("2026-03-15T15:00:00Z");
+    it("mês atual vai do dia 1 até hoje", () => expect(mesAtual(hoje)).toEqual({ de: "2026-03-01", ate: "2026-03-15" }));
+    it("mês passado é inteiro, inclusive na virada do ano", () => {
+        expect(mesPassado(hoje)).toEqual({ de: "2026-02-01", ate: "2026-02-28" });
+        expect(mesPassado(new Date("2026-01-05T15:00:00Z"))).toEqual({ de: "2025-12-01", ate: "2025-12-31" });
+    });
+    it("nomeia o mês em português", () => expect(nomeDoMes("2026-10-01")).toBe("outubro de 2026"));
 });

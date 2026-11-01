@@ -1,8 +1,8 @@
 "use client";
 
 import { errorMessage } from "@/lib/errors";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Download } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BarChart3, ClipboardCopy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useSession } from "@/components/dashboard/session-provider";
 import { SessionGuard } from "@/components/dashboard/session-guard";
 import type { RelatorioMetricas } from "@/modules/metricas/calcular";
-import { dataBr, formatarDuracao, percentual, periodoAnterior, ultimosDias, variacao } from "@/modules/metricas/formato";
+import { dataBr, formatarDuracao, mesAtual, mesPassado, nomeDoMes, percentual, periodoAnterior, ultimosDias, variacao } from "@/modules/metricas/formato";
+import { gerarResumoWhatsApp } from "@/modules/metricas/resumo-texto";
 
-type Atalho = "7" | "30" | "personalizado";
+type Atalho = "7" | "30" | "mes" | "mes-passado" | "personalizado";
 interface Periodo { de: string; ate: string }
 interface Resultado { rotulo: string; periodo: Periodo; dados: RelatorioMetricas }
 
@@ -25,6 +26,14 @@ async function buscar(sessionId: string, p: Periodo): Promise<RelatorioMetricas>
     const json = await res.json().catch(() => ({}));
     if (!res.ok || !json.status) throw new Error(json.message || "Não foi possível carregar as métricas.");
     return json.data as RelatorioMetricas;
+}
+
+/** Variações contra o período anterior de mesma duração (rota com comparar=1; o CSV não aceita esse parâmetro). */
+async function buscarComparacao(sessionId: string, p: Periodo) {
+    const res = await fetch(`/api/metricas/${encodeURIComponent(sessionId)}?de=${p.de}&ate=${p.ate}&comparar=1`);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.status) throw new Error(json.message || "Não foi possível montar o resumo.");
+    return json.data.variacoes as Parameters<typeof gerarResumoWhatsApp>[0]["comparacao"];
 }
 
 const urlCsv = (sessionId: string, p: Periodo) => `/api/metricas/${encodeURIComponent(sessionId)}?de=${p.de}&ate=${p.ate}&formato=csv`;
@@ -109,7 +118,7 @@ function GraficoDiario({ serie }: { serie: RelatorioMetricas["porDia"] }) {
 }
 
 export default function MetricasPage() {
-    const { sessionId } = useSession();
+    const { sessionId, sessions } = useSession();
     const hoje7 = useMemo(() => ultimosDias(7), []);
     const [comparar, setComparar] = useState(false);
     const [atalho, setAtalho] = useState<Atalho>("7");
@@ -118,11 +127,13 @@ export default function MetricasPage() {
     const [loading, setLoading] = useState(false);
     const [resultados, setResultados] = useState<Resultado[]>([]);
     const [erro, setErro] = useState<string | null>(null);
+    const [copiando, setCopiando] = useState(false);
+    const requisicao = useRef(0); // descarta respostas de uma sessão/período que já foi trocado
 
     const escolherAtalho = (a: Atalho) => {
         setAtalho(a);
         if (a !== "personalizado") {
-            const p = ultimosDias(Number(a));
+            const p = a === "mes" ? mesAtual() : a === "mes-passado" ? mesPassado() : ultimosDias(Number(a));
             setPeriodoB(p);
             setPeriodoA(periodoAnterior(p.de, p.ate));
         }
@@ -130,25 +141,30 @@ export default function MetricasPage() {
 
     const carregar = useCallback(async () => {
         if (!sessionId) return;
+        const minha = ++requisicao.current;
         setLoading(true);
         setErro(null);
         try {
             if (comparar) {
                 const [a, b] = await Promise.all([buscar(sessionId, periodoA), buscar(sessionId, periodoB)]);
+                if (minha !== requisicao.current) return;
                 setResultados([
                     { rotulo: "Período A (antes)", periodo: periodoA, dados: a },
                     { rotulo: "Período B (depois)", periodo: periodoB, dados: b },
                 ]);
             } else {
-                setResultados([{ rotulo: "Período", periodo: periodoB, dados: await buscar(sessionId, periodoB) }]);
+                const dados = await buscar(sessionId, periodoB);
+                if (minha !== requisicao.current) return;
+                setResultados([{ rotulo: "Período", periodo: periodoB, dados }]);
             }
         } catch (e) {
+            if (minha !== requisicao.current) return;
             const msg = errorMessage(e, "Não foi possível carregar as métricas.");
             setErro(msg);
             setResultados([]);
             toast.error(msg);
         } finally {
-            setLoading(false);
+            if (minha === requisicao.current) setLoading(false);
         }
     }, [sessionId, comparar, periodoA, periodoB]);
 
@@ -156,6 +172,32 @@ export default function MetricasPage() {
         const datasOk = (p: Periodo) => /^\d{4}-\d{2}-\d{2}$/.test(p.de) && /^\d{4}-\d{2}-\d{2}$/.test(p.ate) && p.de <= p.ate;
         if (datasOk(periodoB) && (!comparar || datasOk(periodoA))) void carregar();
     }, [carregar, comparar, periodoA, periodoB]);
+
+    const copiarResumo = async () => {
+        if (!sessionId) return;
+        setCopiando(true);
+        try {
+            const variacoes = await buscarComparacao(sessionId, periodoB);
+            const mesInteiro = periodoB.de.endsWith("-01") && (periodoB.ate.slice(0, 7) === periodoB.de.slice(0, 7));
+            const texto = gerarResumoWhatsApp({
+                negocio: sessions.find((s) => s.sessionId === sessionId)?.name || "Meu negócio",
+                mes: mesInteiro ? nomeDoMes(periodoB.de) : `${dataBr(periodoB.de)} a ${dataBr(periodoB.ate)}`,
+                vocabulario: { cliente: "cliente", clientes: "clientes" }, // o vocabulário treinável chega numa etapa seguinte
+                comparacao: variacoes,
+            });
+            try {
+                await navigator.clipboard.writeText(texto);
+                toast.success("Resumo copiado. Cole no WhatsApp.");
+            } catch {
+                // sem permissão de área de transferência (ex.: página sem HTTPS): mostra o texto para copiar à mão
+                toast.message("Não foi possível copiar sozinho. Copie o texto abaixo:", { description: texto, duration: 30000 });
+            }
+        } catch (e) {
+            toast.error(errorMessage(e, "Não foi possível montar o resumo."));
+        } finally {
+            setCopiando(false);
+        }
+    };
 
     const principal = resultados[resultados.length - 1]?.dados;
     const base = comparar && resultados.length === 2 ? resultados[0].dados : null;
@@ -206,10 +248,18 @@ export default function MetricasPage() {
                         <div className="flex flex-wrap gap-2">
                             <Button variant={atalho === "7" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("7")}>Últimos 7 dias</Button>
                             <Button variant={atalho === "30" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("30")}>Últimos 30 dias</Button>
+                            <Button variant={atalho === "mes" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("mes")}>Este mês</Button>
+                            <Button variant={atalho === "mes-passado" ? "default" : "outline"} size="sm" onClick={() => escolherAtalho("mes-passado")}>Mês passado</Button>
                             <Button variant={atalho === "personalizado" ? "default" : "outline"} size="sm" onClick={() => setAtalho("personalizado")}>Personalizado</Button>
                             <Button variant={comparar ? "default" : "outline"} size="sm" onClick={() => setComparar((c) => !c)} aria-pressed={comparar}>
                                 Comparar antes x depois
                             </Button>
+                        </div>
+                        <div>
+                            <Button variant="outline" size="sm" onClick={() => void copiarResumo()} disabled={copiando || !sessionId}>
+                                <ClipboardCopy className="h-4 w-4" /> {copiando ? "Montando..." : "Copiar resumo"}
+                            </Button>
+                            <p className="mt-1 text-xs text-muted-foreground">Texto pronto para o WhatsApp, com a variação contra o período anterior de mesma duração.</p>
                         </div>
                         <div className="flex flex-wrap gap-6">
                             {comparar && campoPeriodo("Período A (antes)", periodoA, setPeriodoA, "a")}
