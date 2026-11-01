@@ -24,6 +24,7 @@ import {
     UserPlus,
     BookOpen,
     CreditCard,
+    BarChart3,
 } from "lucide-react";
 
 export interface NavItem {
@@ -56,6 +57,7 @@ export const navGroups: NavGroup[] = [
         items: [
             { href: "/dashboard/chat", label: "Conversas", icon: MessageSquare },
             { href: "/dashboard/broadcast", label: "Disparo", icon: Megaphone },
+            { href: "/dashboard/metricas", label: "Métricas de atendimento", icon: BarChart3 },
             { href: "/dashboard/descadastros", label: "Descadastrados", icon: UserX },
             { href: "/dashboard/sticker", label: "Criador de figurinhas", icon: ImageIcon },
         ],
