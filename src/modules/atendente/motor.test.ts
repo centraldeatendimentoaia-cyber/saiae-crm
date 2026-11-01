@@ -313,3 +313,34 @@ describe("responderAtendente: correções da revisão", () => {
         expect(filtrarHosts("(https://agencia.com/x) e www.outro.com.", ["https://agencia.com"])).toBe("(https://agencia.com/x) e .");
     });
 });
+
+describe("responderAtendente e filtrarHosts: segunda revisão", () => {
+    const OK = ["https://agencia.com"];
+    it("aviso à equipe que falha: qualquer texto do modelo vira MSG_AVISO_FALHOU", async () => {
+        const m = llmRoteirizado([{ chamadas: [{ id: "1", nome: "passar_para_pessoa", argumentos: { motivo: "pedido-humano" } }] }, { texto: "Pronto, chamei a equipe!", chamadas: [] }]);
+        const r = await responderAtendente(deps(m.llm, { onPassarParaPessoa: vi.fn(async () => false) }), entrada("dúvida"));
+        expect(r).toEqual({ mensagens: [MSG_AVISO_FALHOU], passouParaPessoa: false, vendaRegistrada: false, falhou: false, avisoFalhou: true });
+    });
+    it.each(["EVIL.DE", "Evil.de/x", "see/evil.de", "//evil.de", "x=evil.de", "a_evil.de", "évil.de", "evil。com", "evil​.de", "https://agencia.com.evil.com", "https://agencia.com@evil.com", "evil．com", "wa.me/5511999"])(
+        "remove o endereço disfarçado %s",
+        (s) => {
+            const r = filtrarHosts(`Veja ${s} agora`, OK);
+            expect(r.normalize("NFKC").replace(/[​。｡]/g, (c) => (c === "​" ? "" : ".")).toLowerCase()).not.toMatch(/evil|wa\.me/);
+            expect(r.startsWith("Veja")).toBe(true);
+            expect(r.endsWith("agora")).toBe(true);
+        },
+    );
+    it("não mexe em pontuação comum, valores, e-mails nem nos links permitidos", () => {
+        for (const s of ["Sr.Silva chegou", "Olá.Tudo bem?", "ok.obrigado", "Custa R$ 1.200,50.", "nota 4.7", "contato@gmail.com", "arquivo.pdf", "https://agencia.com", "https://agencia.com/precos?x=1", "agencia.com/precos", "Veja: https://agencia.com."]) {
+            expect(filtrarHosts(s, OK), s).toBe(s);
+        }
+    });
+    it("tempo linear em texto adversário", () => {
+        const inicio = performance.now();
+        filtrarHosts("a-".repeat(50_000), OK);
+        filtrarHosts(".".repeat(50_000) + "x", OK);
+        filtrarHosts("a.".repeat(50_000), OK);
+        filtrarHosts("https://" + "a".repeat(100_000), OK);
+        expect(performance.now() - inicio).toBeLessThan(500);
+    });
+});

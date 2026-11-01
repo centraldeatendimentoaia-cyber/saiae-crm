@@ -119,9 +119,20 @@ export function ferramentasAtendente(opcoes: { etiquetas: readonly string[]; tem
 // ---------------------------------------------------------------- links
 
 const COM_ESQUEMA = /^https?:\/\//i;
-// Domínio solto: rótulos com ponto e um final só de letras minúsculas (texto comum como "Sr.Silva" ou "4.7" não casa).
-const DOMINIO_SOLTO = /^(?:[^\s/@]+@)?(?:[a-z0-9-]+\.)+[a-z]{2,24}\.?(?:[:/?#]|$)/;
-const EMAIL = /^[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/i;
+const PONTUACAO_FINAL = ".,;:!?…";
+// Pontos ideográficos e de largura cheia que o WhatsApp pode tratar como ".".
+const PONTOS = /[。．｡]/;
+// Invisíveis usados para quebrar a detecção sem mudar o que o cliente vê.
+const INVISIVEIS = /[­​-‏⁠﻿]/;
+// Rótulos com ponto, começando numa fronteira (o lookbehind deixa cada posição tentar uma vez só: tempo linear).
+const CANDIDATO = /(?<![\p{L}\p{N}\p{M}-])[\p{L}\p{N}\p{M}-]+(?:\.[\p{L}\p{N}\p{M}-]+)+/gu;
+const FINAL_LETRAS = /^\p{L}{2,24}$/u;
+// shortcut: lista fixa de finais comuns; domínio solto com outro final só cai se vier seguido de "/" ou ":". Ampliar se aparecer bypass.
+const TLDS = new Set(
+    ("com net org br io co app dev me pt de fr es it uk eu us ca mx ar cl uy py pe jp cn ru in ly gl to tv cc ws gg be im is ai " +
+        "shop store site online link xyz info biz club live page top vip click fyi run tech pro blog news email space website art one")
+        .split(" "),
+);
 
 const host = (url: string) => {
     try {
@@ -131,26 +142,61 @@ const host = (url: string) => {
     }
 };
 
+/** Cópia normalizada para detecção (NFKC, pontos trocados, invisíveis tirados) e, por caractere, o trecho de origem. */
+function normalizarComMapa(s: string) {
+    let norm = "";
+    const ini: number[] = [];
+    const fim: number[] = [];
+    let i = 0;
+    for (const ch of s) {
+        const n = INVISIVEIS.test(ch) ? "" : PONTOS.test(ch) ? "." : ch.normalize("NFKC");
+        for (let k = 0; k < n.length; k++) {
+            ini.push(i);
+            fim.push(i + ch.length);
+        }
+        norm += n;
+        i += ch.length;
+    }
+    return { norm, ini, fim };
+}
+
 /**
  * Segunda barreira depois de `filtrarLinks` (legado, que aceita qualquer endereço que COMECE com um link permitido, como
- * "https://agencia.com.evil.com"): cada endereço da saída é lido com `new URL` e só fica se o host for exatamente o de um
- * link permitido, sem usuário/senha. E-mails ficam (não abrem página).
+ * "https://agencia.com.evil.com"). 1) Endereço com http(s):// é lido com `new URL` e só fica se o host for exatamente o de
+ * um link permitido, sem usuário/senha. 2) Em qualquer ponto do texto (numa cópia normalizada), domínio solto com final
+ * conhecido, ou seguido de "/" ou ":", só fica se o host for permitido. Domínio de e-mail (logo depois de "@") fica.
  */
 export function filtrarHosts(texto: string, permitidos: string[]): string {
     const hosts = new Set(permitidos.map(host).filter(Boolean));
-    const limpo = texto.replace(/[^\s<>()"'[\]{}]+/g, (pedaco) => {
-        const fim = /[.,;:!?…]+$/.exec(pedaco)?.[0] ?? "";
-        const tok = pedaco.slice(0, pedaco.length - fim.length);
-        const esquema = COM_ESQUEMA.test(tok);
-        if (!esquema && (!DOMINIO_SOLTO.test(tok) || EMAIL.test(tok))) return pedaco;
+    const permitido = (h: string) => hosts.has(h) || hosts.has(host(`https://${h}`));
+
+    const passo1 = texto.replace(/[^\s<>()"'[\]{}]+/g, (pedaco) => {
+        let corte = pedaco.length;
+        while (corte > 0 && PONTUACAO_FINAL.includes(pedaco[corte - 1])) corte--;
+        const tok = pedaco.slice(0, corte);
+        if (!COM_ESQUEMA.test(tok)) return pedaco;
         try {
-            const u = new URL(esquema ? tok : `https://${tok}`);
-            return !u.username && !u.password && hosts.has(u.hostname) ? pedaco : fim;
+            const u = new URL(tok);
+            return !u.username && !u.password && hosts.has(u.hostname) ? pedaco : pedaco.slice(corte);
         } catch {
-            return fim;
+            return pedaco.slice(corte);
         }
     });
-    return limpo.replace(/[ \t]{2,}/g, " ").trim();
+
+    const { norm, ini, fim } = normalizarComMapa(passo1);
+    let saida = "";
+    let ultimo = 0;
+    for (const m of norm.matchAll(CANDIDATO)) {
+        const a = m.index ?? 0;
+        const b = a + m[0].length;
+        const final = m[0].slice(m[0].lastIndexOf(".") + 1);
+        const ehLink = FINAL_LETRAS.test(final) && (TLDS.has(final.toLowerCase()) || norm[b] === "/" || norm[b] === ":");
+        if (!ehLink || norm[a - 1] === "@" || permitido(m[0].toLowerCase())) continue;
+        saida += passo1.slice(ultimo, ini[a]);
+        ultimo = fim[b - 1];
+    }
+    saida += passo1.slice(ultimo);
+    return saida.replace(/[ \t]{2,}/g, " ").trim();
 }
 
 // ---------------------------------------------------------------- ferramentas
@@ -264,9 +310,10 @@ export async function responderAtendente(deps: DepsMotor, e: EntradaAtendente): 
             if (r.chamadas.length === 0) {
                 // Depois de passar para pessoa, o texto do modelo é descartado: vai só a frase fixa do treino.
                 if (turno.passou) return saida([frase(turno.motivo)]);
+                // Aviso à equipe falhou: o modelo poderia dizer que chamou alguém; vai só a frase que não promete nada.
+                if (turno.avisoFalhou) return saida([MSG_AVISO_FALHOU]);
                 const final = r.texto ? filtrarHosts(filtrarLinks(r.texto, permitidos), permitidos) : "";
                 if (!final) {
-                    if (turno.avisoFalhou) return saida([MSG_AVISO_FALHOU]);
                     deps.logger.warn(TAG, "modelo sem resposta utilizável");
                     return saida([MSG_FALHA], true);
                 }
