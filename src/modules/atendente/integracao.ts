@@ -95,7 +95,7 @@ export interface EntradaComTreino {
 }
 
 /** Responde com o motor novo e devolve no formato que agente.ts já usa para enviar e gravar o estado. */
-export async function responderComTreino(a: EntradaComTreino): Promise<{ mensagens: string[]; chamouRecepcao: boolean }> {
+export async function responderComTreino(a: EntradaComTreino): Promise<{ mensagens: string[]; chamouRecepcao: boolean; falhou: boolean }> {
     const desfecho = a.treino.roteiro.desfecho;
     const s = await responderAtendente(
         {
@@ -125,5 +125,5 @@ export async function responderComTreino(a: EntradaComTreino): Promise<{ mensage
         logger.warn(TAG, "aviso à equipe falhou: conversa etiquetada para não ficar sem resposta");
         if (a.etiquetaAguardando) await a.etiquetar(a.etiquetaAguardando);
     }
-    return { mensagens: s.mensagens, chamouRecepcao: s.passouParaPessoa };
+    return { mensagens: s.mensagens, chamouRecepcao: s.passouParaPessoa, falhou: s.falhou && !s.passouParaPessoa };
 }

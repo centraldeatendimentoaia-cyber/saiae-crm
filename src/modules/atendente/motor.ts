@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { dividirResposta, filtrarLinks, linksPermitidos } from "@/modules/agente-salao/motor";
-import type { DefinicaoFerramenta, Llm } from "@/modules/ia-atendimento/llm";
+import { descreverErro, type DefinicaoFerramenta, type Llm } from "@/modules/ia-atendimento/llm";
 import { MAX_PASSOS, montarMensagens, MSG_FALHA } from "@/modules/ia-atendimento/motor";
 import { protegerSaida } from "@/modules/ia-atendimento/vendas/saida";
 import { deveChamarPessoa } from "./gatilhos";
@@ -330,7 +330,7 @@ export async function responderAtendente(deps: DepsMotor, e: EntradaAtendente): 
         deps.logger.warn(TAG, "limite de passos atingido");
         return turno.passou ? saida([frase(turno.motivo)]) : saida([MSG_FALHA], true);
     } catch (err) {
-        deps.logger.warn(TAG, `falha no motor: ${(err as { name?: string })?.name ?? "erro"}`);
+        deps.logger.warn(TAG, `falha no motor: ${descreverErro(err)}`);
         return saida([MSG_FALHA], true);
     }
 }

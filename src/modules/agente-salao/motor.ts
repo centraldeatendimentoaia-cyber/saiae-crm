@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { DefinicaoFerramenta, Llm } from "@/modules/ia-atendimento/llm";
+import { descreverErro, type DefinicaoFerramenta, type Llm } from "@/modules/ia-atendimento/llm";
 import { filtrarSaida, MAX_PASSOS, montarMensagens, MSG_FALHA } from "@/modules/ia-atendimento/motor";
 import { agoraSaoPaulo } from "@/modules/atendimento-comum/tempo";
 import { neutralizar } from "@/modules/ia-atendimento/prompt";
@@ -247,7 +247,7 @@ export async function responderSalao(deps: DepsMotorSalao, e: EntradaSalao): Pro
         deps.logger.warn(TAG, "limite de passos atingido");
         return { mensagens: chamouRecepcao ? [MSG_TRANSFERENCIA] : [MSG_FALHA], chamouRecepcao, falhou: !chamouRecepcao };
     } catch (err) {
-        deps.logger.warn(TAG, `falha no motor: ${(err as { name?: string })?.name ?? "erro"}`);
+        deps.logger.warn(TAG, `falha no motor: ${descreverErro(err)}`);
         return { mensagens: [MSG_FALHA], chamouRecepcao: false, falhou: true };
     }
 }

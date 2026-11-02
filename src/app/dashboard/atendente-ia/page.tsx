@@ -25,16 +25,26 @@ interface Detalhe {
     telefone: string;
     estado: "ia" | "humano";
     pausadaAte: string | null;
-    mensagens: { direcao: "in" | "out"; texto: string; criadoEm: string }[];
+    mensagens: { direcao: "in" | "out"; texto: string; criadoEm: string; autor?: string }[];
     lead: Lead | null;
+    /** Conversa do agente de um negócio: não pode ser apagada por esta tela. */
+    somenteLeitura?: boolean;
 }
+interface Negocio { codigo: string; nome: string; total: number }
 
 const quando = (iso: string) =>
     new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+const iniciais = (nome: string | null | undefined, telefone: string) => {
+    const base = (nome ?? "").trim();
+    return base ? base.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase() : telefone.replace(/\D/g, "").slice(-2) || "?";
+};
+
 export default function AtendenteIaPage() {
     const [loja, setLoja] = useState("VENDAS");
     const [lojas, setLojas] = useState<{ codigo: string; total: number }[]>([]);
+    const [negocios, setNegocios] = useState<Negocio[]>([]);
+    const [erroLista, setErroLista] = useState(false);
     const [busca, setBusca] = useState("");
     const [filtro, setFiltro] = useState<"" | "ia" | "humano">("");
     const [lista, setLista] = useState<ItemLista[]>([]);
@@ -53,10 +63,16 @@ export default function AtendenteIaPage() {
             const j = await res.json();
             if (res.ok && j.status) {
                 setLista(j.data.conversas);
-                setLojas(j.data.lojas);
-            } else if (res.status === 403) {
-                toast.error("Só o administrador vê esta tela.");
+                // a lista de lojas só vem na consulta das conversas da API oficial; ao olhar um negócio, mantém a anterior
+                if (!loja.startsWith("WA:")) setLojas(j.data.lojas);
+                setNegocios(j.data.negocios ?? []);
+                setErroLista(false);
+            } else {
+                setErroLista(true);
+                if (res.status === 403) toast.error("Só o administrador vê esta tela.");
             }
+        } catch {
+            setErroLista(true);
         } finally {
             setCarregando(false);
         }
@@ -114,9 +130,9 @@ export default function AtendenteIaPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-3xl"><Bot className="h-7 w-7" />Atendente IA</h2>
-                    <p className="text-sm text-muted-foreground">Acompanhe o que a IA conversa no WhatsApp oficial. As conversas ficam guardadas por 30 dias.</p>
+                    <p className="text-sm text-muted-foreground">Acompanhe o que a IA conversa em cada negócio e no WhatsApp oficial do Saiaê. Escolha o negócio na lista abaixo.</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={carregarLista} disabled={carregando}>
+                <Button variant="outline" size="sm" onClick={carregarLista} disabled={carregando} aria-label="Atualizar a lista de conversas">
                     <RefreshCw className={cn("h-4 w-4", carregando && "animate-spin")} /> Atualizar
                 </Button>
             </div>
@@ -125,14 +141,21 @@ export default function AtendenteIaPage() {
                 {/* lista */}
                 <div className={cn("space-y-2 rounded-lg border border-border p-3", selecionada && "hidden md:block")}>
                     <div className="flex gap-2">
-                        <select value={loja} onChange={(e) => { setLoja(e.target.value); setSelecionada(null); }} className="h-10 flex-1 rounded-md border border-input bg-background px-2 text-sm">
-                            <option value="VENDAS">Vendas do Saiaê</option>
-                            <option value="TODAS">Todas</option>
-                            {lojas.filter((l) => l.codigo !== "VENDAS").map((l) => (
-                                <option key={l.codigo} value={l.codigo}>{l.codigo === "SEM-LOJA" ? "Sem loja (orientação)" : `Loja ${l.codigo}`} ({l.total})</option>
-                            ))}
+                        <select aria-label="Negócio" value={loja} onChange={(e) => { setLoja(e.target.value); setSelecionada(null); }} className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-2 text-sm">
+                            {negocios.length > 0 && (
+                                <optgroup label="Negócios (WhatsApp conectado)">
+                                    {negocios.map((n) => <option key={n.codigo} value={n.codigo}>{n.nome} ({n.total})</option>)}
+                                </optgroup>
+                            )}
+                            <optgroup label="WhatsApp oficial (API da Meta)">
+                                <option value="VENDAS">Vendas do Saiaê</option>
+                                <option value="TODAS">Todas</option>
+                                {lojas.filter((l) => l.codigo !== "VENDAS").map((l) => (
+                                    <option key={l.codigo} value={l.codigo}>{l.codigo === "SEM-LOJA" ? "Sem loja (orientação)" : `Loja ${l.codigo}`} ({l.total})</option>
+                                ))}
+                            </optgroup>
                         </select>
-                        <select value={filtro} onChange={(e) => setFiltro(e.target.value as "" | "ia" | "humano")} className="h-10 rounded-md border border-input bg-background px-2 text-sm">
+                        <select aria-label="Quem está atendendo" value={filtro} onChange={(e) => setFiltro(e.target.value as "" | "ia" | "humano")} className="h-10 rounded-md border border-input bg-background px-2 text-sm">
                             <option value="">Todas</option>
                             <option value="ia">IA atendendo</option>
                             <option value="humano">Com a equipe</option>
@@ -144,19 +167,24 @@ export default function AtendenteIaPage() {
                     </div>
                     <div className="max-h-[65vh] divide-y divide-border overflow-y-auto">
                         {lista.length === 0 ? (
-                            <p className="p-3 text-sm text-muted-foreground">{carregando ? "Carregando..." : "Nenhuma conversa nos últimos 30 dias."}</p>
+                            <p className="p-3 text-sm text-muted-foreground" role="status">
+                                {carregando ? "Carregando..." : erroLista ? "Não consegui carregar as conversas. Toque em Atualizar para tentar de novo." : "Nenhuma conversa aqui ainda."}
+                            </p>
                         ) : lista.map((c) => (
-                            <button key={c.id} type="button" onClick={() => setSelecionada(c.id)} className={cn("block w-full px-2 py-2.5 text-left hover:bg-muted/50", selecionada === c.id && "bg-muted")}>
-                                <div className="flex items-center justify-between gap-2">
-                                    <span className="truncate text-sm font-medium">{c.lead?.nome ? `${c.lead.nome} · ` : ""}{c.telefone}</span>
-                                    <span className="shrink-0 text-xs text-muted-foreground">{quando(c.ultimaMensagemEm)}</span>
-                                </div>
-                                <p className="truncate text-xs text-muted-foreground">{c.ultima ? `${c.ultima.direcao === "in" ? "Cliente" : "IA"}: ${c.ultima.texto}` : "Sem mensagens"}</p>
-                                <div className="mt-1 flex flex-wrap items-center gap-1">
-                                    {etiquetaEstado(c.estado)}
-                                    {c.lead?.negocio && <Badge variant="secondary">{c.lead.negocio}</Badge>}
-                                    {c.lead?.origem === "panfleto" && <Badge variant="secondary">Panfleto</Badge>}
-                                </div>
+                            <button key={c.id} type="button" aria-current={selecionada === c.id} onClick={() => setSelecionada(c.id)} className={cn("flex w-full items-start gap-3 px-2 py-2.5 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none", selecionada === c.id && "bg-muted")}>
+                                <span aria-hidden className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{iniciais(c.lead?.nome, c.telefone)}</span>
+                                <span className="min-w-0 flex-1">
+                                    <span className="flex items-center justify-between gap-2">
+                                        <span className="truncate text-sm font-medium">{c.lead?.nome ? `${c.lead.nome} · ` : ""}{c.telefone}</span>
+                                        <span className="shrink-0 text-xs text-muted-foreground">{quando(c.ultimaMensagemEm)}</span>
+                                    </span>
+                                    <span className="block truncate text-xs text-muted-foreground">{c.ultima ? `${c.ultima.direcao === "in" ? "Cliente" : "Resposta"}: ${c.ultima.texto}` : "Sem mensagens"}</span>
+                                    <span className="mt-1 flex flex-wrap items-center gap-1">
+                                        {etiquetaEstado(c.estado)}
+                                        {c.lead?.negocio && <Badge variant="secondary">{c.lead.negocio}</Badge>}
+                                        {c.lead?.origem === "panfleto" && <Badge variant="secondary">Panfleto</Badge>}
+                                    </span>
+                                </span>
                             </button>
                         ))}
                     </div>
@@ -185,7 +213,7 @@ export default function AtendenteIaPage() {
                                     ) : (
                                         <Button size="sm" variant="outline" onClick={() => mudarEstado("liberar")}><PlayCircle className="h-4 w-4" /> Devolver à IA</Button>
                                     )}
-                                    <Button size="sm" variant="ghost" onClick={apagar}><Trash2 className="h-4 w-4" /> Apagar conversa</Button>
+                                    {!detalhe.somenteLeitura && <Button size="sm" variant="ghost" onClick={apagar}><Trash2 className="h-4 w-4" /> Apagar conversa</Button>}
                                 </div>
                             </div>
                             <div className="max-h-[60vh] flex-1 space-y-2 overflow-y-auto p-3">
@@ -193,14 +221,16 @@ export default function AtendenteIaPage() {
                                     <div key={i} className={cn("flex", m.direcao === "out" ? "justify-end" : "justify-start")}>
                                         <div className={cn("max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm", m.direcao === "out" ? "bg-emerald-500/15" : "bg-muted")}>
                                             {m.texto}
-                                            <div className="mt-1 text-[10px] text-muted-foreground">{m.direcao === "out" ? "IA" : "Cliente"} · {quando(m.criadoEm)}</div>
+                                            <div className="mt-1 text-[10px] text-muted-foreground">{m.autor ?? (m.direcao === "out" ? "IA" : "Cliente")} · {quando(m.criadoEm)}</div>
                                         </div>
                                     </div>
                                 ))}
                                 <div ref={fim} />
                             </div>
                             <p className="border-t border-border p-2 text-xs text-muted-foreground">
-                                Aqui aparecem as mensagens que a IA recebeu e enviou. O que você escreve direto no celular não é gravado nesta tela.
+                                {detalhe.somenteLeitura
+                                    ? "Conversa completa do número conectado: o que a IA, a equipe (painel ou celular) e o cliente escreveram."
+                                    : "Aqui aparecem as mensagens que a IA recebeu e enviou. O que você escreve direto no celular não é gravado nesta tela."}
                             </p>
                         </div>
                     )}

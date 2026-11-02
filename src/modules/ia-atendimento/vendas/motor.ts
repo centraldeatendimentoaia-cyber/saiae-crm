@@ -2,7 +2,7 @@ import { MAX_TEXTO } from "../constantes";
 import type { Responder } from "../consumer";
 import type { ConsumoStore } from "../consumo";
 import { diaSaoPaulo } from "../tempo";
-import type { Llm } from "../llm";
+import { descreverErro, type Llm } from "../llm";
 import { filtrarSaida, MAX_HISTORICO, MAX_PASSOS, montarMensagens, MSG_FALHA } from "../motor";
 import type { ConversaRef, IaStore } from "../store";
 import { executarFerramentaVendas, FERRAMENTAS_VENDAS, FERRAMENTA_REGISTRAR_LEAD, type AcoesVendas, type MotivoHumano } from "./ferramentas";
@@ -91,7 +91,7 @@ export function criarResponderVendas(deps: VendasDeps): Responder {
             deps.logger.warn(TAG, "limite de passos atingido");
             return MSG_FALHA;
         } catch (e) {
-            deps.logger.warn(TAG, `falha no motor de vendas: ${(e as { name?: string })?.name ?? "erro"}`);
+            deps.logger.warn(TAG, `falha no motor de vendas: ${descreverErro(e)}`);
             return MSG_FALHA;
         }
     };
