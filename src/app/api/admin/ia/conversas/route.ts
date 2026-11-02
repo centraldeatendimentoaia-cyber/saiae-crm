@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { exigirSuperadmin } from "@/lib/admin-auth";
 import { formatPhoneBr } from "@/lib/phone";
+import { jidsDaConversa, PREFIXO_AGENTE, PREFIXO_NEGOCIO } from "@/modules/agente-salao/conversas-admin";
 
 /**
  * GET /api/admin/ia/conversas?loja=VENDAS&q=6199&estado=ia|humano&limite=50
  * Lista as conversas da atendente IA (API oficial), da mais recente para a mais antiga. Só SUPERADMIN.
- * `loja`: "VENDAS" (atendente de vendas do Saiaê, padrão), "TODAS" ou o código de uma loja.
+ * `loja`: "VENDAS" (atendente de vendas do Saiaê, padrão), "TODAS", o código de uma loja ou "WA:<sessionId>" (conversas do
+ * agente de um negócio, ou seja, de um número de WhatsApp conectado).
  * Nunca registra telefone nem texto em log.
  */
 export async function GET(request: NextRequest) {
@@ -25,6 +27,43 @@ export async function GET(request: NextRequest) {
     if (busca) where.contactKey = { contains: busca };
     if (estado === "humano") Object.assign(where, { estado: "humano", pausadaAte: { gt: agora } });
     if (estado === "ia") Object.assign(where, { OR: [{ estado: "ia" }, { pausadaAte: null }, { pausadaAte: { lte: agora } }] });
+
+    // Negócios (números de WhatsApp com agente de IA): cada um tem as próprias conversas, fora da tabela das lojas/vendas.
+    const porNegocio = await prisma.agenteConversa.groupBy({ by: ["sessionId"], _count: { _all: true } });
+    const sessoes = porNegocio.length
+        ? await prisma.session.findMany({ where: { sessionId: { in: porNegocio.map((n) => n.sessionId) } }, select: { sessionId: true, name: true } })
+        : [];
+    const nomeDe = new Map(sessoes.map((s) => [s.sessionId, s.name]));
+    const negocios = porNegocio.map((n) => ({ codigo: `${PREFIXO_NEGOCIO}${n.sessionId}`, nome: nomeDe.get(n.sessionId) ?? "WhatsApp", total: n._count._all }));
+
+    if (loja.startsWith(PREFIXO_NEGOCIO)) {
+        const token = loja.slice(PREFIXO_NEGOCIO.length);
+        const sessao = await prisma.session.findUnique({ where: { sessionId: token }, select: { id: true, name: true } });
+        const filtro: Record<string, unknown> = { sessionId: token };
+        if (busca) filtro.telefone = { contains: busca };
+        if (estado === "humano") Object.assign(filtro, { estado: "humano", pausadaAte: { gt: agora } });
+        if (estado === "ia") Object.assign(filtro, { OR: [{ estado: "ia" }, { pausadaAte: null }, { pausadaAte: { lte: agora } }] });
+        const agentes = await prisma.agenteConversa.findMany({ where: filtro, orderBy: { atualizadoEm: "desc" }, take: limite });
+        const ultimas = await Promise.all(agentes.map((a) =>
+            sessao ? prisma.message.findFirst({ where: { sessionId: sessao.id, remoteJid: { in: jidsDaConversa(a) }, content: { not: null } }, orderBy: [{ timestamp: "desc" }, { id: "desc" }], select: { fromMe: true, content: true, timestamp: true } }) : null));
+        return NextResponse.json({
+            status: true,
+            data: {
+                conversas: agentes.map((a, i) => ({
+                    id: `${PREFIXO_AGENTE}${a.id}`,
+                    lojaCodigo: sessao?.name ?? "WhatsApp",
+                    telefone: a.telefone ? formatPhoneBr(a.telefone) : a.jid.split("@")[0],
+                    estado: a.estado === "humano" && a.pausadaAte && a.pausadaAte > agora ? "humano" : "ia",
+                    pausadaAte: a.pausadaAte,
+                    ultimaMensagemEm: ultimas[i]?.timestamp ?? a.atualizadoEm,
+                    ultima: ultimas[i] ? { direcao: ultimas[i]!.fromMe ? "out" : "in", texto: (ultimas[i]!.content ?? "").slice(0, 140) } : null,
+                    lead: a.nomePerfil || a.servico ? { nome: a.nomePerfil, negocio: a.servico, cidade: null, origem: "whatsapp" } : null,
+                })),
+                lojas: [],
+                negocios,
+            },
+        });
+    }
 
     const [conversas, lojas] = await Promise.all([
         prisma.iaConversa.findMany({
@@ -58,6 +97,7 @@ export async function GET(request: NextRequest) {
                 };
             }),
             lojas: lojas.map((l) => ({ codigo: l.lojaCodigo, total: l._count._all })),
+            negocios,
         },
     });
 }

@@ -88,6 +88,17 @@ export class WhatsAppInstance {
             markOnlineOnConnect: botConfig?.alwaysOnline ?? true,
             // Baixar o histórico inteiro pesa em memória, CPU e banco; ligue com WA_SYNC_FULL_HISTORY=true se precisar
             syncFullHistory: process.env.WA_SYNC_FULL_HISTORY === "true",
+            // Quando o celular ou o cliente não consegue abrir uma mensagem nossa, o WhatsApp pede o reenvio. Sem isto o
+            // Baileys não tem o que reenviar e a mensagem fica para sempre em "Aguardando mensagem. Essa ação pode levar alguns instantes."
+            getMessage: async (key) => {
+                if (!key.id) return undefined;
+                const m = await prisma.message.findUnique({
+                    where: { sessionId_keyId: { sessionId: sessionData.id, keyId: key.id } },
+                    select: { content: true, type: true },
+                });
+                // shortcut: só texto é reconstruído; mídia reenviada não, até guardarmos o conteúdo bruto da mensagem
+                return m?.content && m.type === "TEXT" ? { conversation: m.content } : undefined;
+            },
         });
 
         // Apply Anti-Spam Wrapper to sendMessage

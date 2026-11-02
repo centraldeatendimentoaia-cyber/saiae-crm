@@ -15,7 +15,7 @@ import { registrarOrigem } from "./origem";
 import { origemDaMensagem } from "@/modules/metricas/anuncio";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
-import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
+import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, MSG_TRANSFERENCIA, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 import { responderComTreino, usarAtendenteNovo } from "@/modules/atendente/integracao";
 import { registrarCorrecaoHumana } from "@/modules/atendente/sugestoes";
 
@@ -376,7 +376,15 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             );
             mensagens = r.mensagens;
             chamou = r.chamouRecepcao;
+            if (r.falhou) {
+                // A cliente nunca recebe "não consegui responder": a recepção é avisada (e a IA pausa) e só a frase de
+                // transferência vai. Se nenhum aviso funcionou, fica calada e a conversa segue sem resposta automática.
+                logger.warn(TAG, "o modelo falhou: chamando a recepção em vez de responder com erro");
+                chamou = await chamarRecepcao({ motivo: "duvida", nome: nomePerfil ?? undefined, resumo: "A IA teve um problema técnico e não conseguiu responder esta conversa." });
+                mensagens = chamou ? [MSG_TRANSFERENCIA] : [];
+            }
         }
+        if (mensagens.length === 0) return;
 
         // uma pessoa pode ter assumido enquanto a IA pensava: nesse caso não manda nada (exceto o aviso de transferência)
         if (!chamou) {

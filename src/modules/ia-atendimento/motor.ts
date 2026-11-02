@@ -4,7 +4,7 @@ import { MAX_TEXTO } from "./constantes";
 import type { Responder } from "./consumer";
 import { ehPerguntaAlimentar, MSG_ALIMENTAR_AVISADO, MSG_ALIMENTAR_SEM_AVISO } from "./alimentar";
 import { executarFerramenta, FERRAMENTAS, type AcoesFerramentas } from "./ferramentas";
-import type { Llm, MensagemLlm } from "./llm";
+import { descreverErro, type Llm, type MensagemLlm } from "./llm";
 import { montarPromptPartes } from "./prompt";
 import type { ConversaRef, IaStore } from "./store";
 
@@ -118,7 +118,7 @@ export function criarResponder(deps: MotorDeps): Responder {
             deps.logger.warn(TAG, "limite de passos atingido");
             return MSG_FALHA;
         } catch (e) {
-            deps.logger.warn(TAG, `falha no motor: ${(e as { name?: string })?.name ?? "erro"}`);
+            deps.logger.warn(TAG, `falha no motor: ${descreverErro(e)}`);
             return MSG_FALHA;
         }
     };
