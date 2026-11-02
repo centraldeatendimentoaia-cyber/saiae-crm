@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { ChatList } from "./chat-list";
 import { ChatWindow } from "./chat-window";
 import { MessageCircle } from "lucide-react";
+import { jidDoTelefone } from "@/lib/telefone-br";
 
 interface ChatLayoutClientProps {
     sessionId: string;

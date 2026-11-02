@@ -13,6 +13,8 @@ import { toast } from "sonner";
 
 export interface ChatContact {
     jid: string;
+    /** Todos os JIDs da mesma pessoa (telefone e LID): mensagens de qualquer um deles caem nesta conversa. */
+    jids?: string[];
     phoneJid?: string;
     name: string | null;
     notify: string | null;

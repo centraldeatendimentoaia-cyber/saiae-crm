@@ -3,7 +3,7 @@ import type { BotConfig, MessageType } from "@prisma/client";
 import type { WASocket, WAMessage, Contact } from "@whiskeysockets/baileys";
 import { normalizeMessageContent } from "@whiskeysockets/baileys";
 import { onMessageReceived, onMessageSent, dispatchWebhook, downloadAndSaveMedia } from "@/lib/webhook";
-import { resolveToPhoneJid, isLidJid, normalizeJid } from "@/lib/jid-utils";
+import { resolveToPhoneJid, isLidJid, normalizeJid, telefoneDoLid } from "@/lib/jid-utils";
 import { Server } from "socket.io";
 import { logger } from "@/lib/logger";
 import { ehPrimeiraRecebida, origemDaMensagem, podeSerPrimeiraRecebida, registrarOrigemConversa } from "@/modules/metricas/anuncio";
@@ -211,12 +211,14 @@ export async function processAndSaveMessage(
     }
 
     // --- Normalize LID JIDs to @s.whatsapp.net ---
+    // Sem o telefone na mensagem nem na agenda, pergunta ao mapeamento LID<->telefone do próprio WhatsApp.
+    const viaSocket = sock ? (lid: string) => telefoneDoLid(sock, lid) : undefined;
     let normalizedRemoteJid = remoteJid;
     if (isLidJid(remoteJid)) {
-        normalizedRemoteJid = await resolveToPhoneJid(remoteJid, dbSessionId, remoteJidAlt);
+        normalizedRemoteJid = await resolveToPhoneJid(remoteJid, dbSessionId, remoteJidAlt, viaSocket);
     }
     if (senderJid && isLidJid(senderJid)) {
-        senderJid = await resolveToPhoneJid(senderJid, dbSessionId, remoteJidAlt);
+        senderJid = await resolveToPhoneJid(senderJid, dbSessionId, remoteJidAlt, viaSocket);
     }
 
 
@@ -266,6 +268,8 @@ export async function processAndSaveMessage(
         const finalRemoteJid = normalizeJid(normalizedRemoteJid);
         if (remoteJid && !remoteJid.includes('@g.us') && !remoteJid.includes('status@broadcast')) {
             const contactJid = finalRemoteJid; // Use fully normalized JID
+            // Guarda a ligação telefone <-> LID no contato: é ela que junta as duas conversas na lista.
+            const lidDaConversa = isLidJid(remoteJid) && !isLidJid(contactJid) ? remoteJid : undefined;
             const contact = await prisma.contact.upsert({
                 where: { sessionId_jid: { sessionId: dbSessionId, jid: contactJid } },
                 create: {
@@ -273,12 +277,13 @@ export async function processAndSaveMessage(
                     jid: contactJid,
                     notify: !fromMe ? pushName : undefined,
                     name: !fromMe ? pushName : undefined,
-                    remoteJidAlt: remoteJidAlt || undefined
+                    remoteJidAlt: remoteJidAlt || undefined,
+                    lid: lidDaConversa
                 },
-                update: !fromMe ? {
-                    notify: pushName,
-                    remoteJidAlt: remoteJidAlt || undefined
-                } : {}
+                update: {
+                    ...(!fromMe ? { notify: pushName, remoteJidAlt: remoteJidAlt || undefined } : {}),
+                    ...(lidDaConversa ? { lid: lidDaConversa } : {})
+                }
             });
 
             // Origem da conversa (anúncio ou orgânico): só na 1ª mensagem recebida; roda com o atendente desligado e nunca atrasa o salvamento

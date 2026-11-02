@@ -28,6 +28,8 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
     const [oldestTimestamp, setOldestTimestamp] = useState<string | null>(null);
     const [autoScroll, setAutoScroll] = useState(true);
     const [newMsgBadge, setNewMsgBadge] = useState(false);
+    // JIDs da mesma pessoa (telefone e LID): mensagens de qualquer um deles pertencem a esta conversa
+    const jidsRef = useRef<Set<string>>(new Set([jid]));
 
     // Delete confirmation
     const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<Message | null>(null);
@@ -50,7 +52,8 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
             if (!before) setLoading(true);
             else setLoadingMore(true);
             // o Message local é mais estreito que o do banco (campos nulos viram undefined na tela)
-            const data = (await getChatMessages(sessionId, jid, PAGE_LIMIT, before)) as unknown as { messages: Message[]; hasMore: boolean };
+            const data = (await getChatMessages(sessionId, jid, PAGE_LIMIT, before)) as unknown as { messages: Message[]; hasMore: boolean; jids?: string[] };
+            if (data.jids?.length) jidsRef.current = new Set([jid, ...data.jids]);
             if (!before) { setMessages(data.messages || []); setAutoScroll(true); }
             else if (data.messages?.length > 0) setMessages(prev => [...(data.messages || []), ...prev]);
             setHasMore(data.hasMore);
@@ -81,9 +84,17 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
         const normalizedJid = jid.endsWith("@c.us") ? jid.replace("@c.us", "@s.whatsapp.net") : jid;
         const handler = (newMessages: Message[]) => {
             setMessages(prev => {
-                const relevant = newMessages.filter(m => m.remoteJid === normalizedJid || prev.some(p => p.remoteJid === m.remoteJid));
+                const relevant = newMessages.filter(m => m.remoteJid === normalizedJid || (!!m.remoteJid && jidsRef.current.has(m.remoteJid)) || prev.some(p => p.remoteJid === m.remoteJid));
                 if (relevant.length === 0) return prev;
-                const combined = [...prev, ...relevant];
+                // A mensagem que acabei de enviar chegou pelo socket: sai a cópia provisória (mesmo texto), fica a real.
+                const provisorias = prev.filter(p => p.status === "SENDING");
+                const descartar = new Set<string>();
+                for (const m of relevant) {
+                    if (!m.fromMe) continue;
+                    const p = provisorias.find(x => !descartar.has(x.keyId) && x.content === m.content);
+                    if (p) descartar.add(p.keyId);
+                }
+                const combined = [...prev.filter(p => !descartar.has(p.keyId)), ...relevant];
                 const unique = Array.from(new Map(combined.map(m => [m.keyId, m])).values());
                 return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             });
@@ -108,14 +119,40 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
         }
     }, [hasMore, loadingMore, oldestTimestamp, fetchMessages]);
 
-    const handleSend = async () => {
-        if (!input.trim()) return;
+    // Envia sem travar a tela: a mensagem aparece na hora (provisória) e o campo limpa antes da resposta do
+    // servidor, então Enter/clique repetidos não mandam a mesma mensagem de novo.
+    const enviar = async (provisoriaId: string, texto: string, citada?: string, clientId?: string) => {
         try {
-            await sendChatMessage(sessionId, jid, input, replyingTo?.keyId);
-            setInput("");
-            setReplyingTo(null);
-            setTimeout(() => fetchMessages(), 800);
-        } catch (e) { toast.error(errorMessage(e, "Falha ao enviar")); }
+            const r = await sendChatMessage(sessionId, jid, texto, citada, clientId ?? provisoriaId);
+            setMessages(prev => {
+                if (r.keyId && prev.some(m => m.keyId === r.keyId)) return prev.filter(m => m.keyId !== provisoriaId);
+                return prev.map(m => m.keyId === provisoriaId ? { ...m, keyId: r.keyId ?? m.keyId, status: "SENT" } : m);
+            });
+        } catch (e) {
+            setMessages(prev => prev.map(m => m.keyId === provisoriaId ? { ...m, status: "FAILED" } : m));
+            toast.error(errorMessage(e, "Falha ao enviar"));
+        }
+    };
+
+    const handleSend = () => {
+        const texto = input.trim();
+        if (!texto) return;
+        const provisoriaId = `tmp-${crypto.randomUUID()}`;
+        const citada = replyingTo?.keyId;
+        setMessages(prev => [...prev, {
+            id: provisoriaId, keyId: provisoriaId, content: texto, fromMe: true, timestamp: new Date().toISOString(),
+            type: "TEXT", status: "SENDING", remoteJid: jid, quoteId: citada ?? null,
+        }]);
+        setAutoScroll(true);
+        setInput("");
+        setReplyingTo(null);
+        if (inputRef.current) inputRef.current.style.height = "auto";
+        void enviar(provisoriaId, texto, citada);
+    };
+
+    const reenviar = (msg: Message) => {
+        setMessages(prev => prev.map(m => m.keyId === msg.keyId ? { ...m, status: "SENDING" } : m));
+        void enviar(msg.keyId, msg.content, msg.quoteId ?? undefined);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -163,7 +200,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
         formData.append("sessionId", sessionId);
         formData.append("jid", jid);
         try {
-            toast.info(`Sending ${file.name}...`);
+            toast.info(`Enviando ${file.name}...`);
             await sendMediaMessage(formData);
             toast.success("Enviado!");
             setTimeout(() => fetchMessages(), 800);
@@ -305,6 +342,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                             isGroup={jid.endsWith("@g.us")}
                             onReply={(m) => { setReplyingTo(m); scrollToBottom(true); }}
                             onContextMenu={handleContextMenu}
+                            onRetry={reenviar}
                         />
                     ))}
                     <div ref={bottomRef} />
@@ -355,7 +393,7 @@ export function ChatWindow({ sessionId, jid, name, onBack }: ChatWindowProps) {
                         </div>
                     </div>
 
-                    <Button onClick={handleSend} disabled={!input.trim()} size="icon" className="h-9 w-9 rounded-full shrink-0"><Send className="h-4 w-4" /></Button>
+                    <Button onClick={handleSend} disabled={!input.trim()} aria-label="Enviar mensagem" size="icon" className="h-9 w-9 rounded-full shrink-0"><Send className="h-4 w-4" /></Button>
                 </div>
             </div>
         </div>

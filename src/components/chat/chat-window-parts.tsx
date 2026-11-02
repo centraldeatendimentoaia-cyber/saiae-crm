@@ -148,12 +148,13 @@ export function ContextMenu({ state, onClose, onReply, onDelete }: { state: Cont
 // ─── Main Component ─────────────────
 
 /** Uma mensagem da conversa (com o separador de data quando `dateLabel` vem preenchido). */
-export function MessageRow({ msg, dateLabel, isGroup, onReply, onContextMenu }: {
+export function MessageRow({ msg, dateLabel, isGroup, onReply, onContextMenu, onRetry }: {
     msg: Message;
     dateLabel: string | null;
     isGroup: boolean;
     onReply: (msg: Message) => void;
     onContextMenu: (e: React.MouseEvent, msg: Message) => void;
+    onRetry?: (msg: Message) => void;
 }) {
     return (
         <div id={`msg-${msg.keyId}`}>
@@ -255,8 +256,13 @@ export function MessageRow({ msg, dateLabel, isGroup, onReply, onContextMenu }: 
                     <div className="flex items-end gap-2">
                         <span className="flex-1 text-sm break-all whitespace-pre-wrap">{msg.content}</span>
                         <span className={cn("text-[9px] shrink-0 leading-none", msg.fromMe ? "text-primary-foreground/60" : "text-muted-foreground")}>
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {msg.status === "SENDING" ? "enviando…" : new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
+                        {msg.status === "FAILED" && (
+                            <button type="button" onClick={() => onRetry?.(msg)} className="text-[10px] font-semibold text-red-300 underline shrink-0">
+                                não enviada, tentar de novo
+                            </button>
+                        )}
                     </div>
                 </div>
                 {/* Reply button: other msg on right */}

@@ -1,7 +1,8 @@
 import { errorMessage } from "@/lib/errors";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
-import { normalizeJid, batchResolveToPhoneJid } from "@/lib/jid-utils";
+import { normalizeJid, agruparJidsEquivalentes } from "@/lib/jid-utils";
+import { juntarConversas, type LinhaConversa } from "@/modules/whatsapp/chat-lista";
 import { waManager } from "@/modules/whatsapp/manager";
 import { onMessageSent } from "@/lib/webhook";
 import Sticker from "wa-sticker-formatter";
@@ -10,7 +11,10 @@ import type { AnyMessageContent, MiscMessageGenerationOptions, WAMessage } from 
 
 /** Uma conversa da lista de chats, com a última mensagem. */
 export interface ChatListItem {
+    /** JID canônico (telefone quando se conhece). */
     jid: string;
+    /** Todos os JIDs da mesma pessoa com mensagens (telefone e LID). */
+    jids: string[];
     phoneJid: string;
     name: string | null;
     notify: string | null;
@@ -50,59 +54,99 @@ async function baixarSeUrl(ref: MediaRef | undefined, nome: string): Promise<Med
 }
 
 export class ChatService {
-    /**
-     * Get active chats list for a session with last message preview.
-     * Cursor-based pagination — `before` is ISO timestamp of last seen chat.
-     * Returns chats with last message timestamp < before (older).
-     */
-    static async getChatsList(
+    /** Última mensagem de cada JID (um registro por JID), da mais recente para a mais antiga. */
+    private static async ultimasPorJid(
         dbSessionId: string,
-        limit = 50,
-        before?: string,
-        search?: string
-    ) {
-        // 1. Get latest message per remoteJid with cursor pagination
-        // Uses m1.timestamp < before (when provided) to load older chats
-        // Build params: [dbSessionId, dbSessionId, (before?), limit]
-        const qParams: (string | number | Date)[] = [dbSessionId, dbSessionId];
-        if (before) qParams.push(new Date(before));
-        qParams.push(limit);
-
-        const rawLastMessages = await prisma.$queryRawUnsafe<Array<{
-            remoteJid: string;
-            content: string | null;
-            timestamp: Date;
-            type: string;
-        }>>(`
-            SELECT m1.remoteJid, m1.content, m1.timestamp, m1.type
+        opcoes: { jids?: string[]; busca?: string; antes?: string; limite: number }
+    ): Promise<LinhaConversa[]> {
+        const { jids, busca, antes, limite } = opcoes;
+        // Na busca, vale quem casa por contato (jids) ou quem só tem mensagens com o texto no JID (ex.: telefone sem contato).
+        const porJids = jids?.length ? Prisma.sql`remoteJid IN (${Prisma.join(jids)})` : null;
+        const porTexto = busca ? Prisma.sql`remoteJid LIKE ${`%${busca}%`}` : null;
+        const filtroJids = porJids && porTexto ? Prisma.sql`AND (${porJids} OR ${porTexto})`
+            : porJids ? Prisma.sql`AND ${porJids}`
+            : porTexto ? Prisma.sql`AND ${porTexto}`
+            : Prisma.empty;
+        const filtroAntes = antes ? Prisma.sql`AND m1.timestamp < ${new Date(antes)}` : Prisma.empty;
+        // GROUP BY (remoteJid, timestamp): o WhatsApp grava a hora em segundos, e duas mensagens no mesmo segundo
+        // (ex.: a IA manda uma em seguida da outra) duplicavam a linha e gastavam vagas do LIMIT.
+        return prisma.$queryRaw<LinhaConversa[]>(Prisma.sql`
+            SELECT m1.remoteJid AS remoteJid, MAX(m1.content) AS content, m1.timestamp AS timestamp, MAX(m1.type) AS type
             FROM \`Message\` m1
             INNER JOIN (
-                SELECT remoteJid, MAX(timestamp) as max_ts
+                SELECT remoteJid, MAX(timestamp) AS max_ts
                 FROM \`Message\`
-                WHERE sessionId = ?
+                WHERE sessionId = ${dbSessionId} ${filtroJids}
                 GROUP BY remoteJid
             ) m2 ON m1.remoteJid = m2.remoteJid AND m1.timestamp = m2.max_ts
-            WHERE m1.sessionId = ?
-            ${before ? 'AND m1.timestamp < ?' : ''}
+            WHERE m1.sessionId = ${dbSessionId} ${filtroAntes}
+            GROUP BY m1.remoteJid, m1.timestamp
             ORDER BY m1.timestamp DESC
-            LIMIT ?
-        `, ...qParams);
+            LIMIT ${limite}
+        `);
+    }
 
-        // Fast return if no messages
-        if (rawLastMessages.length === 0) return [];
+    /** JIDs que casam com o texto da busca (nome, apelido, telefone ou assunto do grupo), com os equivalentes. */
+    private static async jidsDaBusca(dbSessionId: string, busca: string): Promise<string[]> {
+        const soNumero = busca.replace(/[\s+()-]/g, "");
+        const termo = /^\d+$/.test(soNumero) ? soNumero : busca;
+        const [contatos, grupos] = await Promise.all([
+            prisma.contact.findMany({
+                where: {
+                    sessionId: dbSessionId,
+                    OR: [{ name: { contains: busca } }, { notify: { contains: busca } }, { jid: { contains: termo } }, { lid: { contains: termo } }, { remoteJidAlt: { contains: termo } }]
+                },
+                select: { jid: true, lid: true, remoteJidAlt: true },
+                take: 300
+            }),
+            prisma.group.findMany({ where: { sessionId: dbSessionId, OR: [{ subject: { contains: busca } }, { jid: { contains: termo } }] }, select: { jid: true }, take: 100 })
+        ]);
+        const achados = new Set<string>(grupos.map((g) => g.jid));
+        for (const c of contatos) [c.jid, c.lid, c.remoteJidAlt].forEach((j) => j && achados.add(j));
+        return [...achados];
+    }
 
-        // 2. Batch fetch contacts & groups ONLY for JIDs that have messages
-        const jids = rawLastMessages.map(m => m.remoteJid);
-        // Chats "@lid" não têm o telefone no JID: resolve pela agenda (sem match, mantém o ID original).
-        const phoneMap = await batchResolveToPhoneJid(jids, dbSessionId);
-        const lookupJids = [...new Set([...jids, ...phoneMap.values()])];
-        const [contacts, groups] = await Promise.all([
+    /** Contatos que ligam telefone e LID para os JIDs dados. */
+    private static contatosLigados(dbSessionId: string, jids: string[]) {
+        return prisma.contact.findMany({
+            where: { sessionId: dbSessionId, OR: [{ jid: { in: jids } }, { lid: { in: jids } }, { remoteJidAlt: { in: jids } }] },
+            select: { jid: true, lid: true, remoteJidAlt: true, name: true, notify: true, profilePic: true }
+        });
+    }
+
+    /**
+     * Uma página da lista de conversas. Telefone e LID da mesma pessoa viram UMA conversa.
+     * `proximoCursor` vem da última linha bruta da página, para a paginação não pular conversas ao juntar.
+     */
+    static async getChatsPage(dbSessionId: string, limit = 50, before?: string, search?: string) {
+        const vazia = { chats: [] as ChatListItem[], hasMore: false, proximoCursor: null as string | null };
+        const busca = search?.trim();
+        const jidsBusca = busca ? await ChatService.jidsDaBusca(dbSessionId, busca) : undefined;
+        const soNumero = busca?.replace(/[\s+()-]/g, "") ?? "";
+        const termoJid = busca ? (/^\d+$/.test(soNumero) ? soNumero : busca) : undefined;
+
+        const pagina = await ChatService.ultimasPorJid(dbSessionId, { jids: jidsBusca, busca: termoJid, antes: before, limite: limit });
+        if (pagina.length === 0) return vazia;
+        const hasMore = pagina.length >= limit;
+        const proximoCursor = pagina[pagina.length - 1].timestamp.toISOString();
+
+        // Ligações telefone <-> LID; JIDs equivalentes que ficaram fora da página entram para somar o que falta.
+        const contatos = await ChatService.contatosLigados(dbSessionId, pagina.map((l) => l.remoteJid));
+        const classes = agruparJidsEquivalentes(contatos);
+        const naPagina = new Set(pagina.map((l) => l.remoteJid));
+        const faltando = [...new Set(pagina.flatMap((l) => [...(classes.get(l.remoteJid) ?? [])]))].filter((j) => !naPagina.has(j));
+        const extras = faltando.length ? await ChatService.ultimasPorJid(dbSessionId, { jids: faltando, limite: faltando.length }) : [];
+        const conversas = juntarConversas([...pagina, ...extras], classes);
+
+        const todosJids = [...new Set(conversas.flatMap((c) => c.jids))];
+        const lookupJids = [...new Set([...todosJids, ...conversas.map((c) => c.jid)])];
+        const [infoContatos, groups] = await Promise.all([
             prisma.contact.findMany({
                 where: { sessionId: dbSessionId, jid: { in: lookupJids } },
                 select: { jid: true, name: true, notify: true, profilePic: true }
             }),
             prisma.group.findMany({
-                where: { sessionId: dbSessionId, jid: { in: jids } },
+                where: { sessionId: dbSessionId, jid: { in: todosJids } },
                 select: { jid: true, subject: true }
             })
         ]);
@@ -111,13 +155,13 @@ export class ChatService {
         // Sem registro, vale o marco inicial (mensagens antigas contam como lidas).
         const baseline = new Date(process.env.UNREAD_BASELINE || "2026-10-06T00:00:00Z");
         const reads = await prisma.chatRead.findMany({
-            where: { sessionId: dbSessionId, jid: { in: jids } },
+            where: { sessionId: dbSessionId, jid: { in: todosJids } },
             select: { jid: true, lastReadAt: true }
         });
         const readMap = new Map(reads.map(r => [r.jid, r.lastReadAt]));
         const unreadRows = await prisma.message.groupBy({
             by: ["remoteJid", "timestamp"],
-            where: { sessionId: dbSessionId, fromMe: false, remoteJid: { in: jids }, timestamp: { gt: baseline } },
+            where: { sessionId: dbSessionId, fromMe: false, remoteJid: { in: todosJids }, timestamp: { gt: baseline } },
             _count: { _all: true }
         });
         const unreadMap = new Map<string, number>();
@@ -126,49 +170,38 @@ export class ChatService {
             if (row.timestamp > since) unreadMap.set(row.remoteJid, (unreadMap.get(row.remoteJid) || 0) + row._count._all);
         }
 
-        // Build lookup map
         const infoMap = new Map<string, { name: string | null; notify: string | null; profilePic: string | null }>();
-        contacts.forEach(c => infoMap.set(c.jid, { name: c.name, notify: c.notify, profilePic: c.profilePic }));
+        infoContatos.forEach(c => infoMap.set(c.jid, { name: c.name, notify: c.notify, profilePic: c.profilePic }));
         groups.forEach(g => infoMap.set(g.jid, { name: g.subject, notify: g.subject, profilePic: null }));
 
-        // 3. Build result array (already sorted by SQL DESC)
-        const result: ChatListItem[] = [];
-        const seenJids = new Set<string>();
-        for (const msg of rawLastMessages) {
-            if (seenJids.has(msg.remoteJid)) continue;
-            seenJids.add(msg.remoteJid);
+        const chats: ChatListItem[] = conversas.map((c) => {
+            const infos = [c.jid, ...c.jids].map((j) => infoMap.get(j)).filter((i): i is NonNullable<typeof i> => !!i);
+            const primeiro = (k: "name" | "notify" | "profilePic") => infos.find((i) => i[k])?.[k] ?? null;
+            return {
+                jid: c.jid,
+                jids: c.jids,
+                phoneJid: c.jid,
+                name: primeiro("name"),
+                notify: primeiro("notify"),
+                profilePic: primeiro("profilePic"),
+                unread: c.jids.reduce((s, j) => s + (unreadMap.get(j) || 0), 0),
+                lastMessage: { content: c.ultima.content, timestamp: c.ultima.timestamp.toISOString(), type: c.ultima.type }
+            };
+        });
+        return { chats, hasMore, proximoCursor };
+    }
 
-            const phoneJid = phoneMap.get(msg.remoteJid) || msg.remoteJid;
-            const info = infoMap.get(msg.remoteJid) || infoMap.get(phoneJid);
-            result.push({
-                jid: msg.remoteJid,
-                phoneJid,
-                name: info?.name || null,
-                notify: info?.notify || null,
-                profilePic: info?.profilePic || null,
-                unread: unreadMap.get(msg.remoteJid) || 0,
-                lastMessage: {
-                    content: msg.content,
-                    timestamp: msg.timestamp instanceof Date
-                        ? msg.timestamp.toISOString()
-                        : String(msg.timestamp),
-                    type: msg.type
-                }
-            });
-        }
+    /** Lista de conversas (sem os dados de paginação). */
+    static async getChatsList(dbSessionId: string, limit = 50, before?: string, search?: string) {
+        return (await ChatService.getChatsPage(dbSessionId, limit, before, search)).chats;
+    }
 
-        // 4. Apply in-memory search filter if needed
-        if (search && search.trim()) {
-            const q = search.toLowerCase();
-            return result.filter(c =>
-                (c.name || '').toLowerCase().includes(q) ||
-                (c.notify || '').toLowerCase().includes(q) ||
-                c.jid.toLowerCase().includes(q) ||
-                c.phoneJid.toLowerCase().includes(q)
-            );
-        }
-
-        return result;
+    /** Todos os JIDs da mesma pessoa que o JID dado (telefone, LID e alternativos), ele incluído. */
+    static async jidsEquivalentes(dbSessionId: string, jid: string): Promise<string[]> {
+        const normalizado = normalizeJid(jid);
+        const contatos = await ChatService.contatosLigados(dbSessionId, [jid, normalizado]);
+        const classes = agruparJidsEquivalentes(contatos);
+        return [...new Set([jid, normalizado, ...(classes.get(jid) ?? []), ...(classes.get(normalizado) ?? [])])];
     }
 
     /**
@@ -182,27 +215,12 @@ export class ChatService {
         limit = 50,
         before?: string
     ) {
-        const normalizedJid = normalizeJid(jid);
-
-        // Find contact variations (LID, alt JIDs)
-        const contact = await prisma.contact.findFirst({
-            where: {
-                sessionId: dbSessionId,
-                OR: [{ jid }, { lid: jid }, { remoteJidAlt: jid }, { jid: normalizedJid }]
-            },
-            select: { jid: true, lid: true, remoteJidAlt: true }
-        });
-
-        const queryJids = new Set([jid, normalizedJid]);
-        if (contact) {
-            if (contact.jid) queryJids.add(contact.jid);
-            if (contact.lid) queryJids.add(contact.lid);
-            if (contact.remoteJidAlt) queryJids.add(contact.remoteJidAlt);
-        }
+        // Telefone e LID da mesma pessoa são a mesma conversa
+        const queryJids = await ChatService.jidsEquivalentes(dbSessionId, jid);
 
         const where: Prisma.MessageWhereInput = {
             sessionId: dbSessionId,
-            remoteJid: { in: Array.from(queryJids) }
+            remoteJid: { in: queryJids }
         };
 
         // Cursor-based: load older messages before this timestamp
@@ -212,7 +230,7 @@ export class ChatService {
 
         const messages = await prisma.message.findMany({
             where,
-            orderBy: { timestamp: 'desc' },
+            orderBy: [{ timestamp: 'desc' }, { id: 'desc' }], // mesma hora (em segundos): o id (cuid) mantém a ordem de criação
             take: limit + 1 // fetch 1 extra to know if there's more
         });
 
@@ -258,7 +276,8 @@ export class ChatService {
         // Return chronological order (oldest first)
         return {
             messages: messagesWithQuote.reverse(),
-            hasMore
+            hasMore,
+            jids: queryJids
         };
     }
 
