@@ -4,6 +4,7 @@ import { ChatLayoutClient } from "@/components/chat/chat-layout-client";
 import { cookies } from "next/headers";
 import { canAccessSession } from "@/lib/api-auth";
 import { SessionGuard } from "@/components/dashboard/session-guard";
+import { jidDoTelefone } from "@/lib/telefone-br";
 
 export default async function ChatWithJidPage({
     params,

@@ -1,7 +1,7 @@
 "use client";
 
 import { logger } from "@/lib/logger";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { MessageSquarePlus, Search, MessageCircle, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getChatsStatus, markChatRead } from "@/app/dashboard/chat/actions";
 import { useSocket } from "./socket-context";
+import { jidDoTelefone } from "@/lib/telefone-br";
 import { ChatContact, ChatListProps, PAGE_SIZE, ChatRow, SkeletonRow } from "./chat-list-parts";
 
 /** Mensagem recebida pelo socket (evento de novas mensagens). */
@@ -38,6 +39,8 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
     const chatsRef = useRef<ChatContact[]>(chats);
     chatsRef.current = chats;
     const fetchingRef = useRef(false);
+    const recarregarRef = useRef<(() => void) | null>(null);
+    const recarregarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const selectedJidRef = useRef<string | undefined>(selectedJid);
     selectedJidRef.current = selectedJid;
 
@@ -53,7 +56,9 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         fetchingRef.current = true;
         try {
             if (!cursor) setLoading(true);
-            const rawChats: ChatContact[] = await getChatsStatus(sessionId, PAGE_SIZE, cursor || undefined, searchQuery || undefined);
+            const pagina = await getChatsStatus(sessionId, PAGE_SIZE, cursor || undefined, searchQuery || undefined);
+            const rawChats: ChatContact[] = pagina.chats;
+            cursorRef.current = pagina.proximoCursor ?? undefined;
             
             const processChats = (newChatsList: ChatContact[], existingChatsList: ChatContact[] = []) => {
                 const merged = new Map(existingChatsList.map(c => [c.jid, c]));
@@ -71,7 +76,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
             } else {
                 setChats(processChats(rawChats));
             }
-            setHasMore((rawChats || []).length >= PAGE_SIZE);
+            setHasMore(pagina.hasMore);
         } catch (error) {
             logger.error("ChatList", "Failed to load chats", error);
         } finally {
@@ -80,7 +85,16 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         }
     }, [sessionId, searchQuery]);
 
-    useEffect(() => { setChats([]); setHasMore(true); fetchChats(); }, [fetchChats]);
+    useEffect(() => { setChats([]); setHasMore(true); cursorRef.current = undefined; fetchChats(); }, [fetchChats]);
+
+    // Recarga com atraso: várias mensagens seguidas viram uma consulta só.
+    useEffect(() => {
+        recarregarRef.current = () => {
+            if (recarregarTimerRef.current) clearTimeout(recarregarTimerRef.current);
+            recarregarTimerRef.current = setTimeout(() => { fetchingRef.current = false; fetchChats(); }, 600);
+        };
+        return () => { if (recarregarTimerRef.current) clearTimeout(recarregarTimerRef.current); };
+    }, [fetchChats]);
 
     useEffect(() => {
         const socket = getSocket();
@@ -89,14 +103,16 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         if (socket.connected) joinSession(sessionId);
         socket.on("connect", onConnect);
         const handler = async (newMessages: IncomingMessage[]) => {
-            let needsReload = false;
+            const donoDe = (c: ChatContact, jid: string) => c.jid === jid || !!c.jids?.includes(jid);
+            // Mensagem de uma conversa que ainda não está na lista: recarrega (fora do updater, que o React pode repetir).
+            const needsReload = newMessages.some(m => !chatsRef.current.some(c => donoDe(c, m.remoteJid)));
             setChats(prev => {
                 const updated = [...prev];
                 newMessages.forEach(msg => {
                     const jid = msg.remoteJid;
-                    const idx = updated.findIndex(c => c.jid === jid);
+                    const idx = updated.findIndex(c => donoDe(c, jid));
                     if (idx !== -1) {
-                        const isOpen = selectedJidRef.current === jid;
+                        const isOpen = !!selectedJidRef.current && donoDe(updated[idx], selectedJidRef.current);
                         const isIncoming = !msg.fromMe;
                         updated[idx] = {
                             ...updated[idx],
@@ -104,7 +120,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                             lastMessage: { content: msg.content, timestamp: msg.timestamp, type: msg.type }
                         };
                         if (isIncoming && isOpen) markChatRead(sessionId, jid).catch(() => {});
-                    } else { needsReload = true; }
+                    }
                 });
                 updated.sort((a, b) => {
                     const tA = a.lastMessage?.timestamp ? new Date(a.lastMessage.timestamp).getTime() : 0;
@@ -113,7 +129,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                 });
                 return updated;
             });
-            if (needsReload) fetchChats();
+            if (needsReload) recarregarRef.current?.();
         };
         socket.on("message.update", handler);
         return () => { socket.off("connect", onConnect); socket.off("message.update", handler); };
@@ -149,23 +165,12 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
         }, 300);
     };
 
-    const filteredChats = useMemo(() => {
-        if (!searchQuery.trim()) return chats;
-        const q = searchQuery.toLowerCase();
-        return chats.filter(chat => {
-            const name = (chat.name || chat.notify || "").toLowerCase();
-            const jid = chat.jid.toLowerCase();
-            return name.includes(q) || jid.includes(q) || (chat.phoneJid || "").toLowerCase().includes(q);
-        });
-    }, [chats, searchQuery]);
+    // A busca roda no banco (acha conversas antigas, fora da primeira página); a lista já vem filtrada.
+    const filteredChats = chats;
 
     const handleEndReached = useCallback(() => {
-        if (hasMore && !loading && !searchQuery.trim()) {
-            const last = chatsRef.current[chatsRef.current.length - 1];
-            const c = last?.lastMessage?.timestamp;
-            if (c) fetchChats(c, true);
-        }
-    }, [hasMore, loading, searchQuery, fetchChats]);
+        if (hasMore && !loading && cursorRef.current) fetchChats(cursorRef.current, true);
+    }, [hasMore, loading, fetchChats]);
 
     const itemContent = useCallback(
         (_: number, chat: ChatContact) => <ChatRow key={chat.jid} chat={chat} isSelected={selectedJid === chat.jid} onSelect={onSelectChat} sessionId={sessionId} labelDots={chatLabelMap.get(chat.jid) || []} />,
@@ -174,9 +179,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
 
     const handleStartNewChat = () => {
         if (!newChatNumber) return;
-        let clean = newChatNumber.replace(/\D/g, '');
-        if (clean.startsWith('0')) clean = '62' + clean.substring(1);
-        onSelectChat(`${clean}@s.whatsapp.net`);
+        onSelectChat(jidDoTelefone(newChatNumber));
         setIsNewChatOpen(false);
         setNewChatNumber("");
     };
@@ -219,7 +222,7 @@ export function ChatList({ sessionId, onSelectChat, selectedJid }: ChatListProps
                     <div className="p-2.5 bg-muted/30 rounded-lg space-y-2 border border-border/40">
                         <Label className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Número de telefone</Label>
                         <div className="flex gap-1.5">
-                            <Input placeholder="628123456789" value={newChatNumber}
+                            <Input placeholder="(61) 99999-0000" value={newChatNumber}
                                 onChange={(e) => setNewChatNumber(e.target.value)}
                                 onKeyDown={(e) => e.key === "Enter" && handleStartNewChat()}
                                 className="h-8 text-sm" />

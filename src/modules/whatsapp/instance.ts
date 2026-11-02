@@ -12,6 +12,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import { prisma } from "@/lib/prisma";
 import { backfillContactNames } from "@/lib/personalize";
+import { unificarConversasLid } from "./unificar-lid";
 import { usePrismaAuthState } from "./auth/usePrismaAuthState";
 import { Server } from "socket.io";
 import pino from "pino";
@@ -30,6 +31,9 @@ import { logger } from "@/lib/logger";
 import { avisarEstadoSessaoEmSegundoPlano } from "@/modules/integracao/comanda/sessao-evento";
 
 const MAX_RECONNECT_ATTEMPTS = 3;
+
+// Sockets que já tiveram os ouvintes (resposta automática, IA, bot) ligados.
+const socketsComOuvintes = new WeakSet<object>();
 
 export class WhatsAppInstance {
     socket: WASocket | null = null;
@@ -149,6 +153,16 @@ export class WhatsAppInstance {
         this.socket.ev.on("connection.update", async (update) => {
             await this.handleConnectionUpdate(update);
         });
+    }
+
+    /** Junta no telefone as conversas antigas que ficaram sob o LID; roda sem travar a conexão. */
+    private async unificarLidEmSegundoPlano() {
+        try {
+            const dbSession = await prisma.session.findUnique({ where: { sessionId: this.sessionId }, select: { id: true } });
+            if (dbSession && this.socket) await unificarConversasLid(this.socket as WASocket, dbSession.id);
+        } catch (e) {
+            logger.error("Instance", "Unificação de conversas LID falhou:", e);
+        }
     }
 
     async handleConnectionUpdate(update: Partial<ConnectionState>) {
@@ -289,11 +303,17 @@ export class WhatsAppInstance {
                     logger.error("Instance", "Group sync failed:", e);
                 }
 
-                bindAutoReply(this.socket as WASocket, this.sessionId);
-                bindOptOut(this.socket as WASocket, this.sessionId);
-                bindAgenteSalao(this.socket as WASocket, this.sessionId);
-                bindBotPedidos(this.socket as WASocket, this.sessionId);
-                bindPpGuard(this.socket as WASocket, this.sessionId);
+                // O Baileys pode avisar "open" mais de uma vez no mesmo socket; ligar os ouvintes de novo faria a
+                // resposta automática, a IA e o bot de pedidos responderem a mesma mensagem repetidas vezes.
+                if (this.socket && !socketsComOuvintes.has(this.socket)) {
+                    socketsComOuvintes.add(this.socket);
+                    bindAutoReply(this.socket as WASocket, this.sessionId);
+                    bindOptOut(this.socket as WASocket, this.sessionId);
+                    bindAgenteSalao(this.socket as WASocket, this.sessionId);
+                    bindBotPedidos(this.socket as WASocket, this.sessionId);
+                    bindPpGuard(this.socket as WASocket, this.sessionId);
+                    void this.unificarLidEmSegundoPlano();
+                }
 
                 await prisma.session.update({
                     where: { sessionId: this.sessionId },

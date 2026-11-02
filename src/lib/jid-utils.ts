@@ -36,7 +36,9 @@ export function normalizeJid(jid: string | undefined | null): string {
 export async function resolveToPhoneJid(
     jid: string,
     dbSessionId: string,
-    inlineAlt?: string | null
+    inlineAlt?: string | null,
+    /** Última tentativa: pergunta ao mapeamento do WhatsApp (ver telefoneDoLid). */
+    viaSocket?: (lid: string) => Promise<string | null>
 ): Promise<string> {
     if (!jid) return jid;
 
@@ -75,8 +77,28 @@ export async function resolveToPhoneJid(
         logger.error("JID", `resolveToPhoneJid: DB lookup failed for ${jid}`, e);
     }
 
-    // 3. Fallback: return original JID
+    // 3. Mapeamento do próprio WhatsApp
+    if (viaSocket) {
+        const telefone = await viaSocket(jid);
+        if (telefone && !isLidJid(telefone)) return telefone;
+    }
+
+    // 4. Fallback: return original JID
     return jid;
+}
+
+/** Telefone (@s.whatsapp.net) de um LID segundo o mapeamento que o Baileys guarda; null se não souber. */
+export async function telefoneDoLid(
+    sock: { signalRepository?: { lidMapping?: { getPNForLID: (lid: string) => Promise<string | null> } } },
+    lid: string
+): Promise<string | null> {
+    try {
+        const pn = await sock.signalRepository?.lidMapping?.getPNForLID(lid);
+        return pn ? normalizeJid(pn.replace(/:\d+@/, "@")) : null;
+    } catch (e) {
+        logger.debug("JID", `getPNForLID falhou para ${lid}: ${(e as Error)?.message ?? "erro"}`);
+        return null;
+    }
 }
 
 /**
@@ -171,4 +193,33 @@ export async function batchResolveToPhoneJid(
     }
 
     return result;
+}
+
+/** Campos de um contato que ligam o telefone ao LID da mesma pessoa. */
+export interface ContatoJids {
+    jid: string;
+    lid?: string | null;
+    remoteJidAlt?: string | null;
+}
+
+/**
+ * Agrupa os JIDs que são a mesma pessoa. O WhatsApp entrega a mesma conversa ora pelo telefone
+ * (@s.whatsapp.net), ora pelo LID (@lid): sem juntar, a lista mostra duas conversas.
+ * Devolve, para cada JID conhecido, o conjunto de todos os JIDs equivalentes (ele incluído).
+ */
+export function agruparJidsEquivalentes(contatos: ContatoJids[]): Map<string, Set<string>> {
+    const classes = new Map<string, Set<string>>();
+    for (const c of contatos) {
+        const ids = [c.jid, c.lid, c.remoteJidAlt].filter((x): x is string => !!x);
+        const juntos = new Set<string>(ids);
+        for (const id of ids) classes.get(id)?.forEach((v) => juntos.add(v));
+        juntos.forEach((id) => classes.set(id, juntos));
+    }
+    return classes;
+}
+
+/** JID que representa o grupo de equivalentes: o telefone quando existe; senão o primeiro. */
+export function jidCanonico(ids: Iterable<string>): string {
+    const lista = [...ids];
+    return lista.find((j) => !isLidJid(j)) ?? lista[0];
 }
