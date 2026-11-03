@@ -40,9 +40,16 @@ export function ehComandoDevolver(texto: string): boolean {
  * Mensagem "de dentro do número" (fromMe) que NÃO saiu do CRM/da IA: uma pessoa escreveu pelo celular ou pelo WhatsApp Web.
  * `enviadaPeloCrm` vem do registro de IDs enviados; mensagens antigas (histórico que chega ao reconectar) não contam.
  */
-export function pessoaAssumiu(args: { fromMe: boolean; enviadaPeloCrm: boolean; criadaEm: Date; agora: Date; tipoEvento: string }): boolean {
+export const JANELA_AUTOMATICA_MS = 10_000;
+
+export function pessoaAssumiu(args: { fromMe: boolean; enviadaPeloCrm: boolean; criadaEm: Date; agora: Date; tipoEvento: string; ultimaInboundAt?: Date | null }): boolean {
     if (!args.fromMe || args.enviadaPeloCrm) return false;
     if (args.tipoEvento !== "notify" && args.tipoEvento !== "append") return false;
+    // shortcut: resposta "fromMe" até 10 s depois da cliente escrever é saudação/ausência automática do WhatsApp Business, não uma pessoa; sem como distinguir de uma pessoa muito rápida
+    if (args.ultimaInboundAt) {
+        const depois = args.criadaEm.getTime() - args.ultimaInboundAt.getTime();
+        if (depois >= 0 && depois <= JANELA_AUTOMATICA_MS) return false;
+    }
     return args.agora.getTime() - args.criadaEm.getTime() <= 120_000;
 }
 

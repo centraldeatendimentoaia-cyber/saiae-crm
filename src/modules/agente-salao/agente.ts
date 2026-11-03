@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { canonicalPhone, formatPhoneBr } from "@/lib/phone";
 import { isOptedOut, isOptInText, isOptOutText } from "@/lib/optout";
-import { LlmAnthropic, type Llm } from "@/modules/ia-atendimento/llm";
+import { LlmAnthropic, descreverErro, type Llm } from "@/modules/ia-atendimento/llm";
 import { MAX_TEXTO } from "@/modules/atendimento-comum/constantes";
 import { CONHECIMENTO_LAVINIA_PADRAO } from "./conhecimento-lavinia";
 import { foiEnviadaPeloCrm, foiRespondidaPorRegra } from "./enviados";
@@ -108,7 +108,10 @@ export function lerConteudo(msg: WAMessage): ConteudoMensagem {
     const c = normalizeMessageContent(msg.message);
     if (!c) return { texto: "", audio: false, naoTexto: false, ignorar: true };
     if (c.protocolMessage || c.reactionMessage || c.pollUpdateMessage || c.senderKeyDistributionMessage || c.editedMessage) return { texto: "", audio: false, naoTexto: false, ignorar: true };
-    const texto: string = c.conversation || c.extendedTextMessage?.text || c.imageMessage?.caption || c.videoMessage?.caption || c.documentMessage?.caption || "";
+    // respostas de botão/lista (anúncio com perguntas rápidas) trazem o texto escolhido em outro campo
+    const texto: string =
+        c.conversation || c.extendedTextMessage?.text || c.imageMessage?.caption || c.videoMessage?.caption || c.documentMessage?.caption ||
+        c.buttonsResponseMessage?.selectedDisplayText || c.templateButtonReplyMessage?.selectedDisplayText || c.listResponseMessage?.title || "";
     if (c.audioMessage) return { texto: "", audio: true, naoTexto: false, ignorar: false };
     if (texto) return { texto: texto.slice(0, MAX_TEXTO), audio: false, naoTexto: false, ignorar: false };
     return { texto: "", audio: false, naoTexto: true, ignorar: false };
@@ -289,14 +292,20 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
         if (!llm) return;
         // resposta automática por palavra-chave já respondeu todo o lote: a IA não responde de novo
         // shortcut: só pula quando TODAS as mensagens do lote foram respondidas pela regra; lote misto a IA responde inteiro
-        if (p.ids.length > 0 && p.ids.every((id) => foiRespondidaPorRegra(id))) return;
+        if (p.ids.length > 0 && p.ids.every((id) => foiRespondidaPorRegra(id))) {
+            logger.info(TAG, "sem resposta da IA: a resposta automática por palavra-chave já respondeu");
+            return;
+        }
         const agora = new Date();
         const msg = p.msg;
         const telefone = telefoneDe(jid, (msg.key as { remoteJidAlt?: string }).remoteJidAlt);
         const nomePerfil = msg.pushName ?? null;
 
         let conv = await garantirConversa(sessionId, jid, { telefone, nomePerfil });
-        if (iaPausada(conv, agora)) return; // uma pessoa assumiu ou a recepção foi chamada
+        if (iaPausada(conv, agora)) {
+            logger.info(TAG, `sem resposta da IA: conversa pausada (${conv.motivoPausa ?? "sem motivo"}) até ${conv.pausadaAte?.toISOString()}`);
+            return; // uma pessoa assumiu ou a recepção foi chamada
+        }
         if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: dadosRetomar({ motivoPausa: null }) });
         if (!podeResponder(MAX_RESPOSTAS_DIA)) {
             logger.warn(TAG, "teto diário de respostas do agente atingido: não responde mais hoje");
@@ -384,12 +393,18 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 mensagens = chamou ? [MSG_TRANSFERENCIA] : [];
             }
         }
-        if (mensagens.length === 0) return;
+        if (mensagens.length === 0) {
+            logger.warn(TAG, "sem resposta da IA: nenhuma mensagem para enviar");
+            return;
+        }
 
         // uma pessoa pode ter assumido enquanto a IA pensava: nesse caso não manda nada (exceto o aviso de transferência)
         if (!chamou) {
             const atual = await prisma.agenteConversa.findUnique({ where: { id: conv.id } });
-            if (atual && iaPausada(atual, new Date())) return;
+            if (atual && iaPausada(atual, new Date())) {
+                logger.info(TAG, "sem resposta da IA: uma pessoa assumiu enquanto ela pensava");
+                return;
+            }
         }
 
         const lista = respostasHora.get(jid) ?? [];
@@ -415,7 +430,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
             try {
                 await processar(jid, p);
             } catch (e) {
-                logger.warn(TAG, `falha ao responder: ${(e as { name?: string })?.name ?? "erro"}`);
+                logger.warn(TAG, `falha ao responder: ${descreverErro(e)}`);
             }
         }, over.debounceMs ?? DEBOUNCE_MS);
     };
@@ -442,7 +457,9 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                         });
                         continue;
                     }
-                    if (pessoaAssumiu({ fromMe: true, enviadaPeloCrm: foiEnviadaPeloCrm(msg.key.id), criadaEm, agora: new Date(), tipoEvento: type })) {
+                    const anterior = await prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid } }, select: { ultimaInboundAt: true } });
+                    if (pessoaAssumiu({ fromMe: true, enviadaPeloCrm: foiEnviadaPeloCrm(msg.key.id), criadaEm, agora: new Date(), tipoEvento: type, ultimaInboundAt: anterior?.ultimaInboundAt })) {
+                        logger.info(TAG, "mensagem do número fora do CRM: uma pessoa assumiu, a IA pausa nesta conversa");
                         const ate = new Date(Date.now() + cfg.pausaHoras * 3_600_000);
                         await prisma.agenteConversa.upsert({
                             where: { sessionId_jid: { sessionId, jid } },
@@ -473,7 +490,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 const primeira = !(await prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid } }, select: { id: true } }));
                 await garantirConversa(sessionId, jid, { telefone, nomePerfil: msg.pushName ?? null });
                 await prisma.agenteConversa.update({ where: { sessionId_jid: { sessionId, jid } }, data: { ultimaInboundAt: new Date(), followUpEm: null } });
-                if (primeira && cfg.etiquetaAnuncio && veioDeAnuncioMeta(msg)) await aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAnuncio);
+                if (primeira && cfg.etiquetaAnuncio && veioDeAnuncioMeta(msg)) void aplicarEtiqueta(sock, sessionId, jid, cfg.etiquetaAnuncio); // sem esperar: a sincronização da etiqueta pode levar até 60 s e a resposta não pode ficar presa nela
 
                 const p = pendentes.get(jid) ?? { textos: [], audio: false, naoTexto: false, msg, ids: [], timer: null, processando: false };
                 if (msg.key.id) p.ids.push(msg.key.id);
@@ -488,7 +505,7 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
                 pendentes.set(jid, p);
                 agendar(jid, p);
             } catch (e) {
-                logger.warn(TAG, `falha ao tratar mensagem: ${(e as { name?: string })?.name ?? "erro"}`);
+                logger.warn(TAG, `falha ao tratar mensagem: ${descreverErro(e)}`);
             }
         }
     });

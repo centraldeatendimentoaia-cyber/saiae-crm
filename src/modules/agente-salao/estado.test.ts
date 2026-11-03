@@ -101,3 +101,16 @@ describe("nomes e texto do lembrete", () => {
         expect(textoFollowUp(null, null)).toBe("Oi! Passando pra ver se você conseguiu decidir. Se quiser, eu passo pra recepção ver um horário pra você 💛");
     });
 });
+
+describe("pessoaAssumiu: saudação automática", () => {
+    const agora = new Date("2026-11-03T13:00:00Z");
+    const base = { fromMe: true, enviadaPeloCrm: false, agora, tipoEvento: "notify" };
+    it("fromMe até 10 s depois da cliente escrever é automática e não pausa a IA", () => {
+        const inbound = new Date(agora.getTime() - 5_000);
+        expect(pessoaAssumiu({ ...base, criadaEm: agora, ultimaInboundAt: inbound })).toBe(false);
+    });
+    it("fromMe bem depois da cliente escrever, ou sem registro dela, é uma pessoa", () => {
+        expect(pessoaAssumiu({ ...base, criadaEm: agora, ultimaInboundAt: new Date(agora.getTime() - 60_000) })).toBe(true);
+        expect(pessoaAssumiu({ ...base, criadaEm: agora, ultimaInboundAt: null })).toBe(true);
+    });
+});
