@@ -59,3 +59,11 @@ describe("registro de IDs enviados pelo CRM", () => {
         expect(foiEnviadaPeloCrm(undefined)).toBe(false);
     });
 });
+
+describe("lerConteudo: respostas de botão e lista", () => {
+    it("usa o texto escolhido pela cliente", () => {
+        expect(lerConteudo(msg({ buttonsResponseMessage: { selectedDisplayText: "Quero agendar" } })).texto).toBe("Quero agendar");
+        expect(lerConteudo(msg({ templateButtonReplyMessage: { selectedDisplayText: "Ver preços" } })).texto).toBe("Ver preços");
+        expect(lerConteudo(msg({ listResponseMessage: { title: "Unhas" } }))).toMatchObject({ texto: "Unhas", naoTexto: false });
+    });
+});

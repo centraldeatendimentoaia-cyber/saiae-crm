@@ -129,6 +129,7 @@ describe("agente do salão (integração com socket falso)", () => {
         await esperar(8000);
         expect(t.enviados).toHaveLength(1);
 
+        await esperar(30_000); // passa a janela de 10 s da saudação automática
         marcarEnviadaPeloCrm("DO-CRM");
         await t.emitir(t.msg("mensagem do disparo", { fromMe: true, id: "DO-CRM" }));
         await t.emitir(t.msg("Oi Ana, aqui é a recepção!", { fromMe: true, id: "DO-CELULAR" })); // pessoa
