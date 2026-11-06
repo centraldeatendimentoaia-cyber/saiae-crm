@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         const resposta = await executarAcaoConexao(pedido.dados);
         return NextResponse.json(resposta);
     } catch (e) {
-        logger.error(TAG, `ação "${pedido.dados.acao}" falhou: ${e instanceof Error ? e.name : "erro"}`);
+        logger.error(TAG, `ação "${pedido.dados.acao}" falhou: ${e instanceof Error ? e.name : "erro"}${typeof (e as { code?: unknown } | null)?.code === "string" ? ` (${(e as { code: string }).code})` : ""}`);
         return NextResponse.json({ error: "Falha ao executar a ação" }, { status: 502 });
     }
 }

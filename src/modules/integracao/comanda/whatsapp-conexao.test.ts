@@ -81,6 +81,20 @@ describe("iniciar", () => {
         expect(c.manager.startSession).not.toHaveBeenCalled();
         expect(c.manager.createSession).not.toHaveBeenCalled();
     });
+    it("vínculo órfão (Session apagada): recria a sessão com o mesmo id e devolve o QR", async () => {
+        const c = cenario({ vinculos: { [A]: "sA" } });
+        const r = await executarAcaoConexao(pedido("iniciar"), c.deps);
+        expect(c.sessoesCriadas).toEqual(["sA"]);
+        expect(c.manager.startSession).toHaveBeenCalledWith("sA");
+        expect(r.estado).toBe("aguardando_qr");
+    });
+    it("vínculo com Session existente e sem instância: só inicia, não recria", async () => {
+        const c = cenario({ vinculos: { [A]: "sA" } });
+        c.db.session.findUnique = (async () => ({ id: "x" })) as never;
+        await executarAcaoConexao(pedido("iniciar"), c.deps);
+        expect(c.manager.createSession).not.toHaveBeenCalled();
+        expect(c.manager.startSession).toHaveBeenCalledWith("sA");
+    });
     it("repetir iniciar não cria sessão nova", async () => {
         const c = cenario();
         await executarAcaoConexao(pedido("iniciar"), c.deps);

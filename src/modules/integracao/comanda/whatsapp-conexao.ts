@@ -132,17 +132,30 @@ async function estadoAtual(barracaId: string, deps: ConexaoDeps): Promise<Respos
     return estadoDaInstancia(deps.manager.getInstance(vinculo.sessionId));
 }
 
+async function criarSessao(barracaId: string, sessionId: string, deps: ConexaoDeps): Promise<void> {
+    const userId = await garantirUsuarioTecnico(deps);
+    try {
+        await deps.manager.createSession(userId, `Sai aê ${barracaId.slice(0, 8)}`, sessionId);
+    } catch (e) {
+        // duas chamadas ao mesmo tempo: a outra já criou a sessão
+        if (!ehDuplicata(e) && !(await deps.db.session.findUnique({ where: { sessionId }, select: { id: true } }))) throw e;
+    }
+}
+
 async function iniciar(barracaId: string, deps: ConexaoDeps): Promise<RespostaConexao> {
     let vinculo = await sessaoDaBarraca(barracaId, deps.db);
-    if (!vinculo) {
-        const userId = await garantirUsuarioTecnico(deps);
-        const sessionId = `saiae-${barracaId}`;
-        try {
-            await deps.manager.createSession(userId, `Sai aê ${barracaId.slice(0, 8)}`, sessionId);
-        } catch (e) {
-            // duas chamadas ao mesmo tempo: a outra já criou a sessão
-            if (!ehDuplicata(e) && !(await deps.db.session.findUnique({ where: { sessionId }, select: { id: true } }))) throw e;
+    if (vinculo && !deps.manager.getInstance(vinculo.sessionId)) {
+        // Vínculo órfão: a `Session` foi apagada (ex.: pela tela de sessões do CRM) e o vínculo ficou. Sem isso o
+        // startSession quebra e o QR nunca sai. Recria a sessão com o mesmo id; as credenciais antigas já foram embora.
+        const existe = await deps.db.session.findUnique({ where: { sessionId: vinculo.sessionId }, select: { id: true } });
+        if (!existe) {
+            await criarSessao(barracaId, vinculo.sessionId, deps);
+            logger.warn(TAG, "vínculo sem sessão: sessão recriada para a barraca");
         }
+    }
+    if (!vinculo) {
+        const sessionId = `saiae-${barracaId}`;
+        await criarSessao(barracaId, sessionId, deps);
         try {
             await deps.db.barracaSessao.create({ data: { barracaId, sessionId } });
         } catch (e) {
