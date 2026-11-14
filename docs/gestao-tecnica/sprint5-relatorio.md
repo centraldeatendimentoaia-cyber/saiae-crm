@@ -1,0 +1,72 @@
+# Sprint 5 (Motor de automações): relatório
+
+Branch `feat/sprint5-motor-automacoes` (já contém Sprints 2 e 3). Desenho em `sprint5-desenho.md`. Nada foi enviado, implantado, aplicado em banco real nem testado contra Meta/WhatsApp real. Nenhum envio real: provedor e relógio são simulados nos testes.
+
+## Decisões
+
+- Executor puro sobre duas interfaces injetáveis (`Store`, `Deps`): a lógica é testada sem banco; `store-prisma.ts` é a implementação real (claim e gravação são `UPDATE` condicionais).
+- Fluxos em JSON versionado (`schemaVersion: 1`); rascunho no fluxo, versão publicada imutável.
+- Condição como objeto com operadores fixos (não há linguagem de texto, então nada a executar nem escapar).
+- Envio: reserva `claimed` gravada antes de chamar o provedor. Sobra sem desfecho = `unknown`, execução falha, nunca reenvia (política do Sprint 2).
+- Cancelamento automático por consulta ao retomar e antes de cada envio (`quemPodeEnviar` e `isOptedOut`), mais `cancelarRunsDoContato` para ganchos externos.
+- Worker desligado por padrão (`AUTOMACOES_ATIVAS=true` liga). Sem gatilho real; só `POST /api/automacoes/[id]/iniciar`.
+- Sem FK para `User`/`Session` (nenhum modelo existente foi tocado).
+
+## Arquivos
+
+Schema (commit `db:` separado, a5389bf): `prisma/schema.prisma` (+4 modelos, só aditivo).
+
+Código (commit e4ed795):
+- `src/modules/automacoes/`: `tipos.ts`, `expressao.ts`, `validador.ts`, `executor.ts`, `store-prisma.ts`, `servico.ts`, `worker.ts`, `testes-util.ts`.
+- `src/app/api/automacoes/`: `route.ts`, `[id]/publicar`, `[id]/iniciar`, `runs/[runId]`, `runs/[runId]/cancelar`.
+- `src/lib/cron.ts`: 2 linhas (import e `startAutomacoes()`).
+- Docs: `sprint5-desenho.md`, este relatório.
+
+## Testes (vitest, 50 novos)
+
+`expressao.test.ts` (condição segura com tentativas de injeção, interpolação, validador de grafo), `executor.test.ts` (28: transições, espera e retomada com contexto, dois executores, queda no meio do envio e depois dele, resultado desconhecido, transitória com backoff e esgotamento, política Cloud, humano e opt-out, cancelamento manual e externo, loop e timeout), `servico.test.ts` (deduplicação, limite simultâneo, escopo por usuário, publicação com validador, claim/salvar condicionais no Prisma simulado).
+
+## Resultados reais
+
+| Item | Resultado |
+|---|---|
+| `npx prisma generate` | OK (após `npm ci` no worktree; ele não tinha `node_modules`) |
+| `npm run typecheck` | OK, sem erros |
+| `npm test` (suíte completa) | 137 arquivos, 2311 testes, todos passando |
+| lint (`eslint` em `src/modules/automacoes`, `src/app/api/automacoes`, `src/lib/cron.ts`) | sem problemas |
+| `npm run build` (env fictício só no processo) | OK; rotas `/api/automacoes/*` geradas |
+
+## Não verificado
+
+- Nada contra MySQL real: o claim concorrente foi provado só com banco em memória (semântica equivalente) e conferindo o `WHERE` e `count === 1` no Prisma simulado. Falta rodar duas instâncias contra o banco do staging.
+- Envio real (Baileys/Cloud), janela de 24 h com dados reais, etiqueta e transferência humana contra tabelas reais.
+- A migração SQL do schema (não gerada; ver pendências).
+- `Label.sessionId` foi gravado com `Session.sessionId` (nome); o código existente mistura nome e id conforme o chamador. Confirmar no staging que a etiqueta aparece no painel.
+
+## Riscos
+
+- Limite de execuções simultâneas é "contar e depois gravar": duas partidas simultâneas com `dedupeKey` diferentes podem passar as duas. A deduplicação por chave é atômica (índice único); o limite não.
+- Cancelar não recolhe um envio já em curso; o executor só percebe ao salvar.
+- Falha `unknown` não notifica o dono (o `cron.ts` faz isso para mensagens agendadas). Hoje só aparece no status da execução.
+- Pausa humana: `quemPodeEnviar` devolve `retomar: true` com pausa vencida; a automação apenas segue, não regrava o estado.
+- `claimExpiresAt` de 5 min: um envio que demore mais que isso por lentidão do provedor poderia ser tomado por outra instância. A reserva `claimed` do passo ainda impede reenvio, mas a execução falharia como `unknown`.
+- Execução usa a sessão do fluxo; se a sessão for removida, a execução falha na resolução do provedor (transitória, esgota).
+
+## Roteiro de staging
+
+1. Revisão do João do schema e da migração; backup; aplicar só no staging por migração revisada (não `db push`).
+2. `AUTOMACOES_ATIVAS=true` apenas no staging.
+3. Criar fluxo com `texto -> espera 1 min -> etiqueta -> fim` numa sessão de teste; publicar (conferir recusa de rascunho com ciclo ou órfão); iniciar para um número próprio; conferir passos e etiqueta; repetir o início (deve dar `duplicada`).
+4. Cancelar durante a espera; assumir a conversa como humano durante a espera (deve cancelar sem enviar); opt-out (SAIR).
+5. Duas instâncias com a mesma execução vencida: uma envia, a outra `nao_reivindicada`; matar o processo logo após enviar e conferir `unknown` sem reenvio.
+6. Sessão Cloud: texto fora da janela deve falhar como `policy`; template deve sair.
+
+## Rollback
+
+Desligar `AUTOMACOES_ATIVAS` (o worker para; as rotas ficam inertes). Reverter os dois commits remove código e tabelas do schema; as tabelas criadas no banco são independentes e podem permanecer vazias ou ser removidas por migração corretiva (nenhuma tabela existente depende delas).
+
+## Pendências de schema
+
+- Exige revisão do João antes do merge (regra aditiva do plano de migração).
+- Gerar e revisar o SQL (4 tabelas, uma FK interna por relação, índices únicos `[flowVersionId, contactKey, dedupeKey]`, `[flowId, version]`, `[runId, seq]`); `contactKey VARCHAR(191)`, `dedupeKey VARCHAR(120)`.
+- Decidir se os índices e `onDelete` (Step e Version em cascata, Run sem cascata) valem; arquivar fluxo é por `status`, não por exclusão.
