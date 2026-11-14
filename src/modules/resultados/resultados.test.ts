@@ -195,6 +195,18 @@ describe("importação de agenda", () => {
         expect(r.resultado.eventos[0].origemDetalhe).not.toMatch(/\n/);
         expect(celulaSegura(r.resultado.eventos[0].origemDetalhe)).toMatch(/^"?'=/);
     });
+    it("ISO completo com data de calendário inexistente é recusado (sem normalizar para outro dia)", () => {
+        for (const t of [
+            "2026-02-31T12:00:00-03:00", "2026-02-30T12:00:00Z", "2026-04-31T08:00:00-03:00", "2025-02-29T12:00:00-03:00",
+            "2026-11-10T24:00:00-03:00", "2026-13-10T12:00:00-03:00", "2026-11-10T12:60:00Z", "2026-11-10T12:00:60Z", "2026-11-10T12:00:00+24:00", "2026-00-10T12:00:00Z", "2026-11-00T12:00:00Z",
+        ]) expect(lerData(t), t).toBeNull();
+        expect(lerData("2028-02-29T12:00:00-03:00")).toBeInstanceOf(Date); // bissexto
+        expect(lerData("2026-11-10T23:59:59.500+05:30")).toBeInstanceOf(Date);
+        const r = interpretarImportacao("csv", "tipo;contato;ocorrido_em;fonte_conferida\nvenda;61999990001;2026-02-31T12:00:00-03:00;sim", AGORA);
+        if (!r.ok) throw new Error();
+        expect(r.resultado.eventos).toHaveLength(0);
+        expect(r.resultado.rejeitadas).toEqual([{ linha: 2, motivo: expect.stringMatching(/data inválida/) }]);
+    });
     it("normalizadores", () => {
         expect(normalizarContato("123")).toBeNull();
         expect(normalizarContato("5561999990001@s.whatsapp.net")).toBe("5561999990001@s.whatsapp.net");

@@ -55,7 +55,12 @@ export function lerData(bruto: string): Date | null {
         const d = new Date(`${t}T12:00:00.000-03:00`);
         return Number.isNaN(d.getTime()) || new Date(d.getTime() - 9 * 3_600_000).toISOString().slice(0, 10) !== t ? null : d;
     }
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(t)) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2}))$/.exec(t);
+    if (!m) return null;
+    // O JavaScript normaliza 31/02 para 3/03 e aceita hora 24: confere os componentes de calendário antes de converter.
+    const [ano, mes, dia, hora, min, seg, offH, offM] = [m[1], m[2], m[3], m[4], m[5], m[6] ?? "0", m[7] ?? "0", m[8] ?? "0"].map(Number);
+    const diasNoMes = new Date(Date.UTC(ano, mes, 0)).getUTCDate(); // dia 0 do mês seguinte = último dia deste (mes de 1 a 12)
+    if (mes < 1 || mes > 12 || dia < 1 || dia > diasNoMes || hora > 23 || min > 59 || seg > 59 || offH > 23 || offM > 59) return null;
     const d = new Date(t);
     return Number.isNaN(d.getTime()) ? null : d;
 }
