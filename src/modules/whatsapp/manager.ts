@@ -69,6 +69,10 @@ export class WhatsAppManager {
         }
 
         const sessionId = customSessionId || Math.random().toString(36).substring(7);
+        // o nome escolhido não pode ser o id interno de outra sessão (confundiria a checagem de dono em canAccessSession)
+        if (customSessionId && (await prisma.session.findUnique({ where: { id: customSessionId }, select: { id: true } }))) {
+            throw new Error("sessionId indisponível");
+        }
 
         const session = await prisma.session.create({
             data: {

@@ -100,38 +100,16 @@ export async function canAccessSession(userId: string, userRole: string, session
         return true;
     }
 
-    // Check if session belongs to user (ownership)
-    const session = await prisma.session.findFirst({
-        where: {
-            OR: [
-                { id: sessionId, userId },
-                { sessionId: sessionId, userId }
-            ]
-        }
-    });
-
-    if (session) return true;
-
-    // Check if user has shared access
-    const dbSession = await prisma.session.findFirst({
-        where: {
-            OR: [
-                { id: sessionId },
-                { sessionId: sessionId }
-            ]
-        },
-        select: { id: true }
-    });
-
-    if (!dbSession) return false;
+    // Resolve UMA sessão, sempre com o mesmo critério: o id interno (cuid) vence o nome (Session.sessionId, escolhido pelo usuário).
+    // Sem isso, quem criasse uma sessão com nome igual ao cuid de outra passaria pela checagem de dono dessa outra.
+    const alvo =
+        (await prisma.session.findFirst({ where: { id: sessionId }, select: { id: true, userId: true } })) ??
+        (await prisma.session.findFirst({ where: { sessionId }, select: { id: true, userId: true } }));
+    if (!alvo) return false;
+    if (alvo.userId === userId) return true;
 
     const sharedAccess = await prisma.sessionAccess.findUnique({
-        where: {
-            sessionId_userId: {
-                sessionId: dbSession.id,
-                userId
-            }
-        }
+        where: { sessionId_userId: { sessionId: alvo.id, userId } }
     });
 
     return !!sharedAccess;
