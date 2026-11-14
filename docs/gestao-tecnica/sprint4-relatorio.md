@@ -113,3 +113,13 @@ Três achados de uma revisão independente, confirmados no código e corrigidos 
 9. **Decisões versionadas**: a versão da revogação fica em `meta.revogadoNaVersao` (sem coluna nova). Reaprovar (inclusive o mesmo hash) exige versão posterior a ela; decisão de versão mais antiga que a registrada é ignorada e não derruba uma versão mais nova aprovada.
 
 Testes: 5 de regressão novos em `importar-pacote.test.ts` (cada um falha sem a correção e passa com ela); o banco em memória ganhou `$transaction` com rollback e leituras que devolvem cópias, como o Prisma real. Não verificado: nada rodou contra Postgres real, então o isolamento real das transações e o `updateMany` condicional concorrente só foram simulados.
+
+### Segunda rodada da revisão
+
+Três ajustes adicionais, cada um em commit próprio, com teste de regressão que falhava antes da correção.
+
+10. **Revogação condicional e atômica**: `revogar` gravava o vínculo sem condição, a partir de uma leitura antiga, e podia sobrescrever `meta.mediaIds` de uma importação concorrente (mídias novas órfãs, antigas apagadas). Agora usa `updateMany` com id, versão, hash e estado editorial lidos; se não casar, relê uma vez, ignora se já há revogação em versão igual ou maior e, senão, tenta de novo (persistindo o conflito, rejeita como `versao_antiga`). O vínculo e a volta do agendado a rascunho ficam na mesma `$transaction`.
+11. **Criação atômica**: `scheduledPost.create` e `externalPostLink.create` agora estão na mesma `$transaction`; uma queda entre os dois não deixa post DRAFT órfão. A compensação por `deleteMany` foi removida; as mídias já gravadas continuam sendo removidas no catch.
+12. **Limpeza não esconde o erro**: o `mediaStorage.remove` nos `catch` (atualização, criação e envio de mídias) engole a própria falha (`.catch(() => {})`), preservando o `ErroItem` original.
+
+Testes novos: 5 (3 na revogação, 1 na criação, 1 na limpeza); o banco em memória passou a manter linhas gravadas por outra conexão após um rollback. Não verificado: continua sem Postgres real, então o comportamento das transações interativas do Prisma sob concorrência verdadeira é só simulado.
