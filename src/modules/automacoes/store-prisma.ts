@@ -2,6 +2,9 @@ import { randomUUID } from "crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isOptedOut } from "@/lib/optout";
+import { errorMessage } from "@/lib/errors";
+import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/lib/plans";
+import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
 import { cloudSessionIds, getProvider } from "@/modules/whatsapp/provider";
 import { numeroDeEnvioPertence } from "@/modules/whatsapp/provider/cloud-sessao";
 import { dadosPausar } from "@/modules/atendimento-comum/pausa";
@@ -47,10 +50,22 @@ export const prismaStore: Store = {
         return p ? { id: p.id, seq: p.seq, nodeId: p.nodeId, type: p.type, status: p.status as StatusPasso } : null;
     },
 
-    async abrirPasso(runId, seq, nodeId, type, status) {
+    async abrirPasso(runId, seq, nodeId, type, status, posse) {
         try {
-            const p = await prisma.automationStep.create({ data: { runId, seq, nodeId, type, status } });
-            return { id: p.id, seq, nodeId, type, status } satisfies StepRow;
+            if (!posse) {
+                const p = await prisma.automationStep.create({ data: { runId, seq, nodeId, type, status } });
+                return { id: p.id, seq, nodeId, type, status } satisfies StepRow;
+            }
+            // Reserva de envio: renova a posse e cria o passo na mesma transação. Run cancelada ou tomada = nada é criado.
+            return await prisma.$transaction(async (tx) => {
+                const r = await tx.automationRun.updateMany({
+                    where: { id: runId, claimedBy: posse.holder, status: "running" },
+                    data: { claimExpiresAt: new Date(posse.agora.getTime() + CLAIM_TTL_MS) },
+                });
+                if (r.count !== 1) return null;
+                const p = await tx.automationStep.create({ data: { runId, seq, nodeId, type, status } });
+                return { id: p.id, seq, nodeId, type, status } satisfies StepRow;
+            });
         } catch (e) {
             if (isUnique(e)) return null;
             throw e;
@@ -89,6 +104,22 @@ export const depsReais: Deps = {
     holder: HOLDER,
     agora: () => new Date(),
     optedOut: (sessionId, contactKey) => isOptedOut(sessionId, contactKey),
+    // Mesmas políticas do agendador (cron.ts): plano/cota e "só quem já interagiu". Quem paga é o dono da sessão (como no disparo).
+    async politicaEnvio(sessionId, destino) {
+        try {
+            const dono = await ownerIdOfSession(sessionId);
+            if (dono) await assertCanSend(dono, 1);
+            if ((await onlyInteractedEnabled(sessionId)) && !(await hasInteracted(sessionId, destino))) return { ok: false, transitoria: false, motivo: NO_INTERACTION_ERROR };
+            return { ok: true };
+        } catch (e) {
+            if (e instanceof PlanError) return { ok: false, transitoria: false, motivo: `Plano bloqueou o envio: ${e.message}` };
+            return { ok: false, transitoria: true, motivo: errorMessage(e, "erro ao checar as políticas de envio") };
+        }
+    },
+    async registrarConsumo(sessionId) {
+        const dono = await ownerIdOfSession(sessionId);
+        if (dono) await recordMessages(dono, 1);
+    },
     conversa: async (sessionId, contactKey) =>
         prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid: contactKey } }, select: { estado: true, pausadaAte: true } }),
     provider(sessionId) {

@@ -80,7 +80,8 @@ export async function simularFluxo(def: Definicao, opcoes: OpcoesSimulacao = {})
             const p = passos[passos.length - 1];
             return p ? { ...p } : null;
         },
-        async abrirPasso(_r, seq, nodeId, type, status) {
+        async abrirPasso(_r, seq, nodeId, type, status, posse) {
+            if (posse && (run.claimedBy !== posse.holder || run.status !== "running")) return null;
             if (passos.some((p) => p.seq === seq)) return null;
             const p = { id: `p${passos.length}`, seq, nodeId, type, status };
             passos.push(p);
@@ -117,6 +118,8 @@ export async function simularFluxo(def: Definicao, opcoes: OpcoesSimulacao = {})
         agora,
         optedOut: async () => false,
         temAcesso: async () => true,
+        politicaEnvio: async () => ({ ok: true }),
+        registrarConsumo: async () => {},
         conversa: async () => null,
         provider: () => ({ ok: true, provider: provedor }),
         janelaAberta: async () => opcoes.janelaAberta !== false,

@@ -40,8 +40,11 @@ export interface Store {
     /** Grava só se ainda somos o dono e a execução segue "running" (cancelamento externo vence). False = perdemos a execução. */
     salvar(runId: string, holder: string, patch: RunPatch, agora: Date): Promise<boolean>;
     ultimoPasso(runId: string): Promise<StepRow | null>;
-    /** Null se (runId, seq) já existe. */
-    abrirPasso(runId: string, seq: number, nodeId: string, type: string, status: StatusPasso): Promise<StepRow | null>;
+    /**
+     * Null se (runId, seq) já existe. Com `posse` (reserva de envio) a criação é atômica com a checagem de que a execução
+     * segue "running" e ainda é nossa: cancelada ou tomada por outra instância = null, e o envio não pode acontecer.
+     */
+    abrirPasso(runId: string, seq: number, nodeId: string, type: string, status: StatusPasso, posse?: { holder: string; agora: Date }): Promise<StepRow | null>;
     fecharPasso(stepId: string, patch: { status: StatusPasso; output?: unknown; error?: string; failureClass?: FailureClass }): Promise<void>;
     definicao(flowVersionId: string): Promise<Definicao>;
     listarProntas(agora: Date, limite: number): Promise<string[]>;
@@ -62,6 +65,10 @@ export interface Deps {
     gateEnvio?(sessionId: string, provider: WhatsAppProvider): Promise<{ ok: true } | { ok: false; resumeAt: Date }>;
     /** Espaçamento humano entre envios (só Baileys), chamado por `processarProntas` entre execuções. */
     espacar?(sessionId: string, provider: WhatsAppProvider): Promise<void>;
+    /** Mesmas políticas dos outros envios: plano/cota e "só quem já interagiu". `transitoria` = falha de infraestrutura (tenta de novo); senão é política e encerra. */
+    politicaEnvio(sessionId: string, destino: string): Promise<{ ok: true } | { ok: false; transitoria: boolean; motivo: string }>;
+    /** Registra 1 envio no consumo do plano. Chamado só depois de a mensagem sair; falha aqui nunca vira reenvio. */
+    registrarConsumo(sessionId: string): Promise<void>;
     conversa(sessionId: string, contactKey: string): Promise<{ estado: string; pausadaAte: Date | null } | null>;
     /** Provedor da sessão (Cloud: sessão resolvida por `cloud-sessao`, nunca "a primeira da lista"). */
     provider(sessionId: string): ProvedorResolvido;
@@ -218,8 +225,13 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
                 let destino: string | undefined;
                 try { destino = await provider.resolveRecipient(run.contactKey); } catch (e) { return falhaDeNo(classifySendFailure(e), e, noId); }
 
+                // Mesmas políticas dos outros envios (plano/cota e "só quem já interagiu"), antes de reservar.
+                const pol = await deps.politicaEnvio(run.sessionId, destino!).catch((e): { ok: false; transitoria: boolean; motivo: string } => ({ ok: false, transitoria: true, motivo: curto(e) }));
+                if (!pol.ok) return pol.transitoria ? falhaDeNo("transient", pol.motivo, noId) : falhar("policy", pol.motivo);
+
                 // Reserva ANTES de chamar o provedor: se o processo cair daqui até fechar o passo, a retomada vê "claimed".
-                const passo = await registrar(noId, no.type, "claimed");
+                // A reserva é atômica com "execução ainda running e nossa": cancelamento anterior a ela impede o envio.
+                const passo = await store.abrirPasso(run.id, ++seq, noId, no.type, "claimed", { holder: deps.holder, agora: deps.agora() });
                 if (!passo) return "perdida";
                 let enviada: { messageId: string | null };
                 try {
@@ -232,6 +244,7 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
                 // Fora do try: falha do banco aqui NÃO é falha de envio (a mensagem saiu); o passo fica "claimed" e a retomada o marca "unknown".
                 await store.fecharPasso(passo.id, { status: "done", output: { messageId: enviada.messageId } });
                 info.enviou = { sessionId: run.sessionId, provider };
+                await deps.registrarConsumo(run.sessionId).catch(() => {}); // falha contábil não é falha de envio: nunca reenvia
                 ctx.tentativas = {};
                 if (!(await salvar({ currentNodeId: no.next ?? noId, stepCount: run.stepCount + 1, context: ctx }))) return "perdida";
                 if (!no.next) return terminar("completed");

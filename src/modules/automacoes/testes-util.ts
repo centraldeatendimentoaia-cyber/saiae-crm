@@ -33,7 +33,8 @@ export function criarStoreMemoria(defs: Record<string, Definicao>) {
             const p = passos.filter((x) => x.runId === id).sort((a, b) => b.seq - a.seq)[0];
             return p ? { id: p.id, seq: p.seq, nodeId: p.nodeId, type: p.type, status: p.status } : null;
         },
-        async abrirPasso(runId, seq, nodeId, type, status: StatusPasso) {
+        async abrirPasso(runId, seq, nodeId, type, status: StatusPasso, posse) {
+            if (posse) { const r = runs.get(runId); if (!r || r.claimedBy !== posse.holder || r.status !== "running") return null; r.claimExpiresAt = new Date(posse.agora.getTime() + CLAIM_TTL_MS); }
             if (passos.some((p) => p.runId === runId && p.seq === seq)) return null;
             const p = { id: `p${passos.length}`, runId, seq, nodeId, type, status };
             passos.push(p);
@@ -58,8 +59,9 @@ export function criarStoreMemoria(defs: Record<string, Definicao>) {
     return { store, runs, passos, falhas, criar };
 }
 
-export function criarDeps(opts: { agora: { t: number }; holder?: string; sendText?: ReturnType<typeof vi.fn>; freeText?: boolean; janela?: boolean; optout?: boolean; conversa?: { estado: string; pausadaAte: Date | null } | null; conectado?: boolean; acesso?: boolean }): Deps & { sendText: ReturnType<typeof vi.fn>; etiquetar: ReturnType<typeof vi.fn>; transferirHumano: ReturnType<typeof vi.fn> } {
+export function criarDeps(opts: { agora: { t: number }; holder?: string; sendText?: ReturnType<typeof vi.fn>; freeText?: boolean; janela?: boolean; optout?: boolean; conversa?: { estado: string; pausadaAte: Date | null } | null; conectado?: boolean; acesso?: boolean; politica?: { ok: true } | { ok: false; transitoria: boolean; motivo: string } }): Deps & { sendText: ReturnType<typeof vi.fn>; etiquetar: ReturnType<typeof vi.fn>; registrarConsumo: ReturnType<typeof vi.fn>; transferirHumano: ReturnType<typeof vi.fn> } {
     const sendText = opts.sendText ?? vi.fn(async () => ({ messageId: "wamid.1" }));
+    const registrarConsumo = vi.fn(async () => {});
     const provider = {
         name: "cloud-api", sessionId: "loja", capabilities: { freeTextAnytime: opts.freeText ?? true, templates: true },
         isConnected: () => opts.conectado ?? true,
@@ -72,6 +74,8 @@ export function criarDeps(opts: { agora: { t: number }; holder?: string; sendTex
         agora: () => new Date(opts.agora.t),
         optedOut: async () => opts.optout ?? false,
         temAcesso: async () => opts.acesso ?? true,
+        politicaEnvio: async () => opts.politica ?? { ok: true },
+        registrarConsumo,
         conversa: async () => (opts.conversa === undefined ? null : opts.conversa),
         provider: () => ({ ok: true, provider }),
         janelaAberta: async () => opts.janela ?? true,
