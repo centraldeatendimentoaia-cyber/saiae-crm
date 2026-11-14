@@ -153,7 +153,13 @@ export async function generateForSeries(series: SeriesRow, now = new Date()): Pr
     const wanted = series.accountIds as string[];
     const alive = await prisma.socialAccount.findMany({ where: { id: { in: wanted }, userId: series.userId }, select: { id: true } });
     if (!alive.length) {
-        await prisma.postSeries.updateMany({ where: { id: series.id, status: "ACTIVE" }, data: { status: "ENDED" } });
+        // Pausa (não encerra) e avisa: reconectar a conta e reativar a série retoma de onde parou, em vez de morrer em silêncio.
+        const paused = await prisma.postSeries.updateMany({ where: { id: series.id, status: "ACTIVE" }, data: { status: "PAUSED" } });
+        if (paused.count === 1) {
+            await prisma.notification
+                .create({ data: { userId: series.userId, type: "WARNING", title: "Série de postagens pausada", message: "Nenhuma conta conectada para esta série (conta removida ou desconectada). Reconecte a conta e reative a série para continuar gerando as postagens.", href: "/dashboard/redes-sociais" } })
+                .catch((e) => logger.warn("Social", `Série ${series.id}: aviso não criado: ${e instanceof Error ? e.message : "erro"}`));
+        }
         return 0;
     }
 
