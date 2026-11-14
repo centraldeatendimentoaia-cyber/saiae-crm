@@ -398,6 +398,46 @@ describe("concorrência entre versões (achado 8)", () => {
     });
 });
 
+describe("decisões editoriais versionadas (achado 9)", () => {
+    const futuro = "2099-12-01T15:00:00.000Z";
+
+    it("v1 aprovada, v2 reprovada: reentregar a v1 não libera o agendamento", async () => {
+        const v1 = peca("a");
+        const r = await importar([v1]);
+        await importar([peca("a", { versao: 2, status_editorial: "reprovado" })]);
+        expect(h.t.externalPostLink[0].editorial).toBe("reprovado");
+
+        const re = await importar([v1]);
+        expect(re.itens[0]).toMatchObject({ resultado: "rejeitado", erro: { codigo: "versao_antiga" } });
+        expect(h.t.externalPostLink[0].editorial).toBe("reprovado");
+        expect((await patch(r.itens[0].postId, { publishAt: futuro })).status).toBe(409);
+    });
+
+    it("o mesmo conteúdo reaprovado numa versão posterior à revogação destrava", async () => {
+        const r = await importar([peca("a")]);
+        await importar([peca("a", { versao: 2, status_editorial: "reprovado" })]);
+        const v3 = await importar([peca("a", { versao: 3 })]); // mesmo conteúdo (o hash não inclui a versão)
+        expect(v3.itens[0].resultado).toBe("atualizado");
+        expect(h.t.externalPostLink[0]).toMatchObject({ editorial: "aprovado", version: 3 });
+        expect((await patch(r.itens[0].postId, { publishAt: futuro })).status).toBe(200);
+    });
+
+    it("conteúdo novo com versão igual à da revogação também é recusado", async () => {
+        await importar([peca("a")]);
+        await importar([peca("a", { versao: 2, status_editorial: "reprovado" })]);
+        const r = await importar([peca("a", { versao: 2, legenda: "outra" })]);
+        expect(r.itens[0]).toMatchObject({ resultado: "rejeitado", erro: { codigo: "versao_antiga" } });
+        expect(h.t.externalPostLink[0].editorial).toBe("reprovado");
+    });
+
+    it("decisão de versão antiga não derruba uma versão mais nova já aprovada", async () => {
+        await importar([peca("a")]);
+        await importar([peca("a", { versao: 2, legenda: "v2" })]);
+        await importar([peca("a", { versao: 1, status_editorial: "reprovado" })]);
+        expect(h.t.externalPostLink[0]).toMatchObject({ editorial: "aprovado", version: 2 });
+    });
+});
+
 describe("hash canônico", () => {
   // vetor calculado também pelo scripts/gerar_manifesto.py da agência (mesmo algoritmo, mesmo resultado)
   it("é estável e depende da ordem das mídias", () => {

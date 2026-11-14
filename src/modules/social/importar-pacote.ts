@@ -86,11 +86,21 @@ interface Ctx {
     arquivos: Map<string, ArquivoRecebido>; contas: Rec; contasOk: Map<string, string>;
 }
 
-/** Revoga a aprovação de um vínculo existente: o rascunho deixa de poder ser agendado e um agendado volta a rascunho. */
-async function revogar(userId: string, key: string, editorial: string, modo: Ctx["modo"]) {
+/** Versão em que o vínculo foi revogado (guardada em meta, sem coluna nova); 0 se nunca foi. */
+const revogadaNaVersao = (meta: unknown): number => { const v = rec(meta).revogadoNaVersao; return Number.isInteger(v) ? (v as number) : 0; };
+
+/**
+ * Revoga a aprovação de um vínculo existente: o rascunho deixa de poder ser agendado e um agendado volta a rascunho.
+ * Registra a versão da revogação: só uma aprovação de versão POSTERIOR a ela destrava (achado 9).
+ * Decisão de versão mais antiga que a registrada é ignorada: não pode derrubar uma versão mais nova já aprovada.
+ */
+async function revogar(userId: string, key: string, editorial: string, modo: Ctx["modo"], versaoPeca: unknown) {
     const link = await prisma.externalPostLink.findUnique({ where: { userId_source_externalKey: { userId, source: SOURCE, externalKey: key } } });
     if (!link || modo === "validar") return;
-    await prisma.externalPostLink.update({ where: { id: link.id }, data: { editorial } });
+    const v = Number.isInteger(versaoPeca) ? (versaoPeca as number) : link.version;
+    if (v < link.version) return;
+    const naVersao = Math.max(v, link.version, revogadaNaVersao(link.meta));
+    await prisma.externalPostLink.update({ where: { id: link.id }, data: { editorial, meta: { ...rec(link.meta), revogadoNaVersao: naVersao } } });
     await prisma.scheduledPost.updateMany({ where: { id: link.postId, userId, status: "PENDING" }, data: { status: "DRAFT", publishAt: null } });
 }
 
@@ -154,12 +164,12 @@ async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise
         // 1) reprovado/bloqueado nunca entra; se já existe vínculo, ele é travado (bloqueio editorial)
         const status = str(p.status_editorial);
         if (status !== "aprovado") {
-            await revogar(userId, externalKey, status || "pendente_aprovacao", ctx.modo);
+            await revogar(userId, externalKey, status || "pendente_aprovacao", ctx.modo, p.versao);
             return rej("status_nao_aprovado", `status_editorial "${status || "ausente"}" não é aprovado.`);
         }
         const lint = rec(p.lint);
         if (lint.erros !== 0) {
-            await revogar(userId, externalKey, "bloqueado_lint", ctx.modo);
+            await revogar(userId, externalKey, "bloqueado_lint", ctx.modo, p.versao);
             return rej("lint_com_erro", "lint.erros precisa ser 0.");
         }
 
@@ -207,11 +217,21 @@ async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise
             if (mesmo && link.editorial === "aprovado") {
                 return { externalKey, resultado: "inalterado", postId: link.postId, groupId: postAnt.groupId ?? null, mediaIds: (postAnt.mediaIds as string[]) ?? [], estado: postAnt.status, urlPainel: urlPainel(postAnt.status), avisos };
             }
-            if (!mesmo && (versao as number) <= link.version) return rej("versao_antiga", `versao ${versao as number} não é maior que a registrada (${link.version}).`);
+            // a aprovação precisa ser de versão posterior à última revogação (achado 9)
+            const revogada = link.editorial === "aprovado" ? 0 : revogadaNaVersao(link.meta);
+            if (!mesmo && (versao as number) <= Math.max(link.version, revogada)) return rej("versao_antiga", `versao ${versao as number} não é maior que a registrada (${Math.max(link.version, revogada)}).`);
+            if (mesmo && (versao as number) <= revogada) return rej("versao_antiga", `O vínculo foi revogado na versão ${revogada}; reaprovar exige uma versão posterior, não a ${versao as number}.`);
             if (!postAnt || !EDITAVEIS.includes(postAnt.status)) return rej("conflito_publicado", "A postagem já foi enviada ou está sendo publicada e não pode mudar.");
 
             if (mesmo) { // mesmo conteúdo reaprovado pela agência: só destrava o vínculo
-                if (ctx.modo === "importar") await prisma.externalPostLink.update({ where: { id: link.id }, data: { editorial: "aprovado" } });
+                if (ctx.modo === "importar") {
+                    const { revogadoNaVersao: _antiga, ...metaLimpo } = rec(link.meta); // eslint-disable-line @typescript-eslint/no-unused-vars
+                    const r = await prisma.externalPostLink.updateMany({
+                        where: { id: link.id, version: link.version, contentHash: link.contentHash, editorial: link.editorial },
+                        data: { version: Math.max(link.version, versao as number), editorial: "aprovado", meta: metaLimpo as never },
+                    });
+                    if (r.count !== 1) return rej("versao_antiga", "Outra importação alterou esta peça ao mesmo tempo; reenvie o manifesto.");
+                }
                 return { externalKey, resultado: "atualizado", postId: postAnt.id, groupId: postAnt.groupId, mediaIds: postAnt.mediaIds as string[], estado: postAnt.status, urlPainel: urlPainel(postAnt.status), avisos };
             }
 
