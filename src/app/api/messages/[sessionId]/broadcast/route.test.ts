@@ -32,9 +32,11 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 // Trava no banco emulada em memória: criar a chave é atômico (como o INSERT com chave única do JobLock).
-const locks = vi.hoisted(() => ({ held: new Set<string>(), released: [] as string[] }));
+const locks = vi.hoisted(() => ({ held: new Set<string>(), released: [] as string[], dbDown: false }));
 vi.mock("@/lib/job-lock", () => ({
+    JobLockDbError: class JobLockDbError extends Error {},
     startJobLock: async (name: string) => {
+        if (locks.dbDown) throw new (await import("@/lib/job-lock")).JobLockDbError("db");
         if (locks.held.has(name)) return null;
         locks.held.add(name);
         return async () => { locks.held.delete(name); locks.released.push(name); };
@@ -130,6 +132,15 @@ describe("POST /api/messages/{sessionId}/broadcast", () => {
     it("instância sem socket: 503", async () => {
         h.getInstance.mockReturnValue({ sessionId: SESSION, socket: null });
         expect((await call({ recipients: [J1], message: "Oi" })).status).toBe(503);
+    });
+
+    it("banco fora ao pegar a trava: 503 (não 409), nada criado", async () => {
+        locks.dbDown = true;
+        const res = await call({ recipients: [J1], message: "Oi" });
+        locks.dbDown = false;
+        expect(res.status).toBe(503);
+        expect((await res.json()).code).toBe("LOCK_UNAVAILABLE");
+        expect(h.prisma.broadcastLog.create).not.toHaveBeenCalled();
     });
 
     it("já existe disparo em andamento neste número: 409", async () => {

@@ -13,11 +13,15 @@ import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
  */
 export type FailureClass = "transient" | "permanent" | "policy" | "unknown";
 
-const POLICY_RE = /Descadastrado|respondeu SAIR|Sem conversa anterior|só quem já interagiu|janela de atendimento|template/i;
+const POLICY_RE = /Descadastrado|respondeu SAIR|Sem conversa anterior|só quem já interagiu|janela de atendimento|template (obrigat|exig|required)/i;
 const PERMANENT_RE = /não possui WhatsApp|número inválido|invalid (jid|number)/i;
-const UNKNOWN_RE = /time(d)?[ -]?out|tempo esgotado|connection (closed|lost|terminated)|conex(ã|a)o (fechada|perdida|encerrada)|ECONNRESET|EPIPE|ETIMEDOUT|socket hang up|AbortError/i;
+const UNKNOWN_RE = /time(d)?[ -]?out|tempo esgotado|connection (closed|lost|terminated)|conex(ã|a)o (fechada|perdida|encerrada)|ECONNRESET|EPIPE|ETIMEDOUT|socket hang up|AbortError|stream errored|not open|socket closed|connection failure|restart[ -]?required/i;
 
-export function classifySendFailure(e: unknown): FailureClass {
+/**
+ * `sendAttempted`: o provedor já foi chamado para enviar. Erro comum de Baileys (sem padrão conhecido) depois disso
+ * pode ter saído, então vira `unknown` em vez de `transient`; antes do envio nada saiu e segue `transient`.
+ */
+export function classifySendFailure(e: unknown, opts: { sendAttempted?: boolean } = {}): FailureClass {
     if (e instanceof CloudApiError) {
         switch (e.kind) {
             case "window_closed":
@@ -37,10 +41,15 @@ export function classifySendFailure(e: unknown): FailureClass {
     if (POLICY_RE.test(msg)) return "policy";
     if (PERMANENT_RE.test(msg)) return "permanent";
     if (UNKNOWN_RE.test(msg)) return "unknown";
-    return "transient";
+    return opts.sendAttempted ? "unknown" : "transient";
 }
 
 /** Espera antes da tentativa seguinte (1ª retentativa = índice 0). */
 export const BACKOFF_MS = [30_000, 2 * 60_000, 10 * 60_000];
 export const MAX_ATTEMPTS = BACKOFF_MS.length + 1;
 export const backoffMs = (attemptsDone: number) => BACKOFF_MS[Math.min(Math.max(attemptsDone, 1), BACKOFF_MS.length) - 1];
+
+/** Tira telefone e JID (dado pessoal) de um texto de erro antes de gravar ou devolver. */
+export function maskPersonalData(text: string): string {
+    return text.replace(/[\w.:+-]*@(?:s\.whatsapp\.net|lid)/gi, "[jid]").replace(/\d{8,}/g, "[número]");
+}

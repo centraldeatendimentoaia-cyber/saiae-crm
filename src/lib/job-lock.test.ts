@@ -6,7 +6,8 @@ const h = vi.hoisted(() => ({
 vi.mock("./prisma", () => ({ prisma: h.prisma }));
 vi.mock("./logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import { acquireJobLock, withJobLock, startJobLock, outrasInstanciasVivas, registrarInstancia } from "./job-lock";
+import { acquireJobLock, withJobLock, startJobLock, outrasInstanciasVivas, registrarInstancia, JobLockDbError } from "./job-lock";
+import { logger } from "./logger";
 
 const dup = Object.assign(new Error("unique"), { code: "P2002" });
 
@@ -29,6 +30,26 @@ describe("startJobLock", () => {
         expect(release).toBeTypeOf("function");
         await release!();
         expect(h.prisma.jobLock.deleteMany).toHaveBeenCalledWith({ where: { name: "j", holder: expect.any(String) } });
+    });
+});
+
+describe("startJobLock: banco x trava ocupada", () => {
+    it("com throwOnDbError, erro de banco lança JobLockDbError; trava ocupada continua null", async () => {
+        h.prisma.jobLock.create.mockRejectedValue(new Error("db fora"));
+        await expect(startJobLock("j", 1000, { throwOnDbError: true })).rejects.toBeInstanceOf(JobLockDbError);
+        expect(await startJobLock("j", 1000)).toBeNull(); // sem a opção, comportamento antigo
+        h.prisma.jobLock.create.mockRejectedValue(dup);
+        h.prisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
+        expect(await startJobLock("j", 1000, { throwOnDbError: true })).toBeNull();
+    });
+    it("a renovação que falha é registrada no log", async () => {
+        vi.useFakeTimers();
+        h.prisma.jobLock.create.mockResolvedValue({});
+        h.prisma.jobLock.updateMany.mockRejectedValue(new Error("db fora"));
+        const release = await startJobLock("j", 3000);
+        await vi.advanceTimersByTimeAsync(1100);
+        expect(logger.warn).toHaveBeenCalledWith("JobLock", expect.stringContaining("renovar"));
+        await release!();
     });
 });
 

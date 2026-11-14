@@ -11,8 +11,8 @@ import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
 import { canonicalPhone, jidVariants } from "@/lib/phone";
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
-import { startJobLock } from "@/lib/job-lock";
-import { classifySendFailure } from "@/lib/send-failure";
+import { startJobLock, JobLockDbError } from "@/lib/job-lock";
+import { classifySendFailure, maskPersonalData } from "@/lib/send-failure";
 
 /** Trava de disparo por número, no banco (vale entre instâncias). Renovada enquanto o disparo roda; expira sozinha se o processo morrer. */
 const BROADCAST_LOCK_TTL_MS = 2 * 60_000;
@@ -74,7 +74,13 @@ export async function POST(
         }
 
         // Trava atômica no banco ANTES de qualquer outro trabalho: duas chamadas simultâneas (ou em duas instâncias) não passam as duas.
-        releaseLock = await startJobLock(`broadcast:${sessionId}`, BROADCAST_LOCK_TTL_MS);
+        try {
+            releaseLock = await startJobLock(`broadcast:${sessionId}`, BROADCAST_LOCK_TTL_MS, { throwOnDbError: true });
+        } catch (e) {
+            if (!(e instanceof JobLockDbError)) throw e;
+            // banco fora do ar não é "disparo em andamento": 503 para o cliente tentar de novo
+            return NextResponse.json({ status: false, message: "Serviço temporariamente indisponível. Tente novamente em instantes.", code: "LOCK_UNAVAILABLE" }, { status: 503 });
+        }
         if (!releaseLock) {
             return NextResponse.json({ status: false, message: "Já existe um disparo em andamento neste número. Espere terminar ou cancele-o antes de começar outro.", code: "BROADCAST_RUNNING" }, { status: 409 });
         }
@@ -201,7 +207,7 @@ export async function POST(
                     // número inválido ou descadastrado: nada foi enviado, não precisa esperar
                     lastWasInvalid = /não possui WhatsApp|Descadastrado|Sem conversa anterior|Repetido/i.test(e?.message || "");
                     // resultado desconhecido (tempo esgotado, conexão caiu): pode ter saído; fica sinalizado e NUNCA é reenviado sozinho
-                    const errText = classifySendFailure(e) === "unknown" ? `Resultado desconhecido (pode ter sido enviado, não reenviar sem conferir): ${e?.message || "erro"}` : e.message || "Unknown error";
+                    const errText = maskPersonalData(classifySendFailure(e) === "unknown" ? `Resultado desconhecido (pode ter sido enviado, não reenviar sem conferir): ${e?.message || "erro"}` : e.message || "Unknown error");
                     errors.push({ jid, error: errText });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 

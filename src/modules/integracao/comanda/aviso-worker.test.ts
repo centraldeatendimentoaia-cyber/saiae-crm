@@ -138,7 +138,7 @@ describe("processarPendentes", () => {
 
     it("falha do Baileys: tenta de novo com espera crescente e termina em falhou", async () => {
         const { linhas, deps, provider } = cenario();
-        provider.sendText.mockRejectedValue(new Error("socket caiu +5561999990001"));
+        provider.sendText.mockRejectedValue(new CloudApiError("rate_limit", "limite +5561999990001"));
         for (let i = 1; i < MAX_TENTATIVAS; i++) {
             linhas[0].proximaTentativaEm = new Date(AGORA - 1);
             await processarPendentes(deps);
@@ -160,7 +160,7 @@ describe("processarPendentes", () => {
 
     it("o motivo e o log nunca contêm telefone nem texto do erro", async () => {
         const { linhas, deps, provider } = cenario();
-        provider.sendText.mockRejectedValue(new Error("falha com 5561999990001"));
+        provider.sendText.mockRejectedValue(new CloudApiError("rate_limit", "falha com 5561999990001"));
         await processarPendentes(deps);
         expect(linhas[0].motivo).toBe("erro_envio");
         expect(JSON.stringify((deps.logger as unknown as { warn: ReturnType<typeof vi.fn> }).warn.mock.calls)).not.toContain("5561999990001");
@@ -227,6 +227,48 @@ describe("processarPendentes", () => {
         relogio.t += 30 * MIN;
         await processarPendentes(deps);
         expect(provider.sendText).toHaveBeenCalledTimes(1);
+    });
+
+    it("erro comum do Baileys DEPOIS de chamar o provedor pode ter saído: resultado_desconhecido, não retenta, avisa o dono uma vez", async () => {
+        const { linhas, deps, provider } = cenario();
+        const notificarDono = vi.fn(async (...args: string[]) => { void args; });
+        deps.notificarDono = notificarDono;
+        provider.sendText.mockRejectedValue(new Error("falha qualquer sem padrão"));
+        await processarPendentes(deps);
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "resultado_desconhecido" });
+        expect(notificarDono).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(notificarDono.mock.calls)).not.toContain("5561999990001");
+        relogio.t += 30 * MIN;
+        await processarPendentes(deps);
+        expect(provider.sendText).toHaveBeenCalledTimes(1);
+        expect(notificarDono).toHaveBeenCalledTimes(1);
+    });
+
+    it("falha ao criar a notificação do dono não derruba nem reabre o aviso", async () => {
+        const { linhas, deps, provider } = cenario();
+        deps.notificarDono = vi.fn(async () => { throw new Error("banco fora"); });
+        provider.sendText.mockRejectedValue(new Error("Timed Out"));
+        await processarPendentes(deps);
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "resultado_desconhecido" });
+    });
+
+    it("a mensagem saiu mas gravar 'enviado' falhou: NÃO retenta nem reenvia; fica 'enviando' para o reconciliador", async () => {
+        const { linhas, deps, provider } = cenario();
+        const avisos = deps.db!.avisoPedido;
+        const updateMany = avisos.updateMany.bind(avisos);
+        avisos.updateMany = async (a: unknown) => {
+            if ((a as { data: { estado?: string } }).data.estado === "enviado") throw new Error("banco caiu");
+            return updateMany(a);
+        };
+        await processarPendentes(deps);
+        expect(provider.sendText).toHaveBeenCalledTimes(1);
+        expect(linhas[0].estado).toBe("enviando");
+        expect(deps.logger!.error).toHaveBeenCalled();
+        relogio.t += 10 * MIN; // passou ENVIANDO_EXPIRA_MS: reconciliador fecha como desconhecido
+        await processarPendentes(deps);
+        expect(provider.sendText).toHaveBeenCalledTimes(1);
+        expect(linhas[0]).toMatchObject({ estado: "falhou", motivo: "resultado_desconhecido" });
+        expect(deps.logger!.warn).toHaveBeenCalledWith("AvisoWorker", expect.stringContaining("1 aviso(s)"));
     });
 
     it("Cloud API: erro de rede no envio é resultado desconhecido; janela de 24 h é política e também não retenta", async () => {

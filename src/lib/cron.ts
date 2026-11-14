@@ -15,7 +15,7 @@ import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
 import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
-import { classifySendFailure, backoffMs, MAX_ATTEMPTS } from "@/lib/send-failure";
+import { classifySendFailure, backoffMs, maskPersonalData, MAX_ATTEMPTS } from "@/lib/send-failure";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -31,7 +31,14 @@ const AVISO_SUBSTITUIDA = "Ocorrência atrasada substituída pela mais recente; 
 const AVISO_INTERROMPIDA = "Processo interrompido entre reservar e confirmar o envio. Pode ou não ter saído; NÃO foi reenviada. Confira na conversa.";
 
 const isUniqueViolation = (e: unknown) => (e as { code?: string })?.code === "P2002";
-const shortError = (e: unknown) => errorMessage(e, "erro").slice(0, 500);
+const shortError = (e: unknown) => maskPersonalData(errorMessage(e, "erro")).slice(0, 500);
+
+/** Avisa o dono no painel de uma perda que não pode ficar em silêncio. Nunca lança (aviso falho só vai para o log). */
+async function notifyOwner(userId: string, title: string, message: string) {
+    await prisma.notification
+        .create({ data: { userId, type: "WARNING", title, message } })
+        .catch((e) => logger.warn("Cron", `Aviso ao dono não criado: ${e instanceof Error ? e.name : "erro"}`));
+}
 
 /** Ocorrências vencidas de uma mensagem recorrente, a partir de sendAt, e a próxima ocorrência futura. */
 function dueOccurrences(expr: string, sendAt: Date, now: Date): { due: Date[]; next: Date } {
@@ -98,10 +105,12 @@ async function processDue(msg: DueMsg, now: Date, provider: WhatsAppProvider): P
         });
     }
     if (tooLate) {
-        await prisma.scheduledMessage.updateMany({
+        const r = await prisma.scheduledMessage.updateMany({
             where: { id: msg.id, status: "PENDING", sendAt: msg.sendAt },
             data: recurring ? { sendAt: next! } : { status: "FAILED" },
         });
+        // mensagem única perdida: uma notificação por ocorrência (o updateMany condicional só acerta uma vez)
+        if (!recurring && r.count === 1) await notifyOwner(msg.session.userId, "Mensagem agendada não enviada", "Uma mensagem agendada passou do prazo de envio (mais de 6 h de atraso) e não foi enviada. Confira em Mensagens agendadas e reagende se precisar.");
         return false;
     }
 
@@ -134,6 +143,7 @@ async function processDue(msg: DueMsg, now: Date, provider: WhatsAppProvider): P
         }
     }
 
+    let sendAttempted = false; // a partir daqui o provedor foi chamado: erro comum pode ter saído
     try {
         // Plano: conta suspensa ou sem cota não envia
         try {
@@ -155,6 +165,7 @@ async function processDue(msg: DueMsg, now: Date, provider: WhatsAppProvider): P
             const media = await resolveMedia(msg.mediaUrl); // Buffer ou { url }
             const caption = msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : undefined;
 
+            sendAttempted = true;
             if (type === "image" || type === "video" || type === "audio") {
                 await provider.sendMedia(to, { kind: type, data: media, caption });
             } else {
@@ -170,10 +181,11 @@ async function processDue(msg: DueMsg, now: Date, provider: WhatsAppProvider): P
             const to = await provider.resolveRecipient(msg.jid);
             if (await isOptedOut(msg.session.sessionId, to)) throw new Error("Descadastrado (respondeu SAIR)");
             if ((await onlyInteractedEnabled(msg.session.sessionId)) && !(await hasInteracted(msg.session.sessionId, to))) throw new Error(NO_INTERACTION_ERROR);
+            sendAttempted = true;
             await provider.sendText(to, msg.content ? await personalizeFor(msg.session.sessionId, to, msg.content, [msg.jid]) : "");
         }
     } catch (error) {
-        const cls = classifySendFailure(error);
+        const cls = classifySendFailure(error, { sendAttempted });
         logger.error("Cron", `Falha (${cls}) no envio de ${msg.id}`, error);
         await finish(cls === "unknown" ? "unknown" : "failed", { failureClass: cls, error: shortError(error) });
         if (!recurring) {
@@ -183,19 +195,21 @@ async function processDue(msg: DueMsg, now: Date, provider: WhatsAppProvider): P
                 await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { sendAt: new Date(Date.now() + backoffMs(falhas)) } });
             } else {
                 await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "FAILED" } });
+                if (cls === "unknown") await notifyOwner(msg.session.userId, "Mensagem agendada com resultado desconhecido", "Uma mensagem agendada pode ou não ter sido enviada (a conexão caiu no envio). Ela NÃO será reenviada: confira na conversa.");
             }
         }
         return false;
     }
 
     // A mensagem já saiu: qualquer falha daqui para baixo NÃO pode virar reenvio.
-    await finish("sent");
+    // Se gravar o desfecho falhar, a reserva "claimed" vence e é reconciliada como "unknown": nunca reenvia.
+    await finish("sent").catch((e) => logger.error("Cron", `Envio de ${msg.id} feito, mas o desfecho não foi gravado`, e));
     try {
         await recordMessages(msg.session.userId, 1);
     } catch (e) {
         logger.error("Cron", `Consumo não registrado para ${msg.id}`, e);
     }
-    if (!recurring) await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "SENT" } });
+    if (!recurring) await prisma.scheduledMessage.update({ where: { id: msg.id }, data: { status: "SENT" } }).catch((e) => logger.error("Cron", `Envio de ${msg.id} feito, mas o status SENT não foi gravado`, e));
     return true;
 }
 

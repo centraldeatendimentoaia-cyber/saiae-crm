@@ -49,6 +49,7 @@ function matches(row: Row, where: Row = {}): boolean {
 }
 
 const prismaMock = {
+    notification: { create: vi.fn(async (...args: unknown[]) => ({ args })) },
     broadcastLog: { updateMany: vi.fn(async () => ({ count: 0 })) },
     scheduledMessage: {
         findMany: vi.fn(async ({ where }: { where: Row }) =>
@@ -117,6 +118,7 @@ vi.mock("@/lib/safe-mode", () => ({
     batchPauseMs: () => 0,
 }));
 
+import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
 import { initScheduler, MAX_ATRASO_MS, CLAIM_EXPIRA_MS } from "./cron";
 
 const JID = "5561999531848@s.whatsapp.net";
@@ -339,7 +341,7 @@ describe("queda e recuperação", () => {
 
 describe("retentativa e resultado desconhecido", () => {
     it("falha transitória: retenta com espera crescente, sem duplicar, e termina quando passa", async () => {
-        h.socket.sendMessage.mockRejectedValueOnce(new Error("boom")).mockResolvedValue({});
+        h.socket.sendMessage.mockRejectedValueOnce(new CloudApiError("rate_limit", "boom")).mockResolvedValue({});
         addMsg();
         await runTick();
         const m = db.msgs.get("m1")!;
@@ -361,7 +363,7 @@ describe("retentativa e resultado desconhecido", () => {
     });
 
     it("falha transitória persistente: para depois de poucas tentativas e fica FAILED", async () => {
-        h.socket.sendMessage.mockRejectedValue(new Error("boom"));
+        h.socket.sendMessage.mockRejectedValue(new CloudApiError("rate_limit", "boom"));
         addMsg();
         for (let i = 0; i < 8; i++) {
             await runTick();
@@ -382,6 +384,26 @@ describe("retentativa e resultado desconhecido", () => {
             await runTick();
         }
         expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it("erro comum DEPOIS de chamar o provedor pode ter saído: unknown, não reenvia, avisa o dono sem telefone", async () => {
+        h.socket.sendMessage.mockRejectedValue(new Error("falha 5561999531848@s.whatsapp.net sem padrão"));
+        addMsg();
+        await runTick();
+        expect(attemptOf("m1")[0]).toMatchObject({ status: "unknown", failureClass: "unknown" });
+        expect(attemptOf("m1")[0].error).not.toMatch(/\d{8,}|@s\.whatsapp\.net/);
+        expect(db.msgs.get("m1")!.status).toBe("FAILED");
+        expect(prismaMock.notification.create).toHaveBeenCalledTimes(1);
+        expect(prismaMock.notification.create.mock.calls[0][0]).toMatchObject({ data: { userId: "u1" } });
+    });
+
+    it("erro ANTES de chamar o provedor (mídia não carregou) segue transitório e retenta", async () => {
+        h.resolveMedia.mockRejectedValue(new Error("falha ao ler arquivo"));
+        addMsg({ mediaUrl: "x.png", mediaType: "image" });
+        await runTick();
+        expect(attemptOf("m1")[0]).toMatchObject({ failureClass: "transient" });
+        expect(db.msgs.get("m1")!.status).toBe("PENDING");
+        expect(h.socket.sendMessage).not.toHaveBeenCalled();
     });
 
     it("falha permanente (número sem WhatsApp): sem retentativa", async () => {
@@ -421,7 +443,42 @@ describe("retentativa e resultado desconhecido", () => {
     });
 });
 
+describe("falha ao gravar o desfecho DEPOIS do envio", () => {
+    it("finish('sent') falha: não cai no catch do tick, não vira FAILED nem reenvia; a reserva vira unknown depois", async () => {
+        addMsg();
+        const orig = prismaMock.scheduledMessageAttempt.updateMany.getMockImplementation()!;
+        prismaMock.scheduledMessageAttempt.updateMany.mockImplementationOnce(async () => { throw new Error("banco caiu"); });
+        await runTick();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+        expect(db.msgs.get("m1")!.status).toBe("SENT");
+        expect(attemptOf("m1")[0].status).toBe("claimed");
+        prismaMock.scheduledMessageAttempt.updateMany.mockImplementation(orig);
+        vi.setSystemTime(new Date(NOW.getTime() + CLAIM_EXPIRA_MS + MIN));
+        await runTick();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+        expect(attemptOf("m1")[0].status).toBe("unknown");
+    });
+
+    it("update de SENT falha: não propaga, não marca FAILED, não reenvia", async () => {
+        addMsg();
+        prismaMock.scheduledMessage.update.mockImplementationOnce(async () => { throw new Error("banco caiu"); });
+        await runTick();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+        expect(db.msgs.get("m1")!.status).toBe("PENDING"); // sem desfecho gravado; a reserva "claimed" impede novo envio
+        await runTick();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+    });
+});
+
 describe("recorrente atrasada", () => {
+    it("cron parado por mais de 8 h numa recorrência por minuto (acima do limite de 500 ocorrências): não quebra, envia no máximo uma vez e a série segue no futuro", async () => {
+        addMsg({ cronExpression: "* * * * *", sendAt: new Date(NOW.getTime() - 9 * 3_600_000) });
+        await runTick();
+        expect(h.socket.sendMessage.mock.calls.length).toBeLessThanOrEqual(1);
+        expect(db.msgs.get("m1")!.status).toBe("PENDING");
+        expect(db.msgs.get("m1")!.sendAt.getTime()).toBeGreaterThan(NOW.getTime());
+    });
+
     it("servidor ficou parado 3 dias, dentro do prazo da última: envia UMA vez (a mais recente) e registra as outras como perdidas", async () => {
         addMsg({ cronExpression: "0 9 * * *", sendAt: new Date("2026-10-11T12:00:00Z") });
         await runTick();
@@ -451,6 +508,9 @@ describe("recorrente atrasada", () => {
         expect(h.socket.sendMessage).not.toHaveBeenCalled();
         expect(db.msgs.get("m1")!.status).toBe("FAILED");
         expect(attemptOf("m1")[0]).toMatchObject({ status: "missed" });
+        expect(prismaMock.notification.create).toHaveBeenCalledTimes(1); // uma por ocorrência perdida
+        await runTick();
+        expect(prismaMock.notification.create).toHaveBeenCalledTimes(1);
     });
 
     it("expressão de recorrência inválida: FAILED visível, sem repetir erro todo minuto", async () => {

@@ -91,3 +91,28 @@ Tabela nova `ScheduledMessageAttempt` (commit `db:` separado, só model novo, se
 - Critério dos 15 min do `scheduler.ts` social com o horário do claim; validade máxima de post vencido.
 - Tetos por número ainda são contados antes do envio, sem trava (efeito pequeno).
 - Cloud API/templates: sem lacuna pequena comprovada; a seleção da primeira sessão Cloud (achado 7) e roteamento por `phoneNumberId` ficam para outra sprint.
+
+## Ajustes pós-revisão
+
+Revisor independente aprovou com ajustes; cada ponto foi conferido no código antes de corrigir.
+
+### Mudanças
+1. **aviso-worker**: `finalizar("enviado")` após o `sendText` agora tem try/catch próprio. Se o UPDATE falhar, só loga erro e o aviso fica `enviando`; o reconciliador o fecha como `falhou/resultado_desconhecido` (nunca reenvia). Antes o erro caía no catch geral e era classificado como transitório (reenvio duplicado).
+2. **cron.ts**: `finish("sent")` e o `update` para `SENT` pós-envio têm `.catch(log)`. Falha ali não cai no catch do tick nem marca FAILED. Se `finish("sent")` falhar, a reserva `claimed` vence e vira `unknown` (mensagem única já está `SENT`; não reenvia).
+3. **send-failure.ts**: `UNKNOWN_RE` ganhou `stream errored`, `not open`, `socket closed`, `connection failure`, `restart required` (e `restartRequired`). `POLICY_RE` não aceita mais `/template/` solto: só `template (obrigat|exig|required)` (o `CloudApiError` kind `template` continua política). Novo parâmetro `{ sendAttempted }`: depois de chamar o provedor (Baileys), erro sem padrão conhecido vira `unknown`; antes do envio segue `transient`. Usado em `cron.ts` e `aviso-worker.ts`. O broadcast não usa o parâmetro (comportamento igual ao anterior). **Mudança de comportamento**: erro genérico pós-envio deixou de ser retentado; só `CloudApiError("rate_limit")` e erros pré-envio retentam. Testes antigos que usavam `Error("boom")`/`Error("socket caiu")` como falha transitória foram trocados por `CloudApiError("rate_limit")`.
+4. **Dados pessoais**: novo `maskPersonalData` (JID `@s.whatsapp.net`/`@lid` vira `[jid]`; sequências de 8+ dígitos viram `[número]`), aplicado em `shortError` (cron.ts) e no erro por destinatário do broadcast. `retention.ts` apaga `ScheduledMessageAttempt` com `claimedAt` mais antigo que `MESSAGE_RETENTION_DAYS` (**prazo escolhido: 90 dias**, o mesmo das mensagens e de `MensagemOrigem`; 0 desliga), nunca apagando linhas `claimed`. Falha da limpeza só vira warn.
+5. **Perdas silenciosas**: (a) aviso-worker, ramo `unknown` com `enviando`: notificação ao dono (usuário da `Session` ligada à barraca) com texto fixo, uma por aviso (o estado final é gravado uma vez); sem dono resolvível não cria nada. A reconciliação de `enviando` expirado agora loga warn com o contador. (b) cron, mensagem única `tooLate` virando FAILED: uma `Notification` ao `session.userId`, só quando o `updateMany` condicional acerta (`count === 1`), logo uma por ocorrência. Também adicionada notificação para mensagem única com resultado `unknown` no cron (mesma função, custo baixo). Textos sem telefone, nome ou conteúdo. Falha ao criar a notificação só loga.
+6. **Menores**: `startJobLock(name, ttl, { throwOnDbError })` lança `JobLockDbError` quando o banco falha ao pegar a trava; a rota de broadcast responde **503** (`code: "LOCK_UNAVAILABLE"`) nesse caso e mantém **409** `BROADCAST_RUNNING` (contrato igual) quando a trava está ocupada. `acquireJobLock` continua devolvendo boolean. Heartbeat da trava agora loga warn se a renovação falhar. Teste do cron parado por mais de 8 h (recorrência por minuto, acima de `MAX_OCORRENCIAS_ATRASADAS`).
+
+### Resultados reais
+- `npm run typecheck`: sem erros.
+- `npm test` (suíte completa): 130 arquivos, 2228 testes, todos passando.
+- Lint nos arquivos alterados: `route.ts` do broadcast mantém os mesmos 5 problemas que já existiam antes (4 `no-explicit-any`, 1 warning); nenhum problema novo. Demais arquivos alterados: sem problemas.
+- `npm run build` (variáveis fictícias só no processo): concluído, rotas listadas.
+
+### Não verificado
+- Nenhum teste contra MySQL real nem envio real (Baileys/Cloud); retenção testada com Prisma emulado.
+- As strings novas do `UNKNOWN_RE` vêm do conhecimento das mensagens do Baileys, não de captura real.
+- Notificação de `unknown` do aviso-worker depende de `Session.sessionId` existir para a barraca; sem ela, só o log com contador.
+- Mudança de classificação (erro genérico pós-envio = `unknown`) reduz retentativas de falhas realmente transitórias do Baileys; o dono é avisado, mas pode exigir reenvio manual.
+- Notificações de mensagem agendada não têm `href` (não há tela dedicada confirmada).

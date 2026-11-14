@@ -76,6 +76,15 @@ export interface WorkerDeps {
     getProvider: (sessionId: string) => WhatsAppProvider | null;
     isOptedOut: (sessionId: string, jid: string) => Promise<boolean>;
     logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void; error: (tag: string, msg: string) => void };
+    /** Avisa o dono da sessão no painel (perda que não pode ficar em silêncio). Sem dono resolvível: não faz nada. */
+    notificarDono?: (sessionId: string, titulo: string, mensagem: string) => Promise<void>;
+}
+
+/** Dono = usuário da sessão do WhatsApp da barraca. Texto fixo: nunca telefone, nome nem conteúdo da mensagem. */
+async function notificarDonoPadrao(sessionId: string, titulo: string, mensagem: string): Promise<void> {
+    const sessao = await prisma.session.findUnique({ where: { sessionId }, select: { userId: true } });
+    if (!sessao) return;
+    await prisma.notification.create({ data: { userId: sessao.userId, type: "WARNING", title: titulo, message: mensagem } });
 }
 
 const depsPadrao = (): WorkerDeps => ({
@@ -87,6 +96,7 @@ const depsPadrao = (): WorkerDeps => ({
     getProvider,
     isOptedOut: isOptedOutDb,
     logger,
+    notificarDono: notificarDonoPadrao,
 });
 
 function ehPayload(p: unknown): p is PayloadAviso {
@@ -174,12 +184,18 @@ export async function processarAviso(linha: LinhaAviso, deps: WorkerDeps): Promi
         if (marcou.count !== 1) return; // reserva perdida: outro worker cuida
         enviandoMarcado = true;
         await provider.sendText(jid, texto);
-        await finalizar(db, linha, "enviado", null, { tentativas: linha.tentativas + 1, enviadoEm: new Date(deps.now()) }, true);
-        deps.logger.info(TAG, `${linha.tipo} enviado`);
+        // A mensagem já saiu: se gravar o desfecho falhar NÃO pode cair no catch (viraria retentativa e duplicaria).
+        // O aviso fica `enviando` e o reconciliador o fecha como resultado desconhecido (nunca reenvia).
+        try {
+            await finalizar(db, linha, "enviado", null, { tentativas: linha.tentativas + 1, enviadoEm: new Date(deps.now()) }, true);
+            deps.logger.info(TAG, `${linha.tipo} enviado`);
+        } catch (e) {
+            deps.logger.error(TAG, `${linha.tipo} enviado, mas o desfecho não foi gravado: ${e instanceof Error ? e.name : "erro"}`);
+        }
     } catch (e) {
         if (e instanceof Error && e.message === "aviso_assumido_por_outro_worker") return;
         // antes de marcar `enviando` nada saiu: tempo esgotado ali (ex.: resolver o número) não é "resultado desconhecido"
-        const bruta = classifySendFailure(e);
+        const bruta = classifySendFailure(e, { sendAttempted: enviandoMarcado });
         const classe = bruta === "unknown" && !enviandoMarcado ? "transient" : bruta;
         const semWhatsapp = e instanceof Error && /não possui WhatsApp/i.test(e.message);
         const tentativas = linha.tentativas + 1;
@@ -190,6 +206,11 @@ export async function processarAviso(linha: LinhaAviso, deps: WorkerDeps): Promi
         } else if (classe === "unknown") {
             motivo = "resultado_desconhecido"; // pode ter saído: não reenvia
             await finalizar(db, linha, "falhou", motivo, { tentativas }, enviandoMarcado);
+            if (enviandoMarcado && sessionId) {
+                // uma notificação por aviso (o estado final é gravado uma vez só): o dono confere na conversa
+                await deps.notificarDono?.(sessionId, "Aviso de pedido com resultado desconhecido", "Um aviso de pedido pode ou não ter chegado ao cliente (a conexão caiu no envio). Ele NÃO será reenviado: confira na conversa.")
+                    .catch(() => deps.logger.warn(TAG, "aviso ao dono não criado"));
+            }
         } else if (classe === "policy" || classe === "permanent") {
             motivo = classe === "policy" ? "bloqueio_de_politica" : "erro_permanente";
             await finalizar(db, linha, "falhou", motivo, { tentativas }, enviandoMarcado);
@@ -205,11 +226,12 @@ export async function processarAviso(linha: LinhaAviso, deps: WorkerDeps): Promi
 }
 
 /** Avisos que ficaram em `enviando` (processo caiu no envio): resultado desconhecido, nunca reenviados. */
-export async function reconciliarEnviando(deps: Pick<WorkerDeps, "db" | "now">): Promise<number> {
+export async function reconciliarEnviando(deps: Pick<WorkerDeps, "db" | "now" | "logger">): Promise<number> {
     const r = await deps.db.avisoPedido.updateMany({
         where: { estado: "enviando", atualizadoEm: { lt: new Date(deps.now() - ENVIANDO_EXPIRA_MS) } },
         data: { estado: "falhou", motivo: "resultado_desconhecido", payload: Prisma.DbNull },
     });
+    if (r.count > 0) deps.logger.warn(TAG, `${r.count} aviso(s) ficaram sem desfecho (processo caiu no envio) e foram marcados como resultado desconhecido`);
     return r.count;
 }
 
