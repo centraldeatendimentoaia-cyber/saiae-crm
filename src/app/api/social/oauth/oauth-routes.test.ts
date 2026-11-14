@@ -47,6 +47,19 @@ describe("rotas OAuth social", () => {
             expect(l.searchParams.get("oauth")).toBe(esperado);
         }
     });
+    it("sem base URL válida (produção sem BASE_URL), start e callback redirecionam para nao-configurado sem lançar", async () => {
+        delete process.env.BASE_URL;
+        const nodeEnv = process.env.NODE_ENV;
+        vi.stubEnv("NODE_ENV", "production");
+        try {
+            const s = await start(req("/api/social/oauth/start"));
+            expect(s.status).toBe(302);
+            expect(s.headers.get("location")).toBe("/dashboard/redes-sociais/contas?oauth=nao-configurado");
+            const c = await callback(req(`/api/social/oauth/callback?code=c&state=${criarEstado("u1", "segredo")}`));
+            expect(c.status).toBe(302);
+            expect(c.headers.get("location")).toBe("/dashboard/redes-sociais/contas?oauth=nao-configurado");
+        } finally { vi.unstubAllEnvs(); if (nodeEnv !== undefined) vi.stubEnv("NODE_ENV", nodeEnv); vi.unstubAllEnvs(); }
+    });
     it("callback feliz: troca o código com o mesmo redirect_uri registrado e volta ok para a BASE_URL", async () => {
         const chamadas: string[] = [];
         vi.stubGlobal("fetch", vi.fn(async (_u: string, init: { body: URLSearchParams }) => {

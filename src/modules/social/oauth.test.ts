@@ -41,8 +41,24 @@ describe("base URL do login da Meta", () => {
     it("sem variável e origin público, usa o origin", () => {
         expect(baseUrl("https://crm.exemplo.com", undefined, {} as never)).toBe("https://crm.exemplo.com");
     });
-    it("sem variável e origin loopback, usa o host do proxy", () => {
-        expect(baseUrl("http://localhost:3030", get({ "x-forwarded-host": "crm.exemplo.com", "x-forwarded-proto": "https" }), { NODE_ENV: "production" } as never)).toBe("https://crm.exemplo.com");
+    it("sem variável e origin loopback, usa o host do proxy (fora de produção)", () => {
+        expect(baseUrl("http://localhost:3030", get({ "x-forwarded-host": "crm.exemplo.com", "x-forwarded-proto": "https" }), { NODE_ENV: "development" } as never)).toBe("https://crm.exemplo.com");
+    });
+    it("x-forwarded-host malformado é recusado", () => {
+        for (const h of ["evil.com/path", "a b.com", "a.com@evil.com", "https://x.com"]) {
+            expect(() => baseUrl("http://localhost:3030", get({ "x-forwarded-host": h }), { NODE_ENV: "development" } as never)).toThrow(/inválido/);
+        }
+        expect(baseUrl("http://localhost:3030", get({ "x-forwarded-host": "crm.exemplo.com:8443" }), { NODE_ENV: "development" } as never)).toBe("https://crm.exemplo.com:8443");
+    });
+    it("em produção, host do proxy sem BASE_URL não vale", () => {
+        expect(() => baseUrl("http://localhost:3030", get({ "x-forwarded-host": "crm.exemplo.com" }), { NODE_ENV: "production" } as never)).toThrow(/BASE_URL/);
+    });
+    it("em produção, BASE_URL/NEXTAUTH_URL com localhost também falha; fora de produção passa", () => {
+        for (const v of ["http://localhost:3030", "http://127.0.0.1", "http://0.0.0.0:80"]) {
+            expect(() => baseUrl("https://x.com", undefined, { NODE_ENV: "production", BASE_URL: v } as never)).toThrow(/localhost/);
+            expect(() => baseUrl("https://x.com", undefined, { NODE_ENV: "production", NEXTAUTH_URL: v } as never)).toThrow(/localhost/);
+        }
+        expect(baseUrl("https://x.com", undefined, { NODE_ENV: "development", BASE_URL: "http://localhost:3030" } as never)).toBe("http://localhost:3030");
     });
     it("em produção nunca devolve localhost/0.0.0.0", () => {
         for (const o of ["http://localhost:3030", "http://0.0.0.0:3030", "http://127.0.0.1:3030"]) {

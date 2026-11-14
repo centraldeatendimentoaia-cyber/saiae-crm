@@ -18,6 +18,8 @@ export function configuracaoMeta(): { appId: string; appSecret: string } | null 
     return appId && appSecret ? { appId, appSecret } : null;
 }
 
+const HOST_VALIDO = /^[a-z0-9.-]+(:\d+)?$/i;
+const hostDe = (u: string) => { try { return new URL(u).hostname; } catch { return u; } };
 const LOOPBACK = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[::1?\])$/i;
 
 /**
@@ -27,9 +29,15 @@ const LOOPBACK = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[::1?\])$/i;
  */
 export function baseUrl(origin: string, headers?: { get(name: string): string | null }, env: NodeJS.ProcessEnv = process.env): string {
     const configurada = (env.BASE_URL || env.NEXTAUTH_URL || "").trim().replace(/\/+$/, "");
-    if (configurada) return configurada;
+    if (configurada) {
+        if (env.NODE_ENV === "production" && LOOPBACK.test(hostDe(configurada))) throw new Error("BASE_URL/NEXTAUTH_URL aponta para localhost em produção");
+        return configurada;
+    }
     let base = origin.replace(/\/+$/, "");
     const fHost = headers?.get("x-forwarded-host")?.split(",")[0]?.trim();
+    if (fHost && !HOST_VALIDO.test(fHost)) throw new Error("x-forwarded-host inválido");
+    // Em produção o host do proxy não é confiável o bastante: exige BASE_URL/NEXTAUTH_URL.
+    if (fHost && env.NODE_ENV === "production") throw new Error("BASE_URL (ou NEXTAUTH_URL) não está definido");
     if (fHost && LOOPBACK.test(new URL(base).hostname)) {
         const proto = headers?.get("x-forwarded-proto")?.split(",")[0]?.trim() === "http" ? "http" : "https";
         base = `${proto}://${fHost}`;

@@ -67,3 +67,27 @@ Novos: `src/server/socket.test.ts` (15 testes, servidor Socket.IO real + cliente
 ## Rollback
 
 `git revert` dos commits da branch (mudanças só em `src/server`, `oauth.ts` e as duas rotas OAuth); sem migração; nenhuma variável nova obrigatória (`SOCKET_ALLOWED_ORIGINS` é opcional).
+
+## Ajustes pós-revisão
+
+Revisão independente aprovou com ajustes. Mudanças (cada uma com teste vitest):
+
+1. **Revalidação sem reentrância** (`socket.ts`): flag `rodando` pula a rodada se a anterior não terminou; dentro da rodada o papel é consultado uma vez por usuário (cache em Map).
+2. **Limites de join-session**: máximo de `MAX_SALAS` = 20 salas por socket e intervalo mínimo de `JOIN_MIN_MS` = 150 ms entre joins; excedeu, o servidor emite `join-session:erro` (`limite-de-salas` ou `muitas-requisicoes`) e mantém o socket conectado.
+3. **Item 3 (origem bloqueada se BASE_URL difere do domínio de acesso)**: sem mudança de código, só documentação: `SOCKET_ALLOWED_ORIGINS` acrescentada em `docs/ENVIRONMENT_VARIABLES.md`. Já descrita em "Riscos".
+4. **x-forwarded-host validado** (`oauth.ts`) com `^[a-z0-9.-]+(:d+)?$`; fora do padrão (barra, espaço, `@`, esquema) lança erro. Em produção, sem BASE_URL/NEXTAUTH_URL, o host do proxy não é mais aceito (lança): **mudança de comportamento**, o fallback antigo por proxy só vale fora de produção.
+5. **Rotas OAuth** (`start` e `callback`): `baseUrl()` agora dentro de try/catch; em falha respondem 302 com `Location` relativo `/dashboard/redes-sociais/contas?oauth=nao-configurado` (mesmo parâmetro já usado nas rotas) e registram aviso no log.
+6. **Guarda de loopback** também para BASE_URL/NEXTAUTH_URL configurados: em produção, localhost/127.x/0.0.0.0/[::1] lança erro.
+7. **Reconexão no front**: `src/lib/socket-reconectar.ts` (espera de 5 s dobrando até 60 s, zera ao conectar, cancela em disconnect manual) ligada nos 4 pontos que abrem socket (página da sessão, session-manager, navbar, socket-context); cobre `io server disconnect` e `connect_error`. O cliente já reconectava nos demais casos.
+8. **Campo de bloqueio no User**: não existe (só `planStatus` = ACTIVE|SUSPENDED, que é cobrança). `loadRole` não foi alterado. Usuário bloqueado hoje = usuário apagado.
+
+### Resultados reais
+- `npm run typecheck`: sem erros.
+- `npm test` (suíte completa): 132 arquivos, 2194 testes, todos passaram (inclusive capability-routes nesta execução).
+- ESLint nos arquivos alterados: 1 erro (`react-hooks/set-state-in-effect` em navbar.tsx) e 22 avisos, todos de código anterior a este ajuste (não verificado por `git stash`; as linhas apontadas não são as alteradas).
+
+### Não verificado
+- Reconexão do front em navegador real (testada só com socket simulado) e sob proxy de produção.
+- Comportamento em produção sem BASE_URL: depende de a variável estar definida no Railway (não consultado); sem ela o login social passa a redirecionar para `nao-configurado`.
+- Teste de carga das salas/revalidação.
+

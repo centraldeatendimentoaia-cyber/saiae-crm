@@ -11,6 +11,9 @@ import { logger } from "../lib/logger";
  */
 
 export const REVALIDATE_MS = 60_000;
+/** Teto de salas de sessão por socket e intervalo mínimo entre dois join-session do mesmo socket. */
+export const MAX_SALAS = 20;
+export const JOIN_MIN_MS = 150;
 
 export type SocketIdentity = { userId: string; exp?: number };
 
@@ -23,7 +26,7 @@ export interface SocketDeps {
     now?: () => number;
 }
 
-type Data = { userId?: string; exp?: number; sessions?: Set<string> };
+type Data = { userId?: string; exp?: number; sessions?: Set<string>; ultimoJoin?: number };
 const dados = (s: Socket) => s.data as Data;
 
 export async function defaultDeps(): Promise<SocketDeps> {
@@ -100,6 +103,10 @@ export function setupSocket(io: Server, deps?: SocketDeps) {
         socket.on("join-session", async (sessionId: unknown) => {
             // "user:" é o prefixo das salas de usuário: um sessionId escolhido pelo cliente não pode colidir com elas.
             if (typeof sessionId !== "string" || !sessionId || sessionId.length > 200 || sessionId.startsWith("user:") || !data.userId) return;
+            const t = Date.now();
+            if (data.ultimoJoin && t - data.ultimoJoin < JOIN_MIN_MS) { socket.emit("join-session:erro", { sessionId, motivo: "muitas-requisicoes" }); return; }
+            data.ultimoJoin = t;
+            if (!data.sessions?.has(sessionId) && (data.sessions?.size ?? 0) >= MAX_SALAS) { socket.emit("join-session:erro", { sessionId, motivo: "limite-de-salas" }); return; }
             try {
                 const d = await ready;
                 const role = await d.loadRole(data.userId);
@@ -120,19 +127,28 @@ export function setupSocket(io: Server, deps?: SocketDeps) {
         });
     });
 
-    const timer = setInterval(() => void revalidate(io, ready, now), REVALIDATE_MS);
+    // Trava de reentrância: se a rodada anterior (banco lento) não terminou, pula esta em vez de empilhar.
+    let rodando = false;
+    const rodar = async () => {
+        if (rodando) return;
+        rodando = true;
+        try { await revalidate(io, ready, now); } catch (err) { logger.error("Socket", "revalidate error:", err); } finally { rodando = false; }
+    };
+    const timer = setInterval(() => void rodar(), REVALIDATE_MS);
     timer.unref?.();
-    return { stop: () => clearInterval(timer), revalidate: () => revalidate(io, ready, now) };
+    return { stop: () => clearInterval(timer), revalidate: () => revalidate(io, ready, now), rodar };
 }
 
 /** Confere token vencido, usuário apagado e acesso a cada sala de sessão de cada socket conectado. */
 export async function revalidate(io: Server, ready: Promise<SocketDeps>, now: () => number) {
     const d = await ready;
+    const papeis = new Map<string, Promise<string | null>>(); // um loadRole por usuário na rodada
+    const papel = (id: string) => { if (!papeis.has(id)) papeis.set(id, d.loadRole(id)); return papeis.get(id)!; };
     for (const socket of io.sockets.sockets.values()) {
         const data = dados(socket);
         try {
             if (!data.userId || (data.exp && data.exp * 1000 <= now())) { socket.disconnect(true); continue; }
-            const role = await d.loadRole(data.userId);
+            const role = await papel(data.userId);
             if (!role) { socket.disconnect(true); continue; }
             for (const room of [...(data.sessions ?? [])]) {
                 if (!(await d.canAccess(data.userId, role, room))) {

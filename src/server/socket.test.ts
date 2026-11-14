@@ -3,13 +3,15 @@ import { AddressInfo } from "net";
 import { Server } from "socket.io";
 import { io as connect, Socket as Client } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { allowedOrigins, originAllowed, setupSocket, SocketDeps } from "./socket";
+import { allowedOrigins, JOIN_MIN_MS, MAX_SALAS, originAllowed, setupSocket, SocketDeps } from "./socket";
 
 // Cookie "token=u1"/"token=u2" identifica o usuário; cada um é dono de uma sessão.
 const dono: Record<string, string> = { "sessao-1": "u1", "sessao-2": "u2" };
 const apagados = new Set<string>();
 const revogados = new Set<string>(); // "userId|sessionId"
 let agora = 1_000_000;
+let chamadasRole = 0;
+let porteira: Promise<void> | null = null; // quando definida, loadRole espera por ela
 
 const deps: SocketDeps = {
     now: () => agora,
@@ -21,8 +23,8 @@ const deps: SocketDeps = {
         if (c === "token=curto") return { userId: "u1", exp: agora / 1000 + 30 };
         return null;
     },
-    loadRole: async (id) => (apagados.has(id) ? null : "OWNER"),
-    canAccess: async (u, _r, s) => dono[s] === u && !revogados.has(`${u}|${s}`),
+    loadRole: async (id) => { chamadasRole++; if (porteira) await porteira; return apagados.has(id) ? null : "OWNER"; },
+    canAccess: async (u, _r, s) => (dono[s] === u || s.startsWith("livre-")) && !revogados.has(`${u}|${s}`),
 };
 
 let http: HttpServer, io: Server, ctl: ReturnType<typeof setupSocket>, port: number;
@@ -40,7 +42,7 @@ const conectou = (c: Client) => new Promise<string>((res) => { c.on("connect", (
 const pausa = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
 beforeEach(async () => {
-    apagados.clear(); revogados.clear(); agora = 1_000_000;
+    apagados.clear(); revogados.clear(); agora = 1_000_000; chamadasRole = 0; porteira = null;
     http = createServer();
     io = new Server(http, {
         path: "/api/socket/io",
@@ -102,8 +104,9 @@ describe("salas", () => {
         const recebidoA: string[] = [], recebidoB: string[] = [];
         a.on("connection.update", (d) => recebidoA.push(d.qr));
         b.on("connection.update", (d) => recebidoB.push(d.qr));
-        a.emit("join-session", "sessao-1"); a.emit("join-session", "sessao-2"); // a tenta entrar na do outro
-        b.emit("join-session", "sessao-2"); b.emit("join-session", "sessao-1");
+        a.emit("join-session", "sessao-1"); b.emit("join-session", "sessao-2");
+        await pausa(JOIN_MIN_MS + 50);
+        a.emit("join-session", "sessao-2"); b.emit("join-session", "sessao-1"); // tentam entrar na do outro
         await pausa();
         io.to("sessao-1").emit("connection.update", { qr: "QR-1" });
         io.to("sessao-2").emit("connection.update", { qr: "QR-2" });
@@ -183,5 +186,43 @@ describe("revogação", () => {
         io.to("sessao-1").emit("connection.update", { qr: "x" });
         await pausa();
         expect(got).toEqual([]);
+    });
+});
+
+describe("limites e revalidação (ajustes pós-revisão)", () => {
+    it("join-session: intervalo mínimo entre joins rejeita com erro e não derruba o socket", async () => {
+        const a = cliente("token=u1");
+        await conectou(a);
+        const erros: { motivo: string }[] = [];
+        a.on("join-session:erro", (e) => erros.push(e));
+        a.emit("join-session", "sessao-1"); a.emit("join-session", "sessao-1");
+        await pausa();
+        expect(erros.map((e) => e.motivo)).toEqual(["muitas-requisicoes"]);
+        expect(a.connected).toBe(true);
+    });
+    it("join-session: teto de " + MAX_SALAS + " salas por socket", async () => {
+        const a = cliente("token=u1");
+        await conectou(a);
+        const erros: { motivo: string; sessionId: string }[] = [];
+        a.on("join-session:erro", (e) => erros.push(e));
+        for (let i = 0; i <= MAX_SALAS; i++) { a.emit("join-session", "livre-" + i); await pausa(JOIN_MIN_MS + 20); }
+        expect(erros).toEqual([{ motivo: "limite-de-salas", sessionId: "livre-" + MAX_SALAS }]);
+        expect(a.connected).toBe(true);
+    });
+    it("revalidação: rodada lenta não empilha (pula a seguinte) e cacheia o papel por usuário", async () => {
+        const a = cliente("token=u1"), b = cliente("token=u1");
+        await Promise.all([conectou(a), conectou(b)]);
+        let libera!: () => void;
+        porteira = new Promise<void>((r) => { libera = r; });
+        chamadasRole = 0;
+        const primeira = ctl.rodar();
+        await pausa();
+        await ctl.rodar(); // pulada: a primeira ainda não terminou
+        expect(chamadasRole).toBe(1); // dois sockets do mesmo usuário, um loadRole só
+        libera();
+        await primeira;
+        chamadasRole = 0;
+        await ctl.rodar(); // trava liberada: roda de novo
+        expect(chamadasRole).toBe(1);
     });
 });
