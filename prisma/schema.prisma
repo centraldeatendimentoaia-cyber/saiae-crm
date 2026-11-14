@@ -919,3 +919,97 @@ model ScheduledMessageAttempt {
   @@unique([scheduledMessageId, occurrenceAt])
   @@index([status, claimedAt])
 }
+
+// ---------------------------------------------------------------------------------------------
+// Motor de automações (Sprint 5). SÓ TABELAS NOVAS: nada existente muda. Sem FK para User/Session de propósito
+// (escopo por userId/sessionId em texto, como AgenteConversa), para não tocar nos modelos atuais.
+// Detalhes em docs/gestao-tecnica/sprint5-desenho.md.
+// ---------------------------------------------------------------------------------------------
+
+// Fluxo: guarda o RASCUNHO editável e aponta para a versão publicada em uso.
+model AutomationFlow {
+  id                 String   @id @default(cuid())
+  userId             String
+  sessionId          String // Session.sessionId (a mesma chave de AgenteConversa/OptOut/getProvider)
+  name               String
+  status             String   @default("active") // active | archived
+  draft              Json // definição em edição (formato versionado por schemaVersion)
+  publishedVersionId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  versions AutomationFlowVersion[]
+  runs     AutomationRun[]
+
+  @@index([userId, status])
+}
+
+// Versão publicada: imutável (nunca se atualiza; mudar = publicar outra).
+model AutomationFlowVersion {
+  id            String   @id @default(cuid())
+  flowId        String
+  version       Int
+  schemaVersion Int
+  definition    Json
+  createdAt     DateTime @default(now())
+
+  flow AutomationFlow  @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  runs AutomationRun[]
+
+  @@unique([flowId, version])
+}
+
+// Execução de um fluxo para um contato. `context` guarda tudo o que é preciso para retomar após reinício.
+model AutomationRun {
+  id             String    @id @default(cuid())
+  userId         String
+  flowId         String
+  flowVersionId  String
+  sessionId      String // Session.sessionId
+  contactKey     String    @db.VarChar(191) // jid do contato
+  dedupeKey      String    @db.VarChar(120)
+  status         String    @default("pending") // pending | running | waiting | completed | failed | cancelled
+  currentNodeId  String?
+  context        Json // { vars, tentativas }
+  stepCount      Int       @default(0)
+  resumeAt       DateTime? // quando status = waiting
+  claimedBy      String?
+  claimExpiresAt DateTime?
+  deadlineAt     DateTime
+  failureClass   String? // transient | permanent | policy | unknown (ver src/lib/send-failure.ts)
+  lastError      String?   @db.Text
+  motivoFim      String? // cancelamento (manual, humano_assumiu, optout) ou fim (transferencia_humana, ...)
+  finishedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  flow    AutomationFlow        @relation(fields: [flowId], references: [id])
+  version AutomationFlowVersion @relation(fields: [flowVersionId], references: [id])
+  steps   AutomationStep[]
+
+  @@unique([flowVersionId, contactKey, dedupeKey])
+  @@index([status, resumeAt])
+  @@index([status, claimExpiresAt])
+  @@index([userId, flowId, contactKey, status])
+  @@index([sessionId, contactKey, status])
+}
+
+// Histórico de passos. Para envio, a linha "claimed" é gravada ANTES de chamar o provedor: se o processo cair,
+// ela sobra sem desfecho e a retomada marca "unknown" sem reenviar.
+model AutomationStep {
+  id           String    @id @default(cuid())
+  runId        String
+  seq          Int
+  nodeId       String
+  type         String
+  status       String // claimed | done | failed | unknown
+  output       Json?
+  error        String?   @db.Text
+  failureClass String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  run AutomationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+}
