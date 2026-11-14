@@ -61,3 +61,43 @@ Reverter os commits do Sprint 7 remove painel, rotas e menu. Os dados de `Result
 - `ResultEvent` (commit `db:` 26be5ee): aditivo, não aplicado; precisa de revisão do João e do SQL gerado (o repositório não tem `prisma/migrations`) e de backup antes de qualquer `db push`.
 - Índice em `ResultEvent` por `userId, sessionId, ocorridoEm` já previsto; sem rotina de retenção.
 - Futuro: campo de campanha/anúncio estruturado em `ConversaOrigem` (hoje só `anuncio|organico`), e `AutomationRun` para contatos sociais (herdado do Sprint 6).
+
+## Ajustes pós-revisão
+
+Revisão independente aprovou com ajustes. Requisito central mantido: nunca somar inferido com confirmado sem rótulo e nunca afirmar causalidade.
+
+### Mudanças
+- **B1 (confiança da origem):** o selo "confirmado" de um evento confirma o evento, não a origem. `Funil.porOrigem` agora é uma lista por (origem, confiança da origem): "Orgânico (origem inferida)" e "Anúncio (origem confirmada)" nunca se misturam. A tela mostra a confiança ao lado de cada origem e o CSV ganhou a coluna `confianca_da_origem`. Teste: lead orgânico nunca aparece como origem confirmada (funil, CSV e JSON da rota).
+- **B2 (importação):** eventos importados são gravados `inferido`; só `confirmado` com a coluna `fonte_conferida = sim` (validada: sim/nao/vazio, outro valor rejeita a linha). "Importação" saiu do texto de "registro autoritativo". Registros antigos sem lote marcados `confirmado` são lidos como inferidos.
+- **B3 (sessão):** `resolverSessao` (novo `sessao.ts`) usa a ordem de `canAccessSession`: id primeiro, depois nome. Usado em `GET` e `importar`. Teste de colisão id x nome.
+- Conversas respondidas: agora inferidas (exige mensagem enviada posterior à primeira recebida no período).
+- Origem declarada em planilha vale em qualquer período (consulta própria, `orderBy ocorridoEm asc, id`), deterministica.
+- Etiqueta: `\b(...|meta|facebook)\b` (não casa mais "Metade"); etiquetas de origem em conflito resultam em "origem não identificada".
+- `dedupKey` inclui o contato quando há referência; repetidas no arquivo sem referência viram aviso com contagem (`repetidasNoArquivo`, `repetidasSemReferencia`), não somem em silêncio.
+- `importacaoId` (lote) no `ResultEvent` (commit `db:` separado `104d330`), gravado na importação; `DELETE /api/resultados/[sessionId]/importar?importacaoId=` desfaz o lote (só dono, escopado por userId e sessão); botão "Desfazer esta importação" no painel.
+- Exclusão: `apagarResultadosDaSessao`/`apagarResultadosDoUsuario` chamadas na exclusão de sessão (rota e `manager.deleteSession`) e de usuário. Retenção: `RESULT_EVENT_RETENTION_DAYS` (padrão 365, 0 desliga) em `retention.ts`.
+- Flag `RESULTADOS_ENABLED` (desligada por padrão): as rotas `/api/resultados/*` respondem 404 sem ela. A entrada no menu continua visível (a página mostra o erro).
+- N+1: as 4 consultas por lote de 500 contatos agora rodam em `Promise.all`. Os `groupBy` seguem sem índice dedicado.
+- Menores: `content-length` checado antes de `request.text()`; avisos de encoding inválido (caractere U+FFFD, típico de Windows-1252) e de aspa aberta no CSV; valor "1.234" rejeitado como ambíguo; contatos importados sem nenhuma conversa na sessão contados e mostrados no painel; `title=` dos selos removido e substituído por legenda visível.
+- Plano do piloto: P10 (não fazer deploy do branch em produção), P11 (flag), P12 (base legal), P13 (EXPLAIN), metas numéricas, teste com `SessionAccess` e admin na etapa 5, nova seção 8 (LGPD e retenção).
+
+### Resultados REAIS desta rodada
+| Item | Resultado |
+|---|---|
+| `npx prisma generate` | OK |
+| `npm run typecheck` | sem erros |
+| `npm test` (2 execuções completas) | 146 arquivos, 2446 testes, 100% nas duas. O flake relatado antes NÃO se repetiu em 2 execuções; sem causa identificada (não investigável sem a saída da falha) |
+| eslint nos arquivos alterados | 0 erros novos. Preexistentes: `any` em `users/[id]/route.ts:43` e `isAdmin` não usado em `sessions/[sessionId]/settings/route.ts:5` |
+| `npm run build` (env fictício só no processo) | OK |
+
+### NÃO verificado
+- Nada rodou contra banco real (mesmo ponto acima). Em especial `importacaoId`, `orderBy` composto e `Promise.all` em lote só com Prisma simulado.
+- **Desempenho dos `groupBy` de `Message`** (4 por requisição, período até 92 dias) e da consulta de `ResultEvent` por contato: sem `EXPLAIN` real. Exigido em staging (P13) antes de liberar para mais de uma sessão.
+- Página no navegador e acessibilidade (legenda visível, leitor de tela).
+- Casamento telefone da planilha x jid (LID, 9º dígito). O painel só conta quantos importados não têm conversa.
+- Exclusão de sessão/usuário nas rotas reais: a cascata foi testada na função, não ponta a ponta.
+- Pedido de exclusão por telefone (titular) não tem tela.
+
+### Schemas pendentes
+- `ResultEvent` (`26be5ee`) e o campo `importacaoId` com índice `(userId, sessionId, importacaoId)` (`104d330`): aditivos, não aplicados; o SQL precisa de revisão e backup antes de qualquer `db push`. Sem `prisma/migrations` no repositório.
+- Possível índice em `Message` para o `groupBy` (decidir após o EXPLAIN).

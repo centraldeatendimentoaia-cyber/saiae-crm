@@ -15,6 +15,10 @@ Objetivo: provar, em staging e depois na operação real da LAVI Concept, que au
 | P7 | Provedor de envio Instagram/Messenger no executor implementado e revisado (hoje inexistente: gatilhos sociais não podem ser ligados) | revisão independente + teste com provedor fictício | João decide prosseguir |
 | P8 | Conta de teste da Meta e número WhatsApp próprio do João/equipe como destinatários; nenhum cliente real | lista nominal dos destinatários | João |
 | P9 | Credenciais do incidente (`incidente-credenciais.md`) tratadas | decisão registrada do João | João |
+| P10 | **Não fazer deploy deste branch (`feat/sprint7-resultados-piloto`) em produção.** Só staging. | Railway production sem este commit; conferência do João | João |
+| P11 | `RESULTADOS_ENABLED=true` só no staging (desligado por padrão: `/api/resultados` responde 404) | variável no painel do staging; produção sem a variável | agente |
+| P12 | Base legal e LGPD definidas antes de importar agenda real (ver seção 8) | registro do João | João |
+| P13 | `EXPLAIN (ANALYZE, BUFFERS)` dos `groupBy` de `Message` e das consultas de `ResultEvent` em staging com volume real, período de 92 dias | plano de execução anexado; sem seq scan sobre a tabela inteira; tempo da resposta < 3 s | agente |
 
 Sem P1 a P4 o piloto não começa. P5 a P7 só são necessários para as etapas sociais (etapa 6).
 
@@ -26,7 +30,7 @@ Cada etapa só começa quando a anterior cumpre seus critérios. Registrar data,
 2. **Painel de resultados com dados vazios e reais de WhatsApp.** Abrir `/dashboard/resultados` num período sem dados: mensagem de vazio, sem erro. Num período com conversas: conferir manualmente 10 contatos amostrados (lead, conversa, resposta) contra o chat. Critério: 10 de 10 batem.
 3. **Origem.** Conferir 10 conversas: as vindas de anúncio (marcador) aparecem como Anúncio confirmado; as sem marcador, Orgânico inferido; as sem nada, "Origem não identificada". Critério: nenhuma origem exibida como confirmada sem marcador; contagem de desconhecidos igual à contagem manual.
 4. **Importação de agenda com arquivo sintético** (`tipo;contato;ocorrido_em;origem;campanha;referencia;valor`): importar, conferir contagens; importar de novo (novos = 0); importar arquivo com 5 linhas inválidas (rejeitadas com número da linha). Depois importar uma exportação REAL da agenda da LAVI (só o João autoriza) e comparar o total de comparecimentos do painel com a agenda: diferença aceita = 0 para linhas válidas.
-5. **Isolamento.** Com dois usuários de teste e duas sessões: o usuário B recebe 403 em `/api/resultados/<sessão de A>` e na importação; o painel de B não mostra eventos de A. Critério: 0 vazamentos.
+5. **Isolamento e papéis.** Com quatro papéis: (a) dono da sessão A; (b) usuário B sem relação com A; (c) usuário C com `SessionAccess` compartilhado em A; (d) admin. Esperado: B recebe 403 em `/api/resultados/<sessão de A>` e na importação; C lê o painel de A (200) mas recebe 403 na importação e no desfazer lote; o dono e o admin leem e importam; o painel de B não mostra eventos de A. Também testar sessão com nome igual ao id interno de outra (deve usar a sessão do id). Critério: 0 vazamentos e a matriz acima 100% igual.
 6. **Automações e gatilhos (só com P5 a P8).** Fluxo de teste (texto, espera, etiqueta) iniciado manualmente para o número de teste; depois UMA flag por vez (DM, comentário), com conta de teste. Critério: cada evento dispara 1 vez (sem duplicata em reentrega do webhook), respeita opt-out "SAIR", respeita janela de 24 h/7 dias.
 7. **Exportação CSV**: abrir no Excel; célula iniciada por `=`, `+`, `-`, `@` aparece como texto. Critério: nenhuma fórmula executada.
 8. **Observação de 7 dias** com flags de automação ligadas só para a conta de teste. Critério: ver métricas de sucesso.
@@ -45,10 +49,12 @@ Cada etapa só começa quando a anterior cumpre seus critérios. Registrar data,
 
 | Métrica | Meta mínima | Fonte |
 |---|---|---|
-| Leads com origem identificada (confirmada ou inferida) | acompanhar e registrar (linha de base); meta definida pelo João após a 1ª semana | painel |
-| Conversas respondidas / conversas iniciadas | igual ou melhor que a semana anterior sem automação | painel + `/dashboard/metricas` |
-| Tempo mediano da primeira resposta | não pior que a linha de base | `/dashboard/metricas` |
-| Comparecimentos conferidos com a agenda | 100% das linhas importadas | agenda da LAVI |
+| Leads com origem identificada (confirmada ou inferida) | registrar a linha de base na 1ª semana (S0); depois da S0 a meta é fixada pelo João por escrito ANTES de ligar qualquer automação, no formato "origem identificada >= X% dos leads"; sem meta escrita, a métrica não conta como aprovada | painel |
+| Conversas respondidas (inferidas) / conversas iniciadas | semana de teste >= S0 menos 5 pontos percentuais (margem de ruído); margem registrada antes da observação | painel + `/dashboard/metricas` |
+| Tempo mediano da primeira resposta | semana de teste <= S0 mais 10% | `/dashboard/metricas` |
+| Comparecimentos conferidos com a agenda | 100% das linhas importadas (diferença = 0) | agenda da LAVI |
+| Linhas importadas com fonte conferida | amostra de 20 linhas conferidas à mão; 20 de 20 iguais antes de marcar `fonte_conferida = sim` em lote | agenda da LAVI |
+| Contatos importados sem conversa registrada | registrar o número; acima de 20% das linhas, investigar o formato do telefone antes de seguir | painel |
 | Incidentes (envio indevido, duplicado, vazamento) | 0 | log + relato da equipe |
 
 Nenhuma meta de conversão ou receita é prometida: sem evidência de causa, o painel só descreve o que aconteceu.
@@ -83,3 +89,12 @@ Nenhuma meta de conversão ou receita é prometida: sem evidência de causa, o p
 | Correções técnicas e revisão independente | agente técnico + revisor |
 
 Clientes externos só entram após: critérios da seção 3 cumpridos, 7 dias sem incidente, isolamento por empresa testado com dados de duas empresas e decisão escrita do João.
+
+## 8. Base legal, LGPD e retenção (a decidir pelo João antes da importação real)
+
+- Dados tratados: telefone (identifica pessoa), data de agendamento/comparecimento, valor da venda e origem declarada. Os eventos ficam na tabela `ResultEvent`, sem conteúdo de mensagem.
+- Base legal: o painel usa dados que a LAVI já possui para atender o cliente; a base proposta é **legítimo interesse** (medir e melhorar o próprio atendimento) ou **execução de contrato**, a confirmar com o encarregado/assessoria jurídica. O João registra a decisão aqui antes da importação real. Se a decisão for consentimento, a importação real não começa.
+- Minimização: importar só as colunas do modelo; sem nome, CPF, observações médicas ou texto livre além do nome da campanha.
+- Retenção: `ResultEvent` apagado automaticamente após `RESULT_EVENT_RETENTION_DAYS` dias da data do evento (padrão 365; 0 desliga), na rotina diária de `retention.ts`. Revisar o prazo junto com a Política de Privacidade.
+- Exclusão: excluir a sessão ou o usuário apaga os `ResultEvent` correspondentes (cascata manual, sem chave estrangeira). Há também "Desfazer esta importação" por lote.
+- Direitos do titular: pedido de exclusão de um telefone exige apagar manualmente os `ResultEvent` desse `contactKey` (não há tela; registrar como pendência).
