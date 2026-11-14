@@ -1014,3 +1014,12 @@ model AutomationStep {
 
   @@unique([runId, seq])
 }
+
+// Reserva atômica de eventos sociais (dedupe de webhook e "uma resposta privada por comentário"). Só aditivo.
+model AutomationTriggerEvent {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
