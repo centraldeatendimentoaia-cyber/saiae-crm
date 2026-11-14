@@ -111,7 +111,7 @@ describe("importação de agenda", () => {
         const r = interpretarImportacao("csv", csv, AGORA);
         expect(r.ok && r.resultado.eventos).toHaveLength(3);
         if (!r.ok) throw new Error();
-        expect(r.resultado.eventos[0]).toMatchObject({ contactKey: "5561999990001@s.whatsapp.net", origem: "anuncio", dedupKey: "agendamento_confirmado:5561999990001@s.whatsapp.net:AG-1", confianca: "inferido" });
+        expect(r.resultado.eventos[0]).toMatchObject({ contactKey: "5561999990001@s.whatsapp.net", origem: "anuncio", dedupKey: expect.stringMatching(/^r:[0-9a-f]{64}$/), confianca: "inferido" });
         expect(r.resultado.eventos[2].valorCentavos).toBe(15050);
     });
     it("é idempotente: mesma entrada gera as mesmas chaves, e repetição no arquivo é descartada", () => {
@@ -154,6 +154,15 @@ describe("importação de agenda", () => {
         const b = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;campanha", "venda;61999990001;2026-11-01;Corte �"), AGORA);
         expect(b.ok && b.resultado.avisos.join(" ")).toMatch(/UTF-8/);
     });
+    it("referências que diferem só por caixa geram chaves diferentes e ambas são importadas (a collation do banco ignora caixa)", () => {
+        const r = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;referencia", "venda;61999990001;2026-11-01;PedidoA", "venda;61999990001;2026-11-01;pedidoa"), AGORA);
+        if (!r.ok) throw new Error();
+        expect(r.resultado.eventos).toHaveLength(2);
+        const [a, b] = r.resultado.eventos.map((e) => e.dedupKey);
+        expect(a).not.toBe(b);
+        expect(a.toLowerCase()).not.toBe(b.toLowerCase()); // distintas até comparando sem diferenciar caixa
+        expect(a.length).toBeLessThanOrEqual(191);
+    });
     it("sem referência a chave vem do hash de tipo+contato+data", () => {
         const r = interpretarImportacao("csv", "tipo;contato;ocorrido_em\nvenda;61999990002;2026-11-01", AGORA);
         if (!r.ok) throw new Error();
@@ -177,7 +186,7 @@ describe("importação de agenda", () => {
         const item = { tipo: "agendamento_solicitado", contato: "5561999990003", ocorrido_em: "2026-11-12T10:00:00-03:00", referencia: 42 };
         const a = interpretarImportacao("json", JSON.stringify([item]), AGORA);
         const b = interpretarImportacao("json", JSON.stringify({ eventos: [item, "lixo"] }), AGORA);
-        expect(a.ok && a.resultado.eventos[0].dedupKey).toBe("agendamento_solicitado:5561999990003@s.whatsapp.net:42");
+        expect(a.ok && a.resultado.eventos[0].dedupKey).toMatch(/^r:[0-9a-f]{64}$/);
         expect(b.ok && b.resultado.rejeitadas).toHaveLength(1);
     });
     it("texto livre com controle e fórmula não quebra a leitura; fórmula é neutralizada só na exportação", () => {

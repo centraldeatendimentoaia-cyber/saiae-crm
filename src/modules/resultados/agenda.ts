@@ -70,7 +70,9 @@ function lerValor(bruto: string): number | null | "invalido" | "ambiguo" {
 }
 
 export function chaveDedup(e: { tipo: string; contactKey: string; ocorridoEm: Date; refExterna: string | null }): string {
-    if (e.refExterna) return `${e.tipo}:${e.contactKey}:${e.refExterna}`;
+    // Hash dos identificadores EXATOS: a coluna usa collation insensível a maiúsculas, e a referência literal faria "PedidoA" e
+    // "pedidoa" colidirem no banco. Hex minúsculo mantém a unicidade igual com ou sem collation e cabe no índice (66 caracteres).
+    if (e.refExterna) return "r:" + createHash("sha256").update(JSON.stringify([e.tipo, e.contactKey, e.refExterna])).digest("hex");
     return "h:" + createHash("sha256").update(`${e.tipo}|${e.contactKey}|${e.ocorridoEm.toISOString()}`).digest("hex").slice(0, 32);
 }
 
