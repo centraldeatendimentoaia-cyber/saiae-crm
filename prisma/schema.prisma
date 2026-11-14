@@ -1037,7 +1037,7 @@ model ResultEvent {
   tipo          String // agendamento_solicitado | agendamento_confirmado | comparecimento | venda
   origem        String? // campanha | post | anuncio | organico | indicacao (declarada na importação; null = não informada)
   origemDetalhe String? // nome da campanha/post, texto livre curto
-  confianca     String   @default("confirmado") // confirmado | inferido | desconhecido
+  confianca     String   @default("inferido") // confirmado | inferido | desconhecido
   fonte         String // importacao_csv | importacao_json
   refExterna    String? // id do registro no sistema de origem
   dedupKey      String // idempotência: tipo:refExterna ou hash de tipo+contato+data
