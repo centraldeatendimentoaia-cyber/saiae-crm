@@ -36,19 +36,31 @@ export async function acquireJobLock(name: string, ttlMs: number): Promise<boole
  * Se o processo morrer, a trava expira em `ttlMs`.
  */
 export async function withJobLock<T>(name: string, ttlMs: number, fn: () => Promise<T>): Promise<T | undefined> {
-    if (!(await acquireJobLock(name, ttlMs))) return undefined;
+    const release = await startJobLock(name, ttlMs);
+    if (!release) return undefined;
+    try {
+        return await fn();
+    } finally {
+        await release();
+    }
+}
+
+/**
+ * Pega a trava `name` e a mantém renovada até chamar a função devolvida (para trabalho que continua depois de a
+ * função que o iniciou retornar, como o disparo manual em segundo plano). Devolve null se outra instância a segura.
+ */
+export async function startJobLock(name: string, ttlMs: number): Promise<(() => Promise<void>) | null> {
+    if (!(await acquireJobLock(name, ttlMs))) return null;
     const beat = setInterval(() => {
         prisma.jobLock
             .updateMany({ where: { name, holder: HOLDER }, data: { expiresAt: new Date(Date.now() + ttlMs) } })
             .catch(() => {});
     }, Math.max(1000, Math.floor(ttlMs / 3)));
     beat.unref?.();
-    try {
-        return await fn();
-    } finally {
+    return async () => {
         clearInterval(beat);
         await prisma.jobLock.deleteMany({ where: { name, holder: HOLDER } }).catch(() => {});
-    }
+    };
 }
 
 const PRESENCA_PREFIXO = "instancia:";

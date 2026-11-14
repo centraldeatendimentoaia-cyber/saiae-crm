@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
 vi.mock("./prisma", () => ({ prisma: h.prisma }));
 vi.mock("./logger", () => ({ logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import { acquireJobLock, withJobLock, outrasInstanciasVivas, registrarInstancia } from "./job-lock";
+import { acquireJobLock, withJobLock, startJobLock, outrasInstanciasVivas, registrarInstancia } from "./job-lock";
 
 const dup = Object.assign(new Error("unique"), { code: "P2002" });
 
@@ -16,6 +16,21 @@ beforeEach(() => {
     h.prisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
 });
 afterEach(() => vi.useRealTimers());
+
+describe("startJobLock", () => {
+    it("devolve null quando outra instância segura a trava", async () => {
+        h.prisma.jobLock.create.mockRejectedValue(dup);
+        h.prisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
+        expect(await startJobLock("j", 1000)).toBeNull();
+    });
+    it("devolve a função que libera a trava (só a do próprio holder)", async () => {
+        h.prisma.jobLock.create.mockResolvedValue({});
+        const release = await startJobLock("j", 1000);
+        expect(release).toBeTypeOf("function");
+        await release!();
+        expect(h.prisma.jobLock.deleteMany).toHaveBeenCalledWith({ where: { name: "j", holder: expect.any(String) } });
+    });
+});
 
 describe("acquireJobLock", () => {
     it("pega a trava quando não existe linha", async () => {

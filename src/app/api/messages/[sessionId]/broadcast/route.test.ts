@@ -31,6 +31,15 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
+// Trava no banco emulada em memória: criar a chave é atômico (como o INSERT com chave única do JobLock).
+const locks = vi.hoisted(() => ({ held: new Set<string>(), released: [] as string[] }));
+vi.mock("@/lib/job-lock", () => ({
+    startJobLock: async (name: string) => {
+        if (locks.held.has(name)) return null;
+        locks.held.add(name);
+        return async () => { locks.held.delete(name); locks.released.push(name); };
+    },
+}));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: h.getInstance } }));
 vi.mock("@/lib/api-auth", () => ({ getAuthenticatedUser: h.getAuthenticatedUser, canAccessSession: h.canAccessSession }));
 vi.mock("@/lib/plans", () => ({
@@ -79,7 +88,8 @@ async function finished() {
 }
 
 beforeEach(() => {
-    ((globalThis as unknown as { __broadcastRunning?: Map<string, string> }).__broadcastRunning)?.clear();
+    locks.held.clear();
+    locks.released.length = 0;
     Object.values(h.prisma).forEach((m) => Object.values(m).forEach((fn) => (fn as ReturnType<typeof vi.fn>).mockReset()));
     h.socket.sendMessage.mockReset().mockResolvedValue({ key: { id: "ID1" } });
     h.socket.onWhatsApp.mockReset();
@@ -123,11 +133,36 @@ describe("POST /api/messages/{sessionId}/broadcast", () => {
     });
 
     it("já existe disparo em andamento neste número: 409", async () => {
-        (globalThis as unknown as { __broadcastRunning: Map<string, string> }).__broadcastRunning ||= new Map();
-        (globalThis as unknown as { __broadcastRunning: Map<string, string> }).__broadcastRunning.set(SESSION, "outro");
+        locks.held.add(`broadcast:${SESSION}`); // outra instância (ou outra chamada) já segura a trava
         const res = await call({ recipients: [J1], message: "Oi" });
         expect(res.status).toBe(409);
         expect((await res.json()).code).toBe("BROADCAST_RUNNING");
+    });
+
+    it("duas chamadas simultâneas: só uma inicia o disparo (trava atômica antes de qualquer await de trabalho)", async () => {
+        const [r1, r2] = await Promise.all([call({ recipients: [J1], message: "Oi" }), call({ recipients: [J2], message: "Oi" })]);
+        expect([r1.status, r2.status].sort()).toEqual([200, 409]);
+        expect(h.prisma.broadcastLog.create).toHaveBeenCalledTimes(1);
+        await finished();
+        await vi.waitFor(() => expect(locks.held.size).toBe(0)); // libera a trava ao terminar
+    });
+
+    it("erro antes de iniciar (cota estourada) libera a trava: o próximo disparo não fica preso", async () => {
+        const { PlanError } = await import("@/lib/plans");
+        h.assertCanSend.mockRejectedValueOnce(Object.assign(new PlanError("Sem cota"), { name: "PlanError" }));
+        expect((await call({ recipients: [J1], message: "Oi" })).status).toBe(402);
+        expect(locks.held.size).toBe(0);
+        expect((await call({ recipients: [J1], message: "Oi" })).status).toBe(200);
+        await finished();
+    });
+
+    it("resultado desconhecido (tempo esgotado) é sinalizado no destinatário e não é reenviado", async () => {
+        h.socket.sendMessage.mockReset().mockRejectedValue(new Error("Timed Out"));
+        await call({ recipients: [J1], message: "Oi" });
+        await finished();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+        const upd = h.prisma.broadcastRecipient.updateMany.mock.calls.find((c) => c[0]?.data?.status === "failed")![0];
+        expect(upd.data.error).toMatch(/Resultado desconhecido/);
     });
 
     it("cota do plano estourada: 402 PLAN_LIMIT", async () => {
