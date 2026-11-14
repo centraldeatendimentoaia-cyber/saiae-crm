@@ -901,3 +901,21 @@ model AtendenteSugestao {
 
   @@index([sessionId, status])
 }
+
+/// Registro durável de cada ocorrência de uma ScheduledMessage (Sprint 2). SO TABELA NOVA: nada existente muda.
+/// O @@unique e o claim atômico: quem cria a linha é o único que envia aquela ocorrência (duas instâncias, reinício).
+/// status: claimed (reservada, envio em curso) | sent | failed | unknown (pode ter saído; nunca reenviar sozinho) | missed (atrasada demais, não enviada)
+/// Sem relação Prisma de propósito (mesmo padrão das tabelas de sessionId texto): não altera ScheduledMessage.
+model ScheduledMessageAttempt {
+  id                 String    @id @default(cuid())
+  scheduledMessageId String
+  occurrenceAt       DateTime
+  status             String    @default("claimed")
+  failureClass       String? // transient | permanent | policy | unknown
+  error              String?   @db.Text
+  claimedAt          DateTime  @default(now())
+  finishedAt         DateTime?
+
+  @@unique([scheduledMessageId, occurrenceAt])
+  @@index([status, claimedAt])
+}
