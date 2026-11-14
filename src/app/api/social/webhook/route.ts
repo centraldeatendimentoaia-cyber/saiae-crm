@@ -10,6 +10,29 @@ export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 1_000_000;
 const TAG = "SocialWebhook";
+const MAX_EVENTOS = 100;
+const LOTE = 5;
+
+/** Lê o corpo aos pedaços e aborta acima do limite (não bufferiza chunked sem teto). null = grande demais. */
+async function lerCorpoLimitado(request: NextRequest): Promise<Buffer | null> {
+    if (!request.body) return Buffer.alloc(0);
+    const reader = request.body.getReader();
+    const partes: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_BODY_BYTES) { await reader.cancel().catch(() => undefined); return null; }
+        partes.push(value);
+    }
+    return Buffer.concat(partes);
+}
+
+async function processarEmLotes(eventos: ReturnType<typeof normalizarWebhookSocial>, deps: ReturnType<typeof depsReais>) {
+    for (let i = 0; i < eventos.length; i += LOTE)
+        await Promise.all(eventos.slice(i, i + LOTE).map((e) => processarEventoSocial(e, deps).catch((err) => logger.warn(TAG, `falha ao processar evento: ${err instanceof Error ? err.name : "erro"}`))));
+}
 
 /**
  * Webhook de Instagram/Messenger (DM e comentário) para os gatilhos de automação. Rota pública (src/proxy.ts):
@@ -31,8 +54,8 @@ export async function POST(request: NextRequest) {
     const secret = process.env.SOCIAL_META_APP_SECRET;
     if (!secret) return NextResponse.json({ error: "Webhook não configurado" }, { status: 503 });
     if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return NextResponse.json({ error: "Corpo grande demais" }, { status: 413 });
-    const raw = Buffer.from(await request.arrayBuffer());
-    if (raw.length > MAX_BODY_BYTES) return NextResponse.json({ error: "Corpo grande demais" }, { status: 413 });
+    const raw = await lerCorpoLimitado(request);
+    if (!raw) return NextResponse.json({ error: "Corpo grande demais" }, { status: 413 });
     if (!verifyMetaSignature(raw, request.headers.get("x-hub-signature-256"), secret)) {
         logger.warn(TAG, "assinatura inválida");
         return NextResponse.json({ error: "Assinatura inválida" }, { status: 401 });
@@ -40,9 +63,9 @@ export async function POST(request: NextRequest) {
     let payload: unknown;
     try { payload = JSON.parse(raw.toString("utf8")); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
-    const eventos = normalizarWebhookSocial(payload);
+    const eventos = normalizarWebhookSocial(payload).slice(0, MAX_EVENTOS);
     const deps = depsReais();
     // 200 rápido: falha de processamento nunca vira erro para a Meta (ela reentregaria o lote)
-    void Promise.all(eventos.map((e) => processarEventoSocial(e, deps))).catch((e) => logger.warn(TAG, `falha ao processar evento: ${e instanceof Error ? e.name : "erro"}`));
+    void processarEmLotes(eventos, deps);
     return NextResponse.json({ received: true });
 }

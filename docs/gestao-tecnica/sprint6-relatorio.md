@@ -1,6 +1,6 @@
 # Sprint 6 (Editor visual e canais sociais): relatório
 
-Branch `feat/sprint6-editor-canais`, a partir do Sprint 5 (contém Sprints 2, 3 e 5). Nada foi implantado, enviado, publicado nem testado contra Meta/WhatsApp reais. Não houve alteração de schema (nenhum commit `db:`). ChatbotX serviu só como referência de padrões (rascunho x publicado, códigos de validação por nó, poucos nós primitivos); nenhum código dele foi usado.
+Branch `feat/sprint6-editor-canais`, a partir do Sprint 5 (contém Sprints 2, 3 e 5). Nada foi implantado, enviado, publicado nem testado contra Meta/WhatsApp reais. Schema: só o commit aditivo `db:` do modelo `AutomationTriggerEvent` (ver "Ajustes pós-revisão"; sem db push). ChatbotX serviu só como referência de padrões (rascunho x publicado, códigos de validação por nó, poucos nós primitivos); nenhum código dele foi usado.
 
 ## Decisões
 
@@ -72,7 +72,27 @@ Nenhuma flag nova está ligada; os gatilhos ficam inertes. A rota `/api/social/w
 
 ## Pendências
 
-- **Schema** (nenhuma feita neste sprint, tudo aditivo se for preciso): tabela de eventos sociais processados (`AutomationTriggerEvent`, único por conta e id de evento) para dedupe entre instâncias e retenção; hoje o dedupe é em memória por processo (TTL 48 h). Opt-out social reaproveita `OptOut` com `sessionId = social:<accountId>` e `phoneKey` = id do remetente (sem coluna nova).
+- **Schema**: modelo aditivo `AutomationTriggerEvent` (chave `key` única) já no `schema.prisma`, MAS a tabela precisa ser criada no banco (db push/migrate, fora deste trabalho) ANTES de ligar qualquer flag de gatilho: sem ela a reserva de evento falha e nada dispara. Falta rotina de retenção (apagar linhas antigas; índice em `createdAt` já existe). Opt-out social reaproveita `OptOut` com `sessionId = social:<accountId>` e `phoneKey` = id do remetente (sem coluna nova).
 - **Provedor de envio Instagram/Messenger** no executor (DM e resposta privada por `comment_id`, conferindo `janela_ate_ms` antes de enviar e usando `classificarErroCanal`); sem isso nenhum gatilho habilita. `AutomationRun` hoje exige `Contact` do WhatsApp; `contactKey` social (`instagram:<id>`) vai precisar de outro caminho em `iniciarRun`.
 - App Review da Meta e ampliar `SCOPES` em `oauth.ts` (reconectar as contas depois).
 - Editor: renomear id de nó, desfazer/refazer, condições compostas só por JSON, validação do bloco `trigger` ao publicar, exibir no editor aviso de gatilho sem conta.
+
+## Ajustes pós-revisão
+
+Mudanças (revisão independente, nenhum bloqueante; viram críticos ao ligar provedor/flags):
+
+1. **Reserva atômica**: `reservar` agora faz `create` em `AutomationTriggerEvent` (unique em `key`); P2002 = já reservado (false); outro erro propaga e não marca a chave. O Map em memória virou só cache (consultado antes, gravado depois do sucesso). Vale para o dedupe de evento e para "uma resposta privada por comentário".
+2. **Trigger validado no servidor** (`gatilhos/validacao.ts`): zod estrito (tipo e canal no enum, accountId string, `palavras` até 20 de até 100 caracteres, `postId` até 100) e lookup de `SocialAccount` por id, userId e provedor do canal. Roda no publicar e no PUT do rascunho (`definicao_invalida`, HTTP 400 com detalhes no PUT). O roteador usa `Array.isArray`/filtro de tipo em `palavras` e isola erro por fluxo (match e início): um fluxo ruim não aborta os outros.
+3. `created_time` do Messenger: abaixo de 1e11 é segundos e é multiplicado por 1000.
+4. Webhook: corpo lido por `getReader()`, aborta acima de 1 MB (413) mesmo chunked sem content-length.
+5. Webhook: no máximo 100 eventos por requisição, processados em lotes de 5.
+6. Menores: id de nó `__proto__|constructor|prototype` recusado no validador; `editor/grafo.ts` usa `Object.create(null)` e `Object.hasOwn`; teto de 100 posições em `layout` (PUT e publicar); `key={sel.id}` em `<PropriedadesNo>`.
+
+Resultados REAIS: `prisma generate` ok; `npm run typecheck` sem erros; `npm test` 144 arquivos, 2404 testes passando; eslint nos arquivos alterados sem erros; `npm run build` ok (env fictício só no processo). Testes novos: `gatilhos/endurecimento.test.ts` (corrida, reinício, P2002, trigger, isolamento por fluxo, segundos Unix, ids perigosos) e `api/social/webhook/limites.test.ts` (413 em chunked, teto de 100 eventos, lotes de 5).
+
+NÃO verificado / não feito:
+- A tabela `AutomationTriggerEvent` não existe em nenhum banco (sem db push); a reserva só foi testada com Prisma simulado, não com Postgres real nem com duas instâncias.
+- Filtro de conta desconectada/token expirado em `contasPorExterno`: `SocialAccount` não tem campo de status, então não foi feito (exigiria schema novo).
+- Sem teste de integração do PUT/publicar com layout acima do teto (a regra está em `servico.ts`, coberta só por leitura).
+- Reordenação de `package.json`: a diferença contra a base misturou mudanças da main; não revertida por não ser trivial.
+- Sem retenção/limpeza das linhas de `AutomationTriggerEvent`.

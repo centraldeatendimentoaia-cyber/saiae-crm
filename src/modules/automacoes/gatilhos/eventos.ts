@@ -10,6 +10,9 @@ const str = (v: unknown): string | undefined => (typeof v === "string" && v !== 
 const obj = (v: unknown): Record<string, unknown> | undefined => (typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined);
 const num = (v: unknown, padrao: number) => (typeof v === "number" && Number.isFinite(v) ? v : padrao);
 
+// created_time do Messenger vem em segundos Unix; abaixo de 1e11 nenhuma data em ms é plausível (1e11 ms = 1973).
+const paraMs = (t: number) => (t < 1e11 ? t * 1000 : t);
+
 export function normalizarWebhookSocial(payload: unknown, agoraMs = Date.now()): EventoSocial[] {
     const p = obj(payload);
     const object = str(p?.object);
@@ -40,7 +43,7 @@ export function normalizarWebhookSocial(payload: unknown, agoraMs = Date.now()):
             const autorId = str(obj(v.from)?.id);
             const postId = str(obj(v.media)?.id) ?? str(v.post_id);
             if (!comentarioId || !autorId || !postId || autorId === conta) continue;
-            saida.push({ tipo: "comentario", canal, eventoId: `comentario:${comentarioId}`, contaExternaId: conta, comentarioId, postId, autorId, texto: str(v.text) ?? str(v.message) ?? "", emMs: num(v.created_time, agoraMs) });
+            saida.push({ tipo: "comentario", canal, eventoId: `comentario:${comentarioId}`, contaExternaId: conta, comentarioId, postId, autorId, texto: str(v.text) ?? str(v.message) ?? "", emMs: paraMs(num(v.created_time, agoraMs)) });
         }
     }
     return saida;

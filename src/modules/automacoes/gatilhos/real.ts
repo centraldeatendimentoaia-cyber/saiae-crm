@@ -8,14 +8,25 @@ import type { DepsRoteador, GatilhoDoFluxo } from "./roteador";
  */
 const PROVEDOR: Record<string, string> = { instagram: "instagram", messenger: "facebook" };
 
-// shortcut: dedupe de eventos em memória do processo (TTL 48 h); com mais de uma instância precisa de tabela única (ver pendências de schema no relatório).
+// Cache em memória (TTL 48 h) só como otimização: a verdade é a tabela AutomationTriggerEvent (chave única), válida entre instâncias e reinícios.
 const VISTOS = new Map<string, number>();
 const TTL_MS = 48 * 3_600_000;
-export function reservarEmMemoria(chave: string, agora = Date.now()): boolean {
-    if (VISTOS.size > 5000) for (const [k, t] of VISTOS) if (agora - t > TTL_MS) VISTOS.delete(k);
-    const t = VISTOS.get(chave);
-    if (t !== undefined && agora - t <= TTL_MS) return false;
-    VISTOS.set(chave, agora);
+const visto = (chave: string) => { const t = VISTOS.get(chave); return t !== undefined && Date.now() - t <= TTL_MS; };
+function lembrar(chave: string) {
+    if (VISTOS.size > 5000) for (const [k, t] of VISTOS) if (Date.now() - t > TTL_MS) VISTOS.delete(k);
+    VISTOS.set(chave, Date.now());
+}
+
+/** Reserva atômica: true só para quem criou a linha (P2002 = outra entrega/instância já reservou). Erro de banco propaga. */
+export async function reservarNoBanco(chave: string): Promise<boolean> {
+    if (visto(chave)) return false;
+    try {
+        await prisma.automationTriggerEvent.create({ data: { key: chave }, select: { id: true } });
+    } catch (e) {
+        if ((e as { code?: string } | null)?.code === "P2002") { lembrar(chave); return false; }
+        throw e;
+    }
+    lembrar(chave);
     return true;
 }
 
@@ -36,7 +47,7 @@ export function depsReais(): DepsRoteador {
                 return t && t.accountId === accountId ? [{ flowId: f.id, trigger: t }] : [];
             });
         },
-        reservar: async (chave) => reservarEmMemoria(chave),
+        reservar: reservarNoBanco,
         async optedOut(accountId, remetenteId) {
             return !!(await prisma.optOut.findUnique({ where: { sessionId_phoneKey: { sessionId: `social:${accountId}`, phoneKey: remetenteId } }, select: { id: true } }));
         },

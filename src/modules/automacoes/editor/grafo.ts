@@ -68,16 +68,16 @@ export function definicaoParaGrafo(def: Definicao | DefinicaoEditor): Grafo {
 }
 
 export function grafoParaDefinicao(g: Grafo): DefinicaoEditor {
-    const nodes: Record<string, No> = {};
-    const layout: Record<string, Posicao> = {};
+    const nodes: Record<string, No> = Object.create(null); // sem protótipo: id "__proto__" não polui
+    const layout: Record<string, Posicao> = Object.create(null);
     for (const n of g.nodes) {
         nodes[n.id] = { ...n.data } as unknown as No;
         layout[n.id] = { x: n.position.x, y: n.position.y };
     }
     // Uma saída por alça: a última aresta vence se o usuário ligar duas vezes a mesma alça.
     for (const e of g.edges) {
+        if (!Object.hasOwn(nodes, e.source)) continue;
         const no = nodes[e.source];
-        if (!no) continue;
         const permitidas = no.type === "condicao" ? ["then", "else"] : no.type === "fim" || no.type === "transferencia_humana" ? [] : ["next"];
         if (permitidas.includes(e.sourceHandle)) (no as unknown as Record<string, string>)[e.sourceHandle] = e.target;
     }

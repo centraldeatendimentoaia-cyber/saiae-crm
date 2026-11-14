@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try {
         return NextResponse.json({ status: true, data: await obterFluxo(user.id, (await params).id) });
     } catch (e) {
-        if (e instanceof ErroAutomacao) return NextResponse.json({ status: false, message: e.codigo, error: e.codigo }, { status: 404 });
+        if (e instanceof ErroAutomacao) return NextResponse.json({ status: false, message: e.codigo, error: e.codigo, details: e.detalhes }, { status: e.codigo === "nao_encontrado" ? 404 : 400 });
         throw e;
     }
 }

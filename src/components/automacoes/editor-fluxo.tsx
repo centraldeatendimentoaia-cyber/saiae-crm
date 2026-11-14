@@ -192,7 +192,7 @@ function EditorInterno({ flowId }: { flowId: string }) {
                 <aside className="min-h-0 space-y-4 overflow-y-auto rounded-xl border bg-card p-3" aria-label="Painéis do editor">
                     {sel ? (
                         <PropriedadesNo
-                            id={sel.id} data={sel.data} erros={mostrarErros ? validacao.porNo[sel.id] ?? [] : []} ehInicio={inicio === sel.id} destinos={destinos(sel.id)}
+                            key={sel.id} id={sel.id} data={sel.data} erros={mostrarErros ? validacao.porNo[sel.id] ?? [] : []} ehInicio={inicio === sel.id} destinos={destinos(sel.id)}
                             outrosNos={nodes.map((n) => n.id)} onMudar={(p) => mudarDados(sel.id, p)} onLigar={(a, alvo) => ligar(sel.id, a, alvo)} onInicio={() => { setInicio(sel.id); setSujo(true); }} onRemover={() => remover(sel.id)}
                         />
                     ) : <p className="text-sm text-muted-foreground">Selecione um nó no canvas ou na lista abaixo para editar.</p>}

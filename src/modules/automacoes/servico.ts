@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessSession } from "@/lib/api-auth";
 import { JANELA_DEDUP_MS, MAX_SIMULTANEAS_POR_CONTATO_FLUXO, SCHEMA_VERSION, STATUS_ATIVOS, TIMEOUT_TOTAL_MS, type Contexto, type Definicao, type MotivoCancelamento } from "./tipos";
 import { validarDefinicao } from "./validador";
+import { validarTrigger } from "./gatilhos/validacao";
 export { cancelarRunsDoContato } from "./cancelamento";
 
 /** Serviço do motor: tudo escopado por `userId`. Sem gatilho real de webhook/Meta neste sprint (só início manual). */
@@ -41,7 +42,17 @@ export async function obterFluxo(userId: string, flowId: string) {
     return f;
 }
 
+const MAX_LAYOUT = 100;
+/** Campos extras do editor (layout e gatilho): tetos e validação de servidor. */
+async function validarExtras(userId: string, def: unknown): Promise<string[]> {
+    const layout = typeof def === "object" && def !== null ? (def as { layout?: unknown }).layout : undefined;
+    if (layout !== undefined && (typeof layout !== "object" || layout === null || Array.isArray(layout) || Object.keys(layout).length > MAX_LAYOUT)) return [`layout deve ser um objeto com até ${MAX_LAYOUT} posições`];
+    return validarTrigger(userId, def);
+}
+
 export async function atualizarRascunho(userId: string, flowId: string, draft: unknown) {
+    const extras = await validarExtras(userId, draft);
+    if (extras.length) throw new ErroAutomacao("definicao_invalida", extras);
     const r = await prisma.automationFlow.updateMany({ where: { id: flowId, userId, status: "active" }, data: { draft: json(draft) } });
     if (r.count !== 1) throw new ErroAutomacao("nao_encontrado");
 }
@@ -51,7 +62,7 @@ export async function publicarFluxo(userId: string, flowId: string) {
     const flow = await prisma.automationFlow.findFirst({ where: { id: flowId, userId } });
     if (!flow) throw new ErroAutomacao("nao_encontrado");
     if (flow.status !== "active") throw new ErroAutomacao("arquivado");
-    const erros = validarDefinicao(flow.draft);
+    const erros = [...validarDefinicao(flow.draft), ...(await validarExtras(userId, flow.draft))];
     if (erros.length) throw new ErroAutomacao("definicao_invalida", erros);
     for (let tentativa = 0; ; tentativa++) {
         try {

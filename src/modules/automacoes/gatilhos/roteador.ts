@@ -43,7 +43,7 @@ const idGatilho = (canal: Canal, tipo: TipoGatilho) => GATILHOS.find((g) => g.ca
 
 function casa(t: GatilhoDoFluxo, ev: EventoSocial): boolean {
     if (t.canal !== ev.canal) return false;
-    const palavras = (t.palavras ?? []).filter((p) => p.trim() !== "");
+    const palavras = (Array.isArray(t.palavras) ? t.palavras : []).filter((p): p is string => typeof p === "string" && p.trim() !== "");
     if (ev.tipo === "dm") {
         if (t.tipo === "dm_qualquer") return true;
         return t.tipo === "dm_palavra_chave" && palavras.some((p) => palavraPresente(ev.texto, p));
@@ -79,12 +79,15 @@ export async function processarEventoSocial(ev: EventoSocial, deps: DepsRoteador
         if (!dentro) { saida.push({ resultado: "ignorado", motivo: "fora_da_janela" }); continue; }
 
         // só fluxos do dono desta conta, e só gatilhos que apontam para esta conta
-        const fluxos = (await deps.fluxosDaConta(conta.userId, conta.accountId)).filter((f) => f.trigger.accountId === conta.accountId && gatilhoHabilitado(idGatilho(f.trigger.canal, f.trigger.tipo), deps.ambiente) && casa(f.trigger, ev));
+        const fluxos = (await deps.fluxosDaConta(conta.userId, conta.accountId)).filter((f) => {
+            try { return f.trigger.accountId === conta.accountId && gatilhoHabilitado(idGatilho(f.trigger.canal, f.trigger.tipo), deps.ambiente) && casa(f.trigger, ev); } catch { return false; } // gatilho malformado de um fluxo não derruba os outros
+        });
         if (fluxos.length === 0) { saida.push({ resultado: "ignorado", motivo: "sem_fluxo_correspondente" }); continue; }
         for (const f of fluxos) {
             // resposta privada: no máximo uma por comentário (por conta), mesmo que mais de um fluxo case
             if (ev.tipo === "comentario" && !(await deps.reservar(`resposta_privada:${conta.accountId}:${(ev as EventoComentario).comentarioId}`))) { saida.push({ resultado: "ignorado", motivo: "resposta_privada_ja_usada" }); break; }
-            const r = await deps.iniciar({ userId: conta.userId, flowId: f.flowId, contactKey: `${ev.canal}:${remetente}`, dedupeKey: ev.eventoId, variaveis: variaveis(ev, f.trigger) });
+            let r: { ok: boolean; motivo?: string };
+            try { r = await deps.iniciar({ userId: conta.userId, flowId: f.flowId, contactKey: `${ev.canal}:${remetente}`, dedupeKey: ev.eventoId, variaveis: variaveis(ev, f.trigger) }); } catch { r = { ok: false, motivo: "erro" }; }
             saida.push(r.ok ? { resultado: "iniciado", flowId: f.flowId, userId: conta.userId } : { resultado: "falhou", flowId: f.flowId, motivo: r.motivo ?? "erro" });
             if (ev.tipo === "comentario") break;
         }

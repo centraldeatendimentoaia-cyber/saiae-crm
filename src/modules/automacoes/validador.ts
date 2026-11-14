@@ -1,7 +1,7 @@
 import { validarExpr, nomeVariavelValido } from "./expressao";
 import { destinos, ESPERA_MAX_MS, ESPERA_MIN_MS, MAX_NOS, MAX_TEXTO, SCHEMA_VERSION, TIMEOUT_TOTAL_MS, TIPOS_NO, type Definicao, type No } from "./tipos";
 
-const ID_NO = /^[A-Za-z0-9_-]{1,64}$/;
+const ID_NO = /^(?!(?:__proto__|constructor|prototype)$)[A-Za-z0-9_-]{1,64}$/;
 const texto = (v: unknown, max = MAX_TEXTO): v is string => typeof v === "string" && v.trim() !== "" && v.length <= max;
 const opcionalId = (v: unknown) => v === undefined || (typeof v === "string" && ID_NO.test(v));
 
