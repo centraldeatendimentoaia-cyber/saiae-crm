@@ -430,6 +430,47 @@ describe("decisões editoriais versionadas (achado 9)", () => {
         expect(h.t.externalPostLink[0].editorial).toBe("reprovado");
     });
 
+    it("revogação concorrente com uma importação: não sobrescreve meta.mediaIds gravado no meio", async () => {
+        await importar([peca("a")]);
+        const orig = h.prisma.externalPostLink.findUnique;
+        // a revogação já leu o vínculo; antes de gravar, outra importação troca mídias e hash
+        const f = vi.spyOn(h.prisma.externalPostLink, "findUnique").mockImplementationOnce(async (a: any) => {
+            const lido = await orig(a);
+            Object.assign(h.t.externalPostLink[0], { contentHash: "b".repeat(64), meta: { ...h.t.externalPostLink[0].meta, mediaIds: ["novo-1", "novo-2"] } });
+            return lido;
+        });
+        await importar([peca("a", { versao: 1, status_editorial: "reprovado" })]);
+        f.mockRestore();
+        expect(h.t.externalPostLink[0].editorial).toBe("reprovado");
+        expect(h.t.externalPostLink[0].meta.mediaIds).toEqual(["novo-1", "novo-2"]);
+        expect(h.t.externalPostLink[0].meta.revogadoNaVersao).toBe(1);
+    });
+
+    it("revogação concorrente: se outra já revogou em versão maior, a decisão é ignorada", async () => {
+        await importar([peca("a")]);
+        const orig = h.prisma.externalPostLink.findUnique;
+        const f = vi.spyOn(h.prisma.externalPostLink, "findUnique").mockImplementationOnce(async (a: any) => {
+            const lido = await orig(a);
+            Object.assign(h.t.externalPostLink[0], { editorial: "reprovado", contentHash: "c".repeat(64), meta: { ...h.t.externalPostLink[0].meta, revogadoNaVersao: 5 } });
+            return lido;
+        });
+        await importar([peca("a", { versao: 1, status_editorial: "pendente_aprovacao" })]);
+        f.mockRestore();
+        expect(h.t.externalPostLink[0]).toMatchObject({ editorial: "reprovado" });
+        expect(h.t.externalPostLink[0].meta.revogadoNaVersao).toBe(5);
+    });
+
+    it("falha ao voltar o agendado a rascunho desfaz a revogação do vínculo (mesma transação)", async () => {
+        const r = await importar([peca("a")]);
+        h.t.scheduledPost[0].status = "PENDING";
+        const u = vi.spyOn(h.prisma.scheduledPost, "updateMany").mockRejectedValueOnce(new Error("falha simulada no post"));
+        const log = vi.spyOn(console, "error").mockImplementation(() => {});
+        await importar([peca("a", { versao: 2, status_editorial: "reprovado" })]);
+        u.mockRestore(); log.mockRestore();
+        expect(h.t.externalPostLink[0].editorial).toBe("aprovado");
+        expect(h.t.scheduledPost.find((p: any) => p.id === r.itens[0].postId)!.status).toBe("PENDING");
+    });
+
     it("decisão de versão antiga não derruba uma versão mais nova já aprovada", async () => {
         await importar([peca("a")]);
         await importar([peca("a", { versao: 2, legenda: "v2" })]);

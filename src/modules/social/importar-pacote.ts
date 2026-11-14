@@ -95,13 +95,29 @@ const revogadaNaVersao = (meta: unknown): number => { const v = rec(meta).revoga
  * Decisão de versão mais antiga que a registrada é ignorada: não pode derrubar uma versão mais nova já aprovada.
  */
 async function revogar(userId: string, key: string, editorial: string, modo: Ctx["modo"], versaoPeca: unknown) {
-    const link = await prisma.externalPostLink.findUnique({ where: { userId_source_externalKey: { userId, source: SOURCE, externalKey: key } } });
-    if (!link || modo === "validar") return;
-    const v = Number.isInteger(versaoPeca) ? (versaoPeca as number) : link.version;
-    if (v < link.version) return;
-    const naVersao = Math.max(v, link.version, revogadaNaVersao(link.meta));
-    await prisma.externalPostLink.update({ where: { id: link.id }, data: { editorial, meta: { ...rec(link.meta), revogadoNaVersao: naVersao } } });
-    await prisma.scheduledPost.updateMany({ where: { id: link.postId, userId, status: "PENDING" }, data: { status: "DRAFT", publishAt: null } });
+    if (modo === "validar") return;
+    for (let tentativa = 0; tentativa < 2; tentativa++) {
+        const link = await prisma.externalPostLink.findUnique({ where: { userId_source_externalKey: { userId, source: SOURCE, externalKey: key } } });
+        if (!link) return;
+        const v = Number.isInteger(versaoPeca) ? (versaoPeca as number) : link.version;
+        if (v < link.version) return;
+        const naVersao = Math.max(v, link.version, revogadaNaVersao(link.meta));
+        // na releitura: outra decisão já revogou em versão igual ou maior, não há o que acrescentar
+        if (tentativa > 0 && link.editorial !== "aprovado" && revogadaNaVersao(link.meta) >= naVersao) return;
+        // condicional ao estado lido: não sobrescreve meta.mediaIds/versão de uma importação concorrente.
+        // Vínculo e volta a rascunho na MESMA transação.
+        const ok = await prisma.$transaction(async (tx) => {
+            const r = await tx.externalPostLink.updateMany({
+                where: { id: link.id, version: link.version, contentHash: link.contentHash, editorial: link.editorial },
+                data: { editorial, meta: { ...rec(link.meta), revogadoNaVersao: naVersao } as never },
+            });
+            if (r.count !== 1) return false;
+            await tx.scheduledPost.updateMany({ where: { id: link.postId, userId, status: "PENDING" }, data: { status: "DRAFT", publishAt: null } });
+            return true;
+        });
+        if (ok) return;
+    }
+    throw new ErroItem("versao_antiga", "Outra importação alterou esta peça ao mesmo tempo; reenvie o manifesto.");
 }
 
 /** Lê e confere os arquivos de mídia de uma peça (mime, tamanho, sha256). Nada é gravado aqui. */
