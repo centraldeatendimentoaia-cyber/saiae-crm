@@ -1,7 +1,7 @@
 import { logger as defaultLogger } from "@/lib/logger";
 import { isOptedOut as defaultIsOptedOut } from "@/lib/optout";
 import { getProvider as defaultGetProvider } from "@/modules/whatsapp/provider";
-import { numeroDeEnvioPertence, sessaoDaBarracaCloud } from "@/modules/whatsapp/provider/cloud-sessao";
+import { numeroDeEnvioPertence, sessaoDaBarracaCloud, temMapaDeNumeros } from "@/modules/whatsapp/provider/cloud-sessao";
 import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
 import { registerComandaEventConsumer, type ComandaEventConsumer } from "./consumers";
@@ -107,7 +107,8 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
             return;
         }
         if (r.ok && !numeroDeEnvioPertence(deps.env, r.sessionId)) {
-            deps.logger.warn(TAG, `${template} pulado: o número de envio não pertence à sessão da barraca`);
+            const motivo = `o número de envio não pertence à sessão da barraca${temMapaDeNumeros(deps.env) ? ` [número de envio fora do mapa explícito para a sessão ${r.sessionId}]` : ""}`;
+            deps.logger.warn(TAG, `${template} pulado: ${motivo}`);
             return;
         }
         const sessionId = r.ok ? r.sessionId : undefined;

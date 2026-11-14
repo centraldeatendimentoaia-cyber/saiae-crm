@@ -75,6 +75,15 @@ describe("envio", () => {
         expect(getProvider).not.toHaveBeenCalled();
         expect(logger.warn).toHaveBeenCalledWith("AvisoPedido", expect.stringContaining("ambigua"));
     });
+    it("com mapa de números explícito e número de envio fora dele: avisa o motivo e o id da sessão, sem enviar", async () => {
+        const { run, sendTemplate, logger } = setup({ env: { COMANDA_NOTIFY_TEMPLATES: "on", WHATSAPP_CLOUD_SESSION_ID: "pilot", WHATSAPP_CLOUD_PHONE_MAP: '{"111":"pilot"}', META_WA_PHONE_NUMBER_ID: "999" } });
+        await run(ev("order.created"));
+        expect(sendTemplate).not.toHaveBeenCalled();
+        const aviso = logger.warn.mock.calls.map((c) => c[1]).join();
+        expect(aviso).toContain("fora do mapa explícito");
+        expect(aviso).toContain("pilot");
+        expect(aviso).not.toContain("999");
+    });
     it("telefone com formatação vira só dígitos", async () => {
         const { run, sendTemplate } = setup();
         await run(ev("order.created", { cliente: { nome: "x", telefone: "+55 (61) 99999-0001" } }));

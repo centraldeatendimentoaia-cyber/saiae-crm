@@ -58,6 +58,9 @@ export const sessaoDaBarracaCloud = (env: Env, barracaId: string): ResolucaoClou
  * Com mapa de números explícito a conferência vale mesmo com uma só sessão; a compatibilidade implícita (uma sessão,
  * sem mapa) só existe na ausência do mapa.
  */
+/** Há mapa explícito de números (WHATSAPP_CLOUD_PHONE_MAP com ao menos uma entrada)? Com ele, número fora do mapa é negado. */
+export const temMapaDeNumeros = (env: Env): boolean => lerMapa(env, "WHATSAPP_CLOUD_PHONE_MAP").size > 0;
+
 export function numeroDeEnvioPertence(env: Env, esperada: string): boolean {
     if (cloudSessionIds(env).size <= 1 && lerMapa(env, "WHATSAPP_CLOUD_PHONE_MAP").size === 0) return true;
     const r = sessaoDoNumero(env, env.META_WA_PHONE_NUMBER_ID?.trim());

@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { logger as defaultLogger } from "@/lib/logger";
 import { addOptOut, isOptedOut, isOptInText, isOptOutText, removeOptOut } from "@/lib/optout";
 import { cloudSessionIds } from "@/modules/whatsapp/provider";
-import { numeroDeEnvioPertence, sessaoDoNumero } from "@/modules/whatsapp/provider/cloud-sessao";
+import { numeroDeEnvioPertence, sessaoDoNumero, temMapaDeNumeros } from "@/modules/whatsapp/provider/cloud-sessao";
 import type { InboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/inbound";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
@@ -254,7 +254,8 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
                         const agora = deps.now().getTime();
                         if (agora - (ultimoAlerta.get(motivo) ?? -Infinity) >= JANELA_ALERTA_MS) {
                             ultimoAlerta.set(motivo, agora);
-                            deps.logger.error(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo} (total desde o início: ${recusadas.get(motivo)})`);
+                            const foraDoMapa = temMapaDeNumeros(deps.env) ? ` [número de envio fora do mapa explícito${r.ok ? `, sessão ${r.sessionId}` : ""}]` : "";
+                            deps.logger.error(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo}${foraDoMapa} (total desde o início: ${recusadas.get(motivo)})`);
                         }
                         c.ignoradas++;
                         continue;

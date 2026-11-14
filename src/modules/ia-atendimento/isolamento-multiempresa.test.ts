@@ -60,6 +60,14 @@ describe("IA: webhook de um número só chega à sessão dona", () => {
         expect(responder).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("diferente do número de envio"));
     });
+    it("número de envio fora do mapa explícito: o aviso diz isso e traz a sessão, sem expor o número", async () => {
+        const { run, logger } = setup({ ...ENV_BASE, META_WA_PHONE_NUMBER_ID: "999" });
+        await run(lote(msg("111", "wamid.1")));
+        const aviso = logger.error.mock.calls.map((c) => c[1]).join();
+        expect(aviso).toContain("fora do mapa explícito");
+        expect(aviso).toContain("loja-a");
+        expect(aviso).not.toContain("999");
+    });
     it("número desconhecido: recusa, registra e não grava nem responde", async () => {
         const { run, store, responder, logger } = setup({ ...ENV_BASE, META_WA_PHONE_NUMBER_ID: "111" });
         await run(lote(msg("999", "wamid.3")));
