@@ -115,6 +115,8 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
         await store.fecharPasso(ultimo.id, { status: "unknown", failureClass: "unknown", error: AVISO_INTERROMPIDA });
         return falhar("unknown", AVISO_INTERROMPIDA);
     }
+    // Passo já "unknown" (envio com resultado desconhecido, mas a gravação do fim da execução falhou): segue impedindo o reenvio.
+    if (ultimo?.status === "unknown") return falhar("unknown", AVISO_INTERROMPIDA);
     // Envio concluído mas a execução não chegou a avançar: avança sem reenviar.
     let envioJaFeito = !!ultimo && ultimo.status === "done" && ultimo.nodeId === run.currentNodeId && (ultimo.type === "texto" || ultimo.type === "template");
 
