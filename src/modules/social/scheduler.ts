@@ -12,6 +12,8 @@ let running = false;
 
 /** Publica um post vencido. O "claim" PENDING→PUBLISHING evita duas publicações do mesmo post. */
 export async function publishOne(postId: string): Promise<void> {
+    // rede de segurança do bloqueio editorial: peça importada que deixou de estar aprovada nunca é publicada
+    if (await prisma.externalPostLink.findFirst({ where: { postId, editorial: { not: "aprovado" } }, select: { id: true } })) return;
     const claimed = await prisma.scheduledPost.updateMany({ where: { id: postId, status: "PENDING" }, data: { status: "PUBLISHING" } });
     if (claimed.count !== 1) return;
 
