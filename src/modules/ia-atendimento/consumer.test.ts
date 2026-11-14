@@ -58,7 +58,7 @@ function setup(over: Partial<IaDeps> = {}) {
     const store = memStore();
     const enviar = vi.fn().mockResolvedValue("wamid.OUT");
     const responder = vi.fn().mockResolvedValue("Resposta da IA");
-    const logger = { info: vi.fn(), warn: vi.fn() };
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const optOut = { is: vi.fn().mockResolvedValue(false), add: vi.fn().mockResolvedValue(undefined), remove: vi.fn().mockResolvedValue(undefined) };
     const deps = criarDepsPadrao({
         store, enviar, responder, logger, optOut,

@@ -143,10 +143,19 @@ describe("envio", () => {
         expect(h.sendTemplate).toHaveBeenCalledTimes(1);
         expect(h.sendTemplate).toHaveBeenCalledWith(`55${TEL}`, { name: "codigo_verificacao", languageCode: "pt_BR", bodyParameters: [COD], buttonParameters: [COD] });
     });
-    it("usa a primeira sessão da lista", async () => {
+    it("várias sessões: usa a dona do número de envio, nunca a primeira da lista", async () => {
         vi.stubEnv("WHATSAPP_CLOUD_SESSION_ID", " a , b");
+        vi.stubEnv("WHATSAPP_CLOUD_PHONE_MAP", '{"111":"a","222":"b"}');
+        vi.stubEnv("META_WA_PHONE_NUMBER_ID", "222");
         await send(body());
-        expect(h.getProvider).toHaveBeenCalledWith("a");
+        expect(h.getProvider).toHaveBeenCalledWith("b");
+    });
+    it("várias sessões sem mapa: 503, registra só o motivo e não envia", async () => {
+        vi.stubEnv("WHATSAPP_CLOUD_SESSION_ID", "a,b");
+        vi.stubEnv("META_WA_PHONE_NUMBER_ID", "222");
+        expect((await send(body())).status).toBe(503);
+        expect(h.sendTemplate).not.toHaveBeenCalled();
+        expect(h.logger.error).toHaveBeenCalledWith("ComandaCodigo", "sessão Cloud não resolvida: ambigua");
     });
     it.each([["sem WHATSAPP_CLOUD_SESSION_ID", ""], ["sessão sem provedor", "pilot"]])("%s: 503, nunca cai para outro canal", async (_n, session) => {
         vi.stubEnv("WHATSAPP_CLOUD_SESSION_ID", session);

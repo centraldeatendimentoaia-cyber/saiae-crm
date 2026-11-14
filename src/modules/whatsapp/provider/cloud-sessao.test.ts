@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
+import { logger } from "@/lib/logger";
 import { numeroDeEnvioPertence, sessaoDaBarracaCloud, sessaoDoNumero } from "./cloud-sessao";
 
 const DUAS = { WHATSAPP_CLOUD_SESSION_ID: "loja-a,loja-b" };
@@ -31,6 +32,20 @@ describe("sessaoDoNumero", () => {
     });
     it("mapa com JSON quebrado: com várias sessões falha fechado", () => {
         expect(sessaoDoNumero({ ...DUAS, WHATSAPP_CLOUD_PHONE_MAP: "{x" }, "111")).toEqual({ ok: false, motivo: "ambigua" });
+    });
+});
+
+describe("mapa com chaves e valores com espaços / JSON quebrado", () => {
+    it("aplica trim nas chaves e nos valores", () => {
+        expect(sessaoDoNumero({ ...DUAS, WHATSAPP_CLOUD_PHONE_MAP: '{" 111 ":" loja-a "}' }, "111")).toEqual({ ok: true, sessionId: "loja-a" });
+    });
+    it("JSON quebrado: avisa uma única vez", () => {
+        const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+        const env = { ...DUAS, WHATSAPP_CLOUD_BARRACA_MAP: "{quebrado" };
+        sessaoDaBarracaCloud(env, "b1");
+        sessaoDaBarracaCloud(env, "b2");
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
     });
 });
 

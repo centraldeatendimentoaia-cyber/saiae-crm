@@ -104,6 +104,21 @@ describe("iniciar", () => {
     });
 });
 
+describe("criarSessao: erros do manager", () => {
+    it("sessionId indisponível (colisão com outra Session) NÃO é tratado como corrida, mesmo se existir sessão com esse sessionId", async () => {
+        const c = cenario();
+        c.db.session.findUnique = (async () => ({ id: "x" })) as never;
+        c.manager.createSession.mockRejectedValueOnce(Object.assign(new Error("sessionId indisponível"), { code: "SESSION_ID_INDISPONIVEL" }));
+        await expect(executarAcaoConexao(pedido("iniciar"), c.deps)).rejects.toThrow("sessionId indisponível");
+    });
+    it("outro erro com sessão já existente: corrida, segue", async () => {
+        const c = cenario();
+        c.db.session.findUnique = (async () => ({ id: "x" })) as never;
+        c.manager.createSession.mockRejectedValueOnce(new Error("falha qualquer"));
+        await expect(executarAcaoConexao(pedido("iniciar"), c.deps)).resolves.toBeDefined();
+    });
+});
+
 describe("desconectar", () => {
     it("com socket ativo: faz logout e tira a instância da memória", async () => {
         const logout = vi.fn(async () => {});

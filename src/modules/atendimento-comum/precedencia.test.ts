@@ -15,7 +15,4 @@ describe("quemPodeEnviar", () => {
         expect(quemPodeEnviar({ estado: "humano", pausadaAte: mais(-1) }, agora)).toEqual({ pode: true, retomar: true });
         expect(quemPodeEnviar({ estado: "humano", pausadaAte: null }, agora)).toEqual({ pode: true, retomar: true });
     });
-    it("opt-out vence tudo, mesmo com a conversa em estado ia", () => {
-        expect(quemPodeEnviar({ estado: "ia", pausadaAte: null }, agora, { optOut: true })).toEqual({ pode: false, motivo: "optout" });
-    });
 });

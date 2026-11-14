@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { cloudSessionIds } from "./index";
 
 /**
@@ -15,15 +16,22 @@ import { cloudSessionIds } from "./index";
 export type MotivoSemSessao = "sem_sessao_cloud" | "ambigua" | "sem_correspondencia";
 export type ResolucaoCloud = { ok: true; sessionId: string } | { ok: false; motivo: MotivoSemSessao };
 
+const jsonQuebradoAvisado = new Set<string>();
+
 type Env = Record<string, string | undefined>;
 
 function lerMapa(env: Env, chave: string): Map<string, string> {
     try {
         const bruto = JSON.parse(env[chave] ?? "{}") as unknown;
         if (!bruto || typeof bruto !== "object" || Array.isArray(bruto)) return new Map();
-        return new Map(Object.entries(bruto).filter((e): e is [string, string] => typeof e[1] === "string" && e[1].trim() !== "").map(([k, v]) => [k, v.trim()]));
+        return new Map(Object.entries(bruto).filter((e): e is [string, string] => typeof e[1] === "string" && e[1].trim() !== "").map(([k, v]) => [k.trim(), v.trim()]));
     } catch {
-        return new Map(); // mapa quebrado = sem mapa (com várias sessões isso falha fechado como "ambigua")
+        // mapa quebrado = sem mapa (com várias sessões isso falha fechado como "ambigua"); avisa uma vez por variável
+        if (!jsonQuebradoAvisado.has(chave)) {
+            jsonQuebradoAvisado.add(chave);
+            logger.warn("CloudSessao", `${chave} não é um JSON válido: tratado como mapa vazio`);
+        }
+        return new Map();
     }
 }
 

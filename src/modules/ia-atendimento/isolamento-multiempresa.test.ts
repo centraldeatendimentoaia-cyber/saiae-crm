@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: vi.fn() } }));
 
-import { criarConsumidorIa, criarDepsPadrao } from "./consumer";
+import { contadorRecusadas, criarConsumidorIa, criarDepsPadrao, zerarContadorRecusadas } from "./consumer";
 import { criarProviderCloud } from "./registro";
 import { createOrderNotifier } from "@/modules/integracao/comanda/order-notifier";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
@@ -32,13 +32,14 @@ function msg(phoneNumberId: string | null, id: string): InboundMessage {
 const lote = (...m: InboundMessage[]): NormalizedBatch => ({ events: m, ignored: 0 });
 
 function setup(env: Record<string, string | undefined>) {
+    zerarContadorRecusadas();
     const conversa: ConversaRef = { id: "c1", lojaCodigo: "K7P2QX", contactKey: "5561999990001", estado: "ia", pausadaAte: null };
     const store = {
         registrarMensagem: vi.fn().mockResolvedValue({ novo: true, conversa }),
         lojaDaConversa: vi.fn().mockResolvedValue(null), historico: vi.fn(), pausar: vi.fn(), retomar: vi.fn(), retomarLoja: vi.fn(),
     } as unknown as IaStore;
     const optOut = { is: vi.fn().mockResolvedValue(false), add: vi.fn(), remove: vi.fn() };
-    const logger = { info: vi.fn(), warn: vi.fn() };
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const responder = vi.fn().mockResolvedValue("ok");
     const enviar = vi.fn().mockResolvedValue("wamid.OUT");
     const run = criarConsumidorIa(criarDepsPadrao({ store, optOut, logger, responder, enviar, env, now: () => T0 }));
@@ -57,21 +58,29 @@ describe("IA: webhook de um número só chega à sessão dona", () => {
         await run(lote(msg("111", "wamid.1"), msg("222", "wamid.2")));
         expect(optOut.is).toHaveBeenCalledTimes(1);
         expect(responder).toHaveBeenCalledTimes(1);
-        expect(logger.warn).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("diferente do número de envio"));
+        expect(logger.error).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("diferente do número de envio"));
     });
     it("número desconhecido: recusa, registra e não grava nem responde", async () => {
         const { run, store, responder, logger } = setup({ ...ENV_BASE, META_WA_PHONE_NUMBER_ID: "111" });
         await run(lote(msg("999", "wamid.3")));
         expect(store.registrarMensagem).not.toHaveBeenCalled();
         expect(responder).not.toHaveBeenCalled();
-        expect(logger.warn).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("mensagem recusada"));
+        expect(logger.error).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("mensagem recusada"));
     });
     it("duas sessões e nenhum mapa: ambíguo, falha explícita (nunca a primeira)", async () => {
         const { run, store, optOut, logger } = setup({ IA_ATENDIMENTO: "on", WHATSAPP_CLOUD_SESSION_ID: "loja-a,loja-b" });
         await run(lote(msg("111", "wamid.4")));
         expect(store.registrarMensagem).not.toHaveBeenCalled();
         expect(optOut.is).not.toHaveBeenCalled();
-        expect(logger.warn).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("ambigua"));
+        expect(logger.error).toHaveBeenCalledWith("IaAtendimento", expect.stringContaining("ambigua"));
+    });
+    it("recusa vira error com motivo, conta por motivo e avisa só uma vez por janela de 10 min", async () => {
+        zerarContadorRecusadas();
+        const { run, logger } = setup({ IA_ATENDIMENTO: "on", WHATSAPP_CLOUD_SESSION_ID: "loja-a,loja-b" });
+        await run(lote(msg("111", "wamid.a1"), msg("111", "wamid.a2")));
+        expect(logger.error).toHaveBeenCalledTimes(1);
+        expect(logger.error.mock.calls[0][1]).not.toContain("111");
+        expect(contadorRecusadas()).toEqual({ ambigua: 2 });
     });
     it("uma sessão só: comportamento de sempre, mesmo sem mapa", async () => {
         const { run, optOut, responder } = setup({ IA_ATENDIMENTO: "on", WHATSAPP_CLOUD_SESSION_ID: "pilot" });

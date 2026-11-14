@@ -22,8 +22,8 @@ Branch `feat/sprint3-multiempresa` (base `origin/main` 48cb963). Desenho em `spr
 - Mitigação já ativa: com várias sessões, só o número de envio responde e mensagens de outro número são recusadas.
 
 ### 4. Precedência humano / IA / automação: UNIFICADA, comportamento preservado
-- Regra atual (do código): conversa `estado=humano` com `pausadaAte` no futuro = só pessoa; pausa vencida = IA retoma sozinha (12 h na IA das lojas, `pausaHoras` no salão); pessoa que escreve pelo celular pausa a IA (salão) ou o bot de pedidos (12 h); resposta automática por palavra-chave vence a IA do salão no mesmo lote; opt-out vence tudo; aviso de pedido é transacional e não passa por pausa.
-- Função única `quemPodeEnviar(conversa, agora, {optOut})` em `src/modules/atendimento-comum/precedencia.ts`, usada por `consumer.ts` e `agente-salao/agente.ts` no lugar da lógica solta. Bot de pedidos (memória própria) e follow-up do salão mantêm suas checagens.
+- Regra atual (do código): conversa `estado=humano` com `pausadaAte` no futuro = só pessoa; pausa vencida = IA retoma sozinha (12 h na IA das lojas, `pausaHoras` no salão); pessoa que escreve pelo celular pausa a IA (salão) ou o bot de pedidos (12 h); resposta automática por palavra-chave vence a IA do salão no mesmo lote; opt-out é checado por cada módulo antes de chamar a função (a função não recebe opt-out); aviso de pedido é transacional e não passa por pausa.
+- Função única `quemPodeEnviar(conversa, agora)` em `src/modules/atendimento-comum/precedencia.ts`, usada por `consumer.ts` e `agente-salao/agente.ts` no lugar da lógica solta. Bot de pedidos (memória própria) e follow-up do salão mantêm suas checagens.
 
 ### 5. Testes de isolamento: FEITOS
 `ia-atendimento/isolamento-multiempresa.test.ts` (duas sessões Cloud: roteamento por número, número fora do mapa, ambíguo, uma sessão, provedor de envio, notificador por barraca, número de envio de outra loja), `cloud-sessao.test.ts`, `precedencia.test.ts`, `api-auth-sessao.test.ts` (colisão nome x id).
@@ -54,3 +54,23 @@ Reverter os dois commits (`git revert 357a752 486e9e8`) ou não fazer merge. Sem
 
 ## Pendências de schema (nenhuma aplicada)
 Ver `sprint3-desenho.md`: `IaConversa.sessionId`, `IaMensagem.phoneNumberId`, tabela `CloudNumero`, relações Prisma de `sessionId` texto, `Empresa`. Cada uma em commit `db:` aditivo e com revisão do João (o Dockerfile roda `db push` no start).
+
+## Ajustes pós-revisão
+
+### Mudanças
+1. `codigo-verificacao/route.ts`: trocou `WHATSAPP_CLOUD_SESSION_ID.split(",")[0]` por `sessaoDoNumero(process.env, META_WA_PHONE_NUMBER_ID)`; `!ok` responde 503 e registra só o motivo. `rg` por `SESSION_ID.*split` e `split(",")[0]` em `src`: restam apenas `confirmar-dono.ts` (segredo, não é sessão) e `bot-pedidos/entrada.ts` (`some`, checagem de pertencimento, não seleciona a primeira).
+2. `consumer.ts`: mensagem recusada agora é `error` (motivo, sem telefone nem phoneNumberId), com contador por motivo (`contadorRecusadas()`) e no máximo um `error` por motivo a cada 10 min. Como detectar: logs `mensagem recusada` no nível error e a linha de total; no checklist de deploy, conferir que não há nenhuma depois de ligar a IA.
+3. Aviso de deploy (2+ sessões sem mapas desligam IA/avisos/código; 1 sessão com mapa parcial recusa número fora do mapa) acrescentado ao fim de `docs/ENVIRONMENT_VARIABLES.md` e a este relatório (ver Riscos).
+4. `cloud-sessao.ts`: `trim` também nas chaves; JSON quebrado gera um único `warn` por variável.
+5. `precedencia.ts`: removidos o parâmetro `optOut`, o motivo `"optout"` e a regra 3 (nenhum chamador usava; o opt-out é checado pelos módulos). Comportamento e demais testes mantidos.
+6. `manager.ts` lança erro com `code = "SESSION_ID_INDISPONIVEL"`; `whatsapp-conexao.ts` não o trata mais como "duas chamadas ao mesmo tempo" (relança). Testes novos nos dois casos.
+7. Limitações registradas: (a) `IaConversa` NÃO tem coluna de sessão, então o isolamento de conversas da IA NÃO atende multiempresa real: só funciona com uma conta Meta; contas distintas exigem a coluna (pendência de schema, não aplicada). (b) `api-auth-sessao.test.ts` usa mock de prisma: a colisão nome x id não foi exercida contra banco real.
+
+### Resultados reais
+- `npm run typecheck`: sem erros.
+- `npm test`: 132 arquivos, 2189 testes passando.
+- `eslint` nos arquivos alterados: 0 erros, 1 aviso que já existia (`beforeEach` não usado em `consumer.test.ts`).
+- `npm run build` (env fictício só no processo): ok.
+
+### Não verificado
+Envio real/Meta; webhook com dois números; comportamento do contador/alerta em produção com várias instâncias (o contador é por processo e se perde ao reiniciar); `createSession` com banco real.

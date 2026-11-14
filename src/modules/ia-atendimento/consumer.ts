@@ -46,7 +46,7 @@ export interface IaDeps {
     };
     env: Record<string, string | undefined>;
     now: () => Date;
-    logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void };
+    logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void; error: (tag: string, msg: string) => void };
     /** Ids de mensagem já vistos (memória; a garantia forte é a coluna única no banco). */
     vistos: BoundedTtlMap<true>;
     /** Quem já recebeu a orientação "use o link da loja" (uma vez por dia). */
@@ -65,6 +65,20 @@ export { MAX_TEXTO };
 
 const TAG = "IaAtendimento";
 const DIA = 24 * 60 * 60 * 1000;
+
+/**
+ * Mensagens recusadas por não achar a sessão Cloud do número (ambígua, sem correspondência, número de envio diferente).
+ * Contador por motivo desde o início do processo (`contadorRecusadas()`) e `error` no máximo uma vez por motivo a cada
+ * 10 minutos, para um erro de configuração aparecer no log sem virar spam. O log nunca leva telefone nem phoneNumberId.
+ */
+const JANELA_ALERTA_MS = 10 * 60 * 1000;
+const recusadas = new Map<string, number>();
+const ultimoAlerta = new Map<string, number>();
+export const contadorRecusadas = (): Record<string, number> => Object.fromEntries(recusadas);
+export function zerarContadorRecusadas(): void {
+    recusadas.clear();
+    ultimoAlerta.clear();
+}
 
 export const MSG_ORIENTACAO = "Olá! Para eu te ajudar, abra a conversa pelo link ou QR code da loja. Assim eu sei de qual loja você está falando.";
 export const MSG_TIPO_NAO_SUPORTADO = "Por enquanto eu só consigo ler mensagens de texto. Pode escrever sua dúvida?";
@@ -235,7 +249,13 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
                 if (cloudSessionIds(deps.env).size > 0) {
                     const r = sessaoDoNumero(deps.env, m.phoneNumberId);
                     if (!r.ok || !numeroDeEnvioPertence(deps.env, r.sessionId)) {
-                        deps.logger.warn(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo}`);
+                        const motivo = r.ok ? "numero_de_envio_diferente" : r.motivo;
+                        recusadas.set(motivo, (recusadas.get(motivo) ?? 0) + 1);
+                        const agora = deps.now().getTime();
+                        if (agora - (ultimoAlerta.get(motivo) ?? -Infinity) >= JANELA_ALERTA_MS) {
+                            ultimoAlerta.set(motivo, agora);
+                            deps.logger.error(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo} (total desde o início: ${recusadas.get(motivo)})`);
+                        }
                         c.ignoradas++;
                         continue;
                     }
