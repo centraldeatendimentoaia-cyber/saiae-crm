@@ -1,4 +1,4 @@
-import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
+import { withJobLock, type PosseTrava, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -62,7 +62,7 @@ export async function publishOne(postId: string): Promise<void> {
     }
 }
 
-export async function publishDue(): Promise<void> {
+export async function publishDue(posse?: PosseTrava): Promise<void> {
     if (running) return;
     running = true;
     try {
@@ -72,7 +72,10 @@ export async function publishDue(): Promise<void> {
             take: 10,
             select: { id: true },
         });
-        for (const p of due) await publishOne(p.id);
+        for (const p of due) {
+            if (posse && !posse.ativa()) break; // perdeu a trava: não inicia novas publicações
+            await publishOne(p.id);
+        }
     } catch (err) {
         logger.error("Social", "Scheduler error:", err);
     } finally {
@@ -95,7 +98,7 @@ export function startSocialScheduler() {
         })
         .catch(() => {});
 
-    cron.schedule("* * * * *", () => void withJobLock("cron:social-publicar", 10 * 60_000, publishDue));
+    cron.schedule("* * * * *", () => void withJobLock("cron:social-publicar", 10 * 60_000, (posse) => publishDue(posse)));
 
     // séries recorrentes: mantém as próximas 8 semanas geradas (na subida e a cada hora)
     void withJobLock("cron:social-series", 10 * 60_000, extendAllSeries);

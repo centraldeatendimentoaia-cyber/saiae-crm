@@ -12,7 +12,9 @@ import { depsReais, prismaStore } from "./store-prisma";
 export function startAutomacoes() {
     if (process.env.AUTOMACOES_ATIVAS !== "true") return;
     cron.schedule("* * * * *", () =>
-        withJobLock("cron:automacoes", 5 * 60_000, async () => {
+        withJobLock("cron:automacoes", 5 * 60_000, async (posse) => {
+            // O executor não conhece a trava (o claim por execução é a garantia); aqui só não inicia rodada sem posse.
+            if (!posse.ativa()) return;
             try {
                 const r = await processarProntas(prismaStore, depsReais, 50, 4 * 60_000);
                 logger.info("Automacoes", `rodada: ${JSON.stringify(r)}`);

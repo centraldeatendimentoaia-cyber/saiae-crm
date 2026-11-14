@@ -11,7 +11,7 @@ import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
 import { canonicalPhone, jidVariants } from "@/lib/phone";
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
-import { startJobLock, JobLockDbError } from "@/lib/job-lock";
+import { startJobLock, JobLockDbError, type LiberarTrava } from "@/lib/job-lock";
 import { classifySendFailure, maskPersonalData } from "@/lib/send-failure";
 
 /** Trava de disparo por número, no banco (vale entre instâncias). Renovada enquanto o disparo roda; expira sozinha se o processo morrer. */
@@ -34,7 +34,7 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ sessionId: string }> }
 ) {
-    let releaseLock: (() => Promise<void>) | null = null;
+    let releaseLock: LiberarTrava | null = null;
     let handedOff = false; // true quando o disparo em segundo plano passou a ser dono da trava
     try {
         const user = await getAuthenticatedUser(request);
@@ -138,9 +138,10 @@ export async function POST(
             let sinceBreak = 0;
             let deferredFrom = -1;
             let deferredNote = "";
-            const stopReason = "";
+            let stopReason = "";
             let lastWasInvalid = false;
             let cancelled = false;
+            let lockLost = false;
             const sentTargets = new Set<string>();
             let mediaBuffer: Buffer | null = null;
             if (mediaUrl) {
@@ -155,6 +156,9 @@ export async function POST(
             for (let i = 0; i < recipients.length; i++) {
                 const jid = recipients[i];
                 lastWasInvalid = false;
+
+                // perdeu a trava do número: outra instância pode ter iniciado outro disparo, então não envia mais nada
+                if (!release.ativa()) { lockLost = true; break; }
 
                 // o usuário pode cancelar a qualquer momento
                 const cur = await prisma.broadcastLog.findUnique({ where: { id: broadcastId }, select: { status: true } });
@@ -252,6 +256,8 @@ export async function POST(
                     }
                 }
             }
+
+            if (lockLost) stopReason = "Disparo interrompido: a trava do número foi perdida (possível queda do banco). Confira os envios antes de refazer.";
 
             // O que não coube hoje vira mensagem agendada: o agendador envia dentro do horário e do limite
             let deferred = 0;
