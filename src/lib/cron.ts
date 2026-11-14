@@ -14,6 +14,7 @@ import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
+import { startAutomacoes } from "@/modules/automacoes/worker";
 import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import { classifySendFailure, backoffMs, maskPersonalData, MAX_ATTEMPTS } from "@/lib/send-failure";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
@@ -282,5 +283,6 @@ export function initScheduler() {
     startRetention();
     startFollowUps();
     startSocialScheduler();
+    startAutomacoes();
     logger.info("Cron", "Scheduler initialized");
 }
