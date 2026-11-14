@@ -115,4 +115,14 @@ Achados da revisão independente (cinco do motor e depois #3, #11, #12, #13 e #2
 - **#13 ISO completo na importação.** `lerData` valida ano, mês, dia (com bissexto), hora, minuto, segundo e offset antes de converter; `2026-02-31T12:00:00-03:00` agora é rejeitada por linha.
 - **#2 Rollback documentado.** O rollback funcional preserva os models aditivos no `schema.prisma` (reverter só o código ou desligar `AUTOMACOES_ATIVAS`/`RESULTADOS_ENABLED`); reverter o schema faz o `prisma db push` do Dockerfile exigir confirmação de perda de dados e impedir o servidor de iniciar. Remoção de tabelas é operação separada, com workers parados, dados reconciliados e backup restaurável testado. Ajustados também o SQL aditivo, o plano de migração e o relatório final do Growth OS.
 
+- **Ajustes da segunda passada.** (a) Com `WHATSAPP_CLOUD_PHONE_MAP` definido, número de envio fora do mapa bloqueia a IA (`consumer.ts`) e o aviso de pedido (`order-notifier.ts`); os dois agora registram "número de envio fora do mapa explícito" com o id da sessão, sem valores de variáveis. **Antes do deploy, conferir nos envs que `META_WA_PHONE_NUMBER_ID` consta no mapa**, senão a IA e o aviso ficam bloqueados (só aparece o aviso no log). (b) `startJobLock` calcula `validoAte` a partir do mesmo instante gravado em `expiresAt`, então `ativa()` não sobrevive ao vencimento real da linha. (c) `lerData` calcula o último dia do mês com `setUTCFullYear`, sem o mapeamento de ano 0 a 99 para 1900+ do `Date.UTC`. (d) Disparo em massa: o bloco de mensagens agendadas ("deferred") com trava perdida foi analisado e não procede: `deferredFrom` só é definido no portão de segurança e `lockLost` só no teste de posse, ambos seguidos de `break`, então nunca coexistem; sem teste possível, sem mudança.
+
+### Limitações conhecidas
+
+- `IaConversa` não tem `sessionId`: a pausa humana cruza lojas (conservador).
+- O worker de automações não tem posse da trava no executor (só deixa de iniciar a rodada).
+- Os nós `etiqueta` e `transferirHumano` não têm reserva atômica.
+- P2002 em `abrirPasso` com posse não é tratado como corrida.
+- `dedupKey` antiga de resultados não casa com a nova (ver #12).
+
 Não verificado: nada foi exercitado contra Prisma, Baileys ou Cloud reais; a transação de reserva só foi testada com o banco em memória (a versão Prisma foi apenas compilada).
