@@ -1,5 +1,5 @@
 import { validarExpr, nomeVariavelValido } from "./expressao";
-import { destinos, ESPERA_MAX_MS, ESPERA_MIN_MS, MAX_NOS, MAX_TEXTO, SCHEMA_VERSION, TIPOS_NO, type Definicao, type No } from "./tipos";
+import { destinos, ESPERA_MAX_MS, ESPERA_MIN_MS, MAX_NOS, MAX_TEXTO, SCHEMA_VERSION, TIMEOUT_TOTAL_MS, TIPOS_NO, type Definicao, type No } from "./tipos";
 
 const ID_NO = /^[A-Za-z0-9_-]{1,64}$/;
 const texto = (v: unknown, max = MAX_TEXTO): v is string => typeof v === "string" && v.trim() !== "" && v.length <= max;
@@ -80,5 +80,21 @@ export function validarDefinicao(def: unknown): string[] {
         return false;
     };
     for (const id of ids) if (temCiclo(id)) { erros.push("ciclo sem nó de espera (loop infinito)"); break; }
+
+    // Esperas somadas no caminho mais longo não podem passar do prazo total da execução (senão o fim seria sempre timeout).
+    // shortcut: arestas de retorno de ciclo contam 0 (cada volta repete as esperas; o prazo da execução é quem limita voltas).
+    const memo = new Map<string, number>();
+    const emCurso = new Set<string>();
+    const maisLongo = (id: string): number => {
+        if (memo.has(id)) return memo.get(id) as number;
+        if (emCurso.has(id)) return 0;
+        emCurso.add(id);
+        const n = nodes[id];
+        const r = (n.type === "espera" ? n.ms : 0) + Math.max(0, ...destinos(n).map(maisLongo));
+        emCurso.delete(id);
+        memo.set(id, r);
+        return r;
+    };
+    if (maisLongo(d.start as string) > TIMEOUT_TOTAL_MS) erros.push("soma das esperas do caminho maior que o prazo total da execução (7 dias)");
     return erros;
 }

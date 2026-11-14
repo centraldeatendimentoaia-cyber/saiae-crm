@@ -4,7 +4,7 @@ import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
 import { avaliar, interpolar } from "./expressao";
 import {
-    CLAIM_TTL_MS, MAX_PASSOS, PAUSA_HUMANO_MS,
+    CLAIM_TTL_MS, MAX_CLAIMS_SEM_PROGRESSO, MAX_PASSOS, PAUSA_HUMANO_MS,
     type Contexto, type Definicao, type MotivoCancelamento, type No, type StatusRun,
 } from "./tipos";
 
@@ -19,6 +19,8 @@ export interface RunRow {
     currentNodeId: string | null;
     context: Contexto;
     stepCount: number;
+    /** Reivindicações desde o último salvamento bem-sucedido (a própria reivindicação já soma 1). */
+    claimsSemProgresso: number;
     resumeAt: Date | null;
     deadlineAt: Date;
 }
@@ -54,6 +56,12 @@ export interface Deps {
     holder: string;
     agora(): Date;
     optedOut(sessionId: string, contactKey: string): Promise<boolean>;
+    /** O usuário da execução ainda é dono da sessão (ou tem SessionAccess)? Falso = sessão apagada, recriada por outro ou acesso revogado. */
+    temAcesso(userId: string, sessionId: string): Promise<boolean>;
+    /** Modo Seguro (só Baileys): fora do horário devolve quando a janela abre. Ausente = sem restrição. */
+    gateEnvio?(sessionId: string, provider: WhatsAppProvider): Promise<{ ok: true } | { ok: false; resumeAt: Date }>;
+    /** Espaçamento humano entre envios (só Baileys), chamado por `processarProntas` entre execuções. */
+    espacar?(sessionId: string, provider: WhatsAppProvider): Promise<void>;
     conversa(sessionId: string, contactKey: string): Promise<{ estado: string; pausadaAte: Date | null } | null>;
     /** Provedor da sessão (Cloud: sessão resolvida por `cloud-sessao`, nunca "a primeira da lista"). */
     provider(sessionId: string): ProvedorResolvido;
@@ -79,7 +87,7 @@ function contextoDe(c: unknown): Contexto {
  * (só uma reivindica) e para o processo cair em qualquer ponto: o estado está sempre no banco, e envio sem desfecho
  * vira "unknown" e nunca é reenviado.
  */
-export async function executarRun(runId: string, store: Store, deps: Deps): Promise<ResultadoRun> {
+export async function executarRun(runId: string, store: Store, deps: Deps, info: { enviou?: { sessionId: string; provider: WhatsAppProvider } } = {}): Promise<ResultadoRun> {
     const run = await store.claimRun(runId, deps.holder, deps.agora(), CLAIM_TTL_MS);
     if (!run) return "nao_reivindicada";
     const ctx = contextoDe(run.context);
@@ -94,6 +102,9 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
         (await salvar({ status, finishedAt: deps.agora(), resumeAt: null, ...extra })) ? status : "perdida";
     const falhar = (failureClass: FailureClass, lastError: string) => terminar("failed", { failureClass, lastError });
     const cancelar = (motivo: MotivoCancelamento) => terminar("cancelled", { motivoFim: motivo });
+
+    // Execução envenenada: várias reivindicações seguidas sem conseguir salvar nada (banco/definição quebrados) param de rodar.
+    if (run.claimsSemProgresso > MAX_CLAIMS_SEM_PROGRESSO) return falhar("permanent", `execução travada: mais de ${MAX_CLAIMS_SEM_PROGRESSO} reivindicações seguidas sem progresso`);
 
     const def = await store.definicao(run.flowVersionId);
     const ultimo = await store.ultimoPasso(run.id);
@@ -130,6 +141,7 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
 
         // Cancelamento automático: ao retomar e antes de CADA envio (humano assumiu ou contato saiu).
         if (!envioJaFeito && (primeira || ehEnvio(no) || no.type === "transferencia_humana")) {
+            if (!(await deps.temAcesso(run.userId, run.sessionId))) return cancelar("sessao_invalida");
             if (await deps.optedOut(run.sessionId, run.contactKey)) return cancelar("optout");
             const conv = (await deps.conversa(run.sessionId, run.contactKey)) ?? { estado: "ia", pausadaAte: null };
             if (!quemPodeEnviar(conv, deps.agora()).pode) return cancelar("humano_assumiu");
@@ -140,6 +152,7 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
             const p = await registrar(noId, no.type, "done", saida ?? {});
             if (!p) return "perdida";
             if (!next) return terminar("completed");
+            ctx.tentativas = {}; // tentativas valem por nó: ao avançar, o próximo começa do zero
             return (await salvar({ currentNodeId: next, stepCount: run.stepCount + 1, context: ctx })) ? null : "perdida";
         };
         let fim: ResultadoRun | null;
@@ -164,6 +177,7 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
                 const p = await registrar(noId, no.type, "done", { ms: no.ms });
                 if (!p) return "perdida";
                 if (!no.next) return terminar("completed");
+                ctx.tentativas = {};
                 const ok = await salvar({ status: "waiting", currentNodeId: no.next, resumeAt: new Date(deps.agora().getTime() + no.ms), stepCount: run.stepCount + 1, context: ctx });
                 return ok ? "waiting" : "perdida";
             }
@@ -181,6 +195,9 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
                 if (!pr.ok) return pr.permanente ? falhar("permanent", pr.motivo) : falhaDeNo("transient", pr.motivo, noId);
                 const provider = pr.provider;
                 if (!provider.isConnected()) return falhaDeNo("transient", "sessão desconectada", noId);
+                // Modo Seguro (Baileys): fora do horário a execução espera a janela abrir, sem gastar tentativa.
+                const gate = deps.gateEnvio ? await deps.gateEnvio(run.sessionId, provider) : { ok: true as const };
+                if (!gate.ok) return (await salvar({ status: "waiting", resumeAt: gate.resumeAt, context: ctx })) ? "waiting" : "perdida";
 
                 let enviar: () => Promise<{ messageId: string | null }>;
                 // Política da Cloud: texto livre só com a janela de 24 h aberta; fora dela, só template.
@@ -212,6 +229,8 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
                 }
                 // Fora do try: falha do banco aqui NÃO é falha de envio (a mensagem saiu); o passo fica "claimed" e a retomada o marca "unknown".
                 await store.fecharPasso(passo.id, { status: "done", output: { messageId: enviada.messageId } });
+                info.enviou = { sessionId: run.sessionId, provider };
+                ctx.tentativas = {};
                 if (!(await salvar({ currentNodeId: no.next ?? noId, stepCount: run.stepCount + 1, context: ctx }))) return "perdida";
                 if (!no.next) return terminar("completed");
                 fim = null;
@@ -223,10 +242,14 @@ export async function executarRun(runId: string, store: Store, deps: Deps): Prom
 }
 
 /** Uma rodada do worker: executa as execuções prontas (pendentes, esperas vencidas, abandonadas). */
-export async function processarProntas(store: Store, deps: Deps, limite = 50): Promise<Record<ResultadoRun, number>> {
+export async function processarProntas(store: Store, deps: Deps, limite = 50, orcamentoMs = Infinity): Promise<Record<ResultadoRun, number>> {
     const total: Record<ResultadoRun, number> = { nao_reivindicada: 0, perdida: 0, waiting: 0, completed: 0, failed: 0, cancelled: 0 };
+    const inicio = Date.now();
     for (const id of await store.listarProntas(deps.agora(), limite)) {
-        try { total[await executarRun(id, store, deps)]++; } catch { total.perdida++; /* fica abandonada e a próxima rodada a retoma */ }
+        if (Date.now() - inicio > orcamentoMs) break; // o espaçamento entre envios alonga a rodada: o resto fica para a próxima
+        const info: { enviou?: { sessionId: string; provider: WhatsAppProvider } } = {};
+        try { total[await executarRun(id, store, deps, info)]++; } catch { total.perdida++; /* fica abandonada e a próxima rodada a retoma */ }
+        if (info.enviou && deps.espacar) await deps.espacar(info.enviou.sessionId, info.enviou.provider).catch(() => {});
     }
     return total;
 }

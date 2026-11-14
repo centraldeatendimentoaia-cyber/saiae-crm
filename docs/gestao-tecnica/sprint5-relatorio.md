@@ -70,3 +70,31 @@ Desligar `AUTOMACOES_ATIVAS` (o worker para; as rotas ficam inertes). Reverter o
 - Exige revisão do João antes do merge (regra aditiva do plano de migração).
 - Gerar e revisar o SQL (4 tabelas, uma FK interna por relação, índices únicos `[flowVersionId, contactKey, dedupeKey]`, `[flowId, version]`, `[runId, seq]`); `contactKey VARCHAR(191)`, `dedupeKey VARCHAR(120)`.
 - Decidir se os índices e `onDelete` (Step e Version em cascata, Run sem cascata) valem; arquivar fluxo é por `status`, não por exclusão.
+
+## Ajustes pós-revisão
+
+Revisão independente aprovou com ajustes; cada ponto foi conferido no código antes de corrigir.
+
+### Mudanças
+
+1. **Sessão do fluxo.** `criarFluxo` resolve a sessão (id interno primeiro, depois nome) e grava sempre `Session.sessionId` (nome). Sessão inexistente: `sessao_invalida` (rota devolve 404).
+2. **Acesso à sessão rechecado.** `iniciarRun` chama `canAccessSession(userId, role, flow.sessionId)` (403 se negado). O executor consulta `deps.temAcesso(userId, sessionId)` (dono ou `SessionAccess`) ao retomar e antes de cada envio; sem acesso, cancela com `motivoFim = sessao_invalida`. Cobre acesso revogado e sessão recriada por outro usuário com o mesmo nome. Efeito colateral aceito: um SUPERADMIN que criou fluxo em sessão alheia sem ser dono nem ter `SessionAccess` tem as execuções canceladas pelo executor.
+3. **Disparo manual em massa.** (a) `contactKey` precisa existir em `Contact` da sessão (`jid` ou `remoteJidAlt`), senão `contato_desconhecido` (400). (b) Teto de inícios na última hora: por usuário (`AUTOMACOES_MAX_INICIOS_HORA_USUARIO`, padrão 60) e por fluxo (`AUTOMACOES_MAX_INICIOS_HORA_FLUXO`, padrão 30); excedido devolve `limite_taxa` (HTTP 429). (c) Baileys: antes do envio o executor consulta `gateEnvio` (Modo Seguro, `safeGate`; fora do horário a execução fica `waiting` até a janela abrir, sem gastar tentativa) e `processarProntas` espaça os envios com `humanDelayMs`/`batchPauseMs` (`espacar`) e respeita um orçamento de tempo por rodada (4 min no worker; o restante fica para a próxima). Cloud API não sofre gate nem espaçamento.
+4. **Execução envenenada.** Coluna aditiva `AutomationRun.claimsSemProgresso` (commit `db:` separado). `claimRun` incrementa; qualquer `salvar` bem-sucedido zera. Acima de 5 reivindicações seguidas sem salvar nada, a execução falha como `permanent` ("execução travada ..."), antes de tocar a definição.
+5. **Esperas x prazo.** `ESPERA_MAX_MS = TIMEOUT_TOTAL_MS` (7 dias). O validador também rejeita fluxo cujo caminho mais longo some esperas acima de 7 dias (ramos alternativos não somam; arestas de retorno de ciclo contam zero, atalho documentado no código).
+6. **Menores.** `CLAIM_TTL_MS` no lugar de `5 * 60_000` em `salvar`. `ctx.tentativas` zera ao avançar de nó. `publicarFluxo` usa `$transaction` (versão e ponteiro juntos; retentativa em colisão de número mantida). Nova rota `PUT /api/automacoes/[id]` (`{ draft }`) autenticada e escopada por `userId`. `cancelarRunsDoContato` foi movida para `cancelamento.ts` (re-exportada por `servico.ts`) e passa a ser chamada por `addOptOut` (opt-out cancela as execuções ativas do contato, melhor esforço).
+
+### Resultados reais
+
+- `npx prisma generate`: ok. `npm run typecheck`: sem erros.
+- `npm test` (suíte completa): 139 arquivos, 2339 testes, todos passando (antes: 137 arquivos, 2311). Novos: `pos-revisao.test.ts` (executor e validador), acréscimos em `servico.test.ts`, `src/app/api/automacoes/route.test.ts` (401 sem login, isolamento/IDOR em iniciar, publicar, editar rascunho, ver e cancelar execução, 403/201 na criação, 400 contato desconhecido, 429 taxa).
+- `eslint` nos arquivos alterados: sem erros nem avisos.
+- `npm run build` (variáveis fictícias só no processo): ok.
+
+### Limitações e não verificado
+
+- **`AUTOMACOES_ATIVAS` NÃO deve ligar em produção** sem validar em staging o conjunto acima: gate do Modo Seguro, espaçamento entre envios, tetos por hora e cancelamento por acesso revogado. Nada disso foi exercitado contra Baileys, Cloud, nem banco reais.
+- Colunas novas (`claimsSemProgresso`) não foram aplicadas a banco algum; o repositório não tem pasta de migrações, então o SQL aditivo precisa ser gerado e revisado antes do deploy.
+- "Humano assumiu" não ganhou gancho de cancelamento imediato: os pontos que pausam a conversa são vários (painel, IA das lojas, atendente). O executor cancela na retomada e antes de cada envio via `quemPodeEnviar`, então a limitação é só a latência (a execução fica `waiting` até acordar). Opt-out cancela na hora, casando pelo `jid` recebido; outra forma do mesmo número cai na checagem do executor.
+- Teto por hora conta execuções criadas, não envios; o espaçamento só vale com Anti-Spam ligado na sessão (padrão: ligado sem configuração salva).
+- Nenhum teste contra Prisma real: rotas e serviço foram testados com banco falso/mocks.

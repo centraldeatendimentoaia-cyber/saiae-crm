@@ -5,11 +5,16 @@ const h = vi.hoisted(() => ({
         automationFlow: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
         automationFlowVersion: { findFirst: vi.fn(), create: vi.fn(), findUniqueOrThrow: vi.fn() },
         automationRun: { count: vi.fn(), create: vi.fn(), findFirst: vi.fn(), updateMany: vi.fn() },
+        session: { findFirst: vi.fn() },
+        contact: { findFirst: vi.fn() },
+        $transaction: vi.fn(),
     },
+    acesso: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
+vi.mock("@/lib/api-auth", () => ({ canAccessSession: h.acesso }));
 
-import { ErroAutomacao, cancelarRun, cancelarRunsDoContato, iniciarRun, publicarFluxo } from "./servico";
+import { ErroAutomacao, cancelarRun, cancelarRunsDoContato, criarFluxo, iniciarRun, publicarFluxo } from "./servico";
 import { prismaStore } from "./store-prisma";
 
 vi.mock("@/modules/whatsapp/provider", () => ({ cloudSessionIds: () => new Set(), getProvider: vi.fn() }));
@@ -24,12 +29,63 @@ beforeEach(() => {
     h.prisma.automationFlow.findFirst.mockResolvedValue(flow);
     h.prisma.automationFlowVersion.findUniqueOrThrow.mockResolvedValue({ id: "v1", definition: { schemaVersion: 1, start: "a", nodes: {} } });
     h.prisma.automationRun.count.mockResolvedValue(0);
+    h.acesso.mockResolvedValue(true);
+    h.prisma.contact.findFirst.mockResolvedValue({ id: "ct1" });
+    h.prisma.$transaction.mockImplementation((fn: (tx: typeof h.prisma) => unknown) => fn(h.prisma));
+    delete process.env.AUTOMACOES_MAX_INICIOS_HORA_USUARIO;
+    delete process.env.AUTOMACOES_MAX_INICIOS_HORA_FLUXO;
+});
+
+describe("sessão do fluxo (criarFluxo)", () => {
+    it("cliente manda o cuid: grava o NOME da sessão", async () => {
+        h.prisma.session.findFirst.mockResolvedValueOnce({ sessionId: "loja" });
+        await criarFluxo({ userId: "u1", sessionId: "cuid123", name: "x" });
+        expect(h.prisma.session.findFirst.mock.calls[0][0].where).toEqual({ id: "cuid123" });
+        expect(h.prisma.automationFlow.create.mock.calls[0][0].data.sessionId).toBe("loja");
+    });
+    it("cliente manda o nome: resolve por nome e grava o mesmo nome", async () => {
+        h.prisma.session.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ sessionId: "loja" });
+        await criarFluxo({ userId: "u1", sessionId: "loja", name: "x" });
+        expect(h.prisma.session.findFirst.mock.calls[1][0].where).toEqual({ sessionId: "loja" });
+        expect(h.prisma.automationFlow.create.mock.calls[0][0].data.sessionId).toBe("loja");
+    });
+    it("sessão inexistente: erro e nada é criado", async () => {
+        h.prisma.session.findFirst.mockResolvedValue(null);
+        await expect(criarFluxo({ userId: "u1", sessionId: "zzz", name: "x" })).rejects.toMatchObject({ codigo: "sessao_invalida" });
+        expect(h.prisma.automationFlow.create).not.toHaveBeenCalled();
+    });
+});
+
+describe("início manual: acesso, contato e taxa", () => {
+    it("acesso revogado à sessão do fluxo: recusa (canAccessSession com a sessão do fluxo)", async () => {
+        h.acesso.mockResolvedValue(false);
+        await expect(iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c" })).rejects.toMatchObject({ codigo: "sessao_invalida" });
+        expect(h.acesso).toHaveBeenCalledWith("u1", "OWNER", "loja");
+        expect(h.prisma.automationRun.create).not.toHaveBeenCalled();
+    });
+    it("contato que não existe na sessão: recusa", async () => {
+        h.prisma.contact.findFirst.mockResolvedValue(null);
+        await expect(iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "5561000000000@s.whatsapp.net" })).rejects.toMatchObject({ codigo: "contato_desconhecido" });
+        expect(h.prisma.contact.findFirst.mock.calls[0][0].where).toMatchObject({ session: { sessionId: "loja" } });
+        expect(h.prisma.automationRun.create).not.toHaveBeenCalled();
+    });
+    it("teto por usuário na última hora (env): limite_taxa", async () => {
+        process.env.AUTOMACOES_MAX_INICIOS_HORA_USUARIO = "2";
+        h.prisma.automationRun.count.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+        expect(await iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c", agora: AGORA })).toEqual({ ok: false, motivo: "limite_taxa" });
+        expect(h.prisma.automationRun.count.mock.calls[1][0].where).toMatchObject({ userId: "u1", createdAt: { gte: new Date(AGORA.getTime() - 3_600_000) } });
+    });
+    it("teto por fluxo (padrão 30/h): limite_taxa", async () => {
+        h.prisma.automationRun.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0).mockResolvedValueOnce(30);
+        expect(await iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c" })).toEqual({ ok: false, motivo: "limite_taxa" });
+        expect(h.prisma.automationRun.create).not.toHaveBeenCalled();
+    });
 });
 
 describe("início e deduplicação", () => {
     it("cria a execução no nó inicial com o escopo do fluxo (userId e sessão)", async () => {
         h.prisma.automationRun.create.mockResolvedValue({ id: "r1" });
-        expect(await iniciarRun({ userId: "u1", flowId: "f1", contactKey: "c", agora: AGORA })).toEqual({ ok: true, runId: "r1" });
+        expect(await iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c", agora: AGORA })).toEqual({ ok: true, runId: "r1" });
         const data = h.prisma.automationRun.create.mock.calls[0][0].data;
         expect(data).toMatchObject({ userId: "u1", sessionId: "loja", flowVersionId: "v1", currentNodeId: "a", contactKey: "c" });
         expect(data.dedupeKey).toBe(`janela:${Math.floor(AGORA.getTime() / 3_600_000)}`);
@@ -37,21 +93,21 @@ describe("início e deduplicação", () => {
     it("mesma versão, contato e janela: duplicada, sem segunda execução", async () => {
         h.prisma.automationRun.create.mockRejectedValue(P2002);
         h.prisma.automationRun.findFirst.mockResolvedValue({ id: "r0" });
-        expect(await iniciarRun({ userId: "u1", flowId: "f1", contactKey: "c", agora: AGORA })).toEqual({ ok: false, motivo: "duplicada", runId: "r0" });
+        expect(await iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c", agora: AGORA })).toEqual({ ok: false, motivo: "duplicada", runId: "r0" });
     });
     it("limite de execuções simultâneas por contato e fluxo", async () => {
         h.prisma.automationRun.count.mockResolvedValue(1);
-        expect(await iniciarRun({ userId: "u1", flowId: "f1", contactKey: "c" })).toEqual({ ok: false, motivo: "limite_simultaneas" });
+        expect(await iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c" })).toEqual({ ok: false, motivo: "limite_simultaneas" });
         expect(h.prisma.automationRun.create).not.toHaveBeenCalled();
     });
     it("fluxo de outro usuário não é encontrado (escopo por userId)", async () => {
         h.prisma.automationFlow.findFirst.mockResolvedValue(null);
-        await expect(iniciarRun({ userId: "outro", flowId: "f1", contactKey: "c" })).rejects.toBeInstanceOf(ErroAutomacao);
+        await expect(iniciarRun({ userId: "outro", role: "OWNER", flowId: "f1", contactKey: "c" })).rejects.toBeInstanceOf(ErroAutomacao);
         expect(h.prisma.automationFlow.findFirst.mock.calls[0][0].where).toMatchObject({ userId: "outro" });
     });
     it("sem versão publicada não inicia", async () => {
         h.prisma.automationFlow.findFirst.mockResolvedValue({ ...flow, publishedVersionId: null });
-        await expect(iniciarRun({ userId: "u1", flowId: "f1", contactKey: "c" })).rejects.toMatchObject({ codigo: "sem_versao_publicada" });
+        await expect(iniciarRun({ userId: "u1", role: "OWNER", flowId: "f1", contactKey: "c" })).rejects.toMatchObject({ codigo: "sem_versao_publicada" });
     });
 });
 
@@ -66,6 +122,7 @@ describe("publicação", () => {
         h.prisma.automationFlowVersion.findFirst.mockResolvedValue({ version: 3 });
         h.prisma.automationFlowVersion.create.mockResolvedValue({ id: "v4", version: 4 });
         await publicarFluxo("u1", "f1");
+        expect(h.prisma.$transaction).toHaveBeenCalledTimes(1); // versão e ponteiro juntos
         expect(h.prisma.automationFlowVersion.create.mock.calls[0][0].data).toMatchObject({ flowId: "f1", version: 4 });
         expect(h.prisma.automationFlow.update).toHaveBeenCalledWith({ where: { id: "f1" }, data: { publishedVersionId: "v4" } });
     });

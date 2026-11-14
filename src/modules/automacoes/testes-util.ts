@@ -16,7 +16,7 @@ export function criarStoreMemoria(defs: Record<string, Definicao>) {
             if (!r) return null;
             const livre = r.status === "pending" || (r.status === "waiting" && !!r.resumeAt && r.resumeAt <= agora) || (r.status === "running" && !!r.claimExpiresAt && r.claimExpiresAt < agora);
             if (!livre) return null;
-            r.status = "running"; r.claimedBy = holder; r.claimExpiresAt = new Date(agora.getTime() + ttl);
+            r.claimsSemProgresso++; r.status = "running"; r.claimedBy = holder; r.claimExpiresAt = new Date(agora.getTime() + ttl);
             return structuredClone(r) as RunRow;
         },
         async salvar(id, holder, patch: RunPatch, agora) {
@@ -25,6 +25,7 @@ export function criarStoreMemoria(defs: Record<string, Definicao>) {
             const r = runs.get(id);
             if (!r || r.claimedBy !== holder || r.status !== "running") return false;
             Object.assign(r, structuredClone(patch));
+            r.claimsSemProgresso = 0;
             if (patch.status && patch.status !== "running") { r.claimedBy = null; r.claimExpiresAt = null; } else r.claimExpiresAt = new Date(agora.getTime() + CLAIM_TTL_MS);
             return true;
         },
@@ -50,14 +51,14 @@ export function criarStoreMemoria(defs: Record<string, Definicao>) {
     const criar = (id: string, defId: string, agora: Date, extra: Partial<RunRow> = {}) => {
         runs.set(id, {
             id, userId: "u1", sessionId: "loja", contactKey: "5561999990001@s.whatsapp.net", flowVersionId: defId, status: "pending",
-            currentNodeId: defs[defId].start, context: { vars: {}, tentativas: {} }, stepCount: 0, resumeAt: null,
+            currentNodeId: defs[defId].start, context: { vars: {}, tentativas: {} }, stepCount: 0, claimsSemProgresso: 0, resumeAt: null,
             deadlineAt: new Date(agora.getTime() + 7 * 24 * 3_600_000), claimedBy: null, claimExpiresAt: null, ...extra,
         });
     };
     return { store, runs, passos, falhas, criar };
 }
 
-export function criarDeps(opts: { agora: { t: number }; holder?: string; sendText?: ReturnType<typeof vi.fn>; freeText?: boolean; janela?: boolean; optout?: boolean; conversa?: { estado: string; pausadaAte: Date | null } | null; conectado?: boolean }): Deps & { sendText: ReturnType<typeof vi.fn>; etiquetar: ReturnType<typeof vi.fn>; transferirHumano: ReturnType<typeof vi.fn> } {
+export function criarDeps(opts: { agora: { t: number }; holder?: string; sendText?: ReturnType<typeof vi.fn>; freeText?: boolean; janela?: boolean; optout?: boolean; conversa?: { estado: string; pausadaAte: Date | null } | null; conectado?: boolean; acesso?: boolean }): Deps & { sendText: ReturnType<typeof vi.fn>; etiquetar: ReturnType<typeof vi.fn>; transferirHumano: ReturnType<typeof vi.fn> } {
     const sendText = opts.sendText ?? vi.fn(async () => ({ messageId: "wamid.1" }));
     const provider = {
         name: "cloud-api", sessionId: "loja", capabilities: { freeTextAnytime: opts.freeText ?? true, templates: true },
@@ -70,6 +71,7 @@ export function criarDeps(opts: { agora: { t: number }; holder?: string; sendTex
         holder: opts.holder ?? "A",
         agora: () => new Date(opts.agora.t),
         optedOut: async () => opts.optout ?? false,
+        temAcesso: async () => opts.acesso ?? true,
         conversa: async () => (opts.conversa === undefined ? null : opts.conversa),
         provider: () => ({ ok: true, provider }),
         janelaAberta: async () => opts.janela ?? true,

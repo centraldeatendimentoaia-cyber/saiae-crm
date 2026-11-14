@@ -6,7 +6,8 @@ import { cloudSessionIds, getProvider } from "@/modules/whatsapp/provider";
 import { numeroDeEnvioPertence } from "@/modules/whatsapp/provider/cloud-sessao";
 import { dadosPausar } from "@/modules/atendimento-comum/pausa";
 import type { Deps, RunRow, Store, StepRow, StatusPasso } from "./executor";
-import type { Contexto, Definicao } from "./tipos";
+import { getSafeMode, safeGate, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
+import { CLAIM_TTL_MS, type Contexto, type Definicao } from "./tipos";
 
 const isUnique = (e: unknown) => (e as { code?: string })?.code === "P2002";
 const json = (v: unknown) => v as Prisma.InputJsonValue;
@@ -14,7 +15,7 @@ const json = (v: unknown) => v as Prisma.InputJsonValue;
 const paraRun = (r: Awaited<ReturnType<typeof prisma.automationRun.findUniqueOrThrow>>): RunRow => ({
     id: r.id, userId: r.userId, sessionId: r.sessionId, contactKey: r.contactKey, flowVersionId: r.flowVersionId,
     status: r.status as RunRow["status"], currentNodeId: r.currentNodeId, context: r.context as unknown as Contexto,
-    stepCount: r.stepCount, resumeAt: r.resumeAt, deadlineAt: r.deadlineAt,
+    stepCount: r.stepCount, claimsSemProgresso: r.claimsSemProgresso, resumeAt: r.resumeAt, deadlineAt: r.deadlineAt,
 });
 
 export const prismaStore: Store = {
@@ -25,7 +26,7 @@ export const prismaStore: Store = {
                 id: runId,
                 OR: [{ status: "pending" }, { status: "waiting", resumeAt: { lte: agora } }, { status: "running", claimExpiresAt: { lt: agora } }],
             },
-            data: { status: "running", claimedBy: holder, claimExpiresAt: new Date(agora.getTime() + ttlMs) },
+            data: { status: "running", claimedBy: holder, claimExpiresAt: new Date(agora.getTime() + ttlMs), claimsSemProgresso: { increment: 1 } },
         });
         if (r.count !== 1) return null;
         return paraRun(await prisma.automationRun.findUniqueOrThrow({ where: { id: runId } }));
@@ -36,7 +37,7 @@ export const prismaStore: Store = {
         const sai = patch.status !== undefined && patch.status !== "running"; // espera/fim: solta a reserva
         const r = await prisma.automationRun.updateMany({
             where: { id: runId, claimedBy: holder, status: "running" },
-            data: { ...resto, ...(context ? { context: json(context) } : {}), ...(sai ? { claimedBy: null, claimExpiresAt: null } : { claimExpiresAt: new Date(agora.getTime() + 5 * 60_000) }) },
+            data: { ...resto, claimsSemProgresso: 0, ...(context ? { context: json(context) } : {}), ...(sai ? { claimedBy: null, claimExpiresAt: null } : { claimExpiresAt: new Date(agora.getTime() + CLAIM_TTL_MS) }) },
         });
         return r.count === 1;
     },
@@ -81,6 +82,7 @@ export const prismaStore: Store = {
 
 const HOLDER = randomUUID();
 const H24 = 24 * 3_600_000;
+const enviadosPorSessao = new Map<string, number>();
 
 /** Dependências reais: provedor existente (Cloud pela sessão correta), opt-out e conversa do atendimento. */
 export const depsReais: Deps = {
@@ -95,6 +97,28 @@ export const depsReais: Deps = {
             return { ok: false, permanente: true, motivo: "número de envio da Cloud não pertence a esta sessão" };
         const provider = getProvider(sessionId);
         return provider ? { ok: true, provider } : { ok: false, permanente: false, motivo: "sessão indisponível para envio" };
+    },
+    async temAcesso(userId, sessionId) {
+        const s = await prisma.session.findUnique({ where: { sessionId }, select: { id: true, userId: true } });
+        if (!s) return false;
+        if (s.userId === userId) return true;
+        return !!(await prisma.sessionAccess.findUnique({ where: { sessionId_userId: { sessionId: s.id, userId } }, select: { id: true } }));
+    },
+    // Modo Seguro só vale para Baileys (a Cloud tem janela e template próprios).
+    async gateEnvio(sessionId, provider) {
+        if (provider.name === "cloud-api") return { ok: true };
+        const safe = await getSafeMode(sessionId);
+        if (!safe) return { ok: true };
+        const g = safeGate(safe);
+        return g.ok ? { ok: true } : { ok: false, resumeAt: g.resumeAt };
+    },
+    async espacar(sessionId, provider) {
+        if (provider.name === "cloud-api") return;
+        const safe = await getSafeMode(sessionId);
+        if (!safe) return;
+        const n = (enviadosPorSessao.get(sessionId) ?? 0) + 1;
+        enviadosPorSessao.set(sessionId, n);
+        await sleepMs(safe.batchSize > 0 && n % safe.batchSize === 0 ? batchPauseMs(safe) : humanDelayMs(safe));
     },
     async janelaAberta(sessionId, contactKey) {
         const s = await prisma.session.findUnique({ where: { sessionId }, select: { id: true } });

@@ -13,11 +13,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const lido = await lerCorpo(request, schema);
     if (!lido.ok) return lido.response;
     try {
-        const r = await iniciarRun({ userId: user.id, flowId: (await params).id, ...lido.data });
+        const r = await iniciarRun({ userId: user.id, role: user.role, flowId: (await params).id, ...lido.data });
         if (r.ok) return NextResponse.json({ status: true, data: { runId: r.runId } }, { status: 201 });
-        return NextResponse.json({ status: false, message: r.motivo, error: r.motivo, data: { runId: r.runId } }, { status: 409 });
+        return NextResponse.json({ status: false, message: r.motivo, error: r.motivo, data: { runId: r.runId } }, { status: r.motivo === "limite_taxa" ? 429 : 409 });
     } catch (e) {
-        if (e instanceof ErroAutomacao) return NextResponse.json({ status: false, message: e.codigo, error: e.codigo }, { status: e.codigo === "nao_encontrado" ? 404 : 400 });
+        if (e instanceof ErroAutomacao) return NextResponse.json({ status: false, message: e.codigo, error: e.codigo }, { status: e.codigo === "nao_encontrado" ? 404 : e.codigo === "sessao_invalida" ? 403 : 400 });
         throw e;
     }
 }

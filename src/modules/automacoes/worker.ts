@@ -14,7 +14,7 @@ export function startAutomacoes() {
     cron.schedule("* * * * *", () =>
         withJobLock("cron:automacoes", 5 * 60_000, async () => {
             try {
-                const r = await processarProntas(prismaStore, depsReais);
+                const r = await processarProntas(prismaStore, depsReais, 50, 4 * 60_000);
                 logger.info("Automacoes", `rodada: ${JSON.stringify(r)}`);
             } catch (e) {
                 logger.error("Automacoes", "falha na rodada", e);
