@@ -33,6 +33,21 @@ describe("startJobLock", () => {
     });
 });
 
+describe("startJobLock: prazo da posse", () => {
+    it("ativa() não passa do vencimento gravado no banco, mesmo com o create demorando", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        h.prisma.jobLock.create.mockImplementation(async () => { vi.setSystemTime(500); return {}; }); // create lento
+        h.prisma.jobLock.updateMany.mockReturnValue(new Promise(() => {})); // renovação nunca confirma
+        const posse = await startJobLock("j", 3000);
+        const expiresAt = (h.prisma.jobLock.create.mock.calls[0][0].data.expiresAt as Date).getTime();
+        expect(expiresAt).toBe(3000);
+        vi.setSystemTime(expiresAt);
+        expect(posse!.ativa()).toBe(false);
+        await posse!();
+    });
+});
+
 describe("startJobLock: banco x trava ocupada", () => {
     it("com throwOnDbError, erro de banco lança JobLockDbError; trava ocupada continua null", async () => {
         h.prisma.jobLock.create.mockRejectedValue(new Error("db fora"));

@@ -25,8 +25,8 @@ export interface PosseTrava {
 export type LiberarTrava = (() => Promise<void>) & PosseTrava;
 
 // O token é por aquisição: se a trava é retomada pela mesma instância, a posse antiga não "revive".
-async function tentarPegar(name: string, ttlMs: number, token: string): Promise<Tentativa> {
-    const expiresAt = new Date(Date.now() + ttlMs);
+async function tentarPegar(name: string, ttlMs: number, token: string, inicio = Date.now()): Promise<Tentativa> {
+    const expiresAt = new Date(inicio + ttlMs);
     try {
         await prisma.jobLock.create({ data: { name, holder: token, expiresAt } });
         return "ok";
@@ -75,11 +75,12 @@ export async function withJobLock<T>(name: string, ttlMs: number, fn: (posse: Po
  */
 export async function startJobLock(name: string, ttlMs: number, opts: { throwOnDbError?: boolean } = {}): Promise<LiberarTrava | null> {
     const token = randomUUID();
-    const t = await tentarPegar(name, ttlMs, token);
+    const inicio = Date.now(); // mesmo instante que define expiresAt no banco: ativa() nunca passa do vencimento real
+    const t = await tentarPegar(name, ttlMs, token, inicio);
     if (t === "error" && opts.throwOnDbError) throw new JobLockDbError(name);
     if (t !== "ok") return null;
     const ctrl = new AbortController();
-    let validoAte = Date.now() + ttlMs;
+    let validoAte = inicio + ttlMs;
     const perder = (motivo: string) => {
         if (ctrl.signal.aborted) return;
         logger.error("JobLock", `posse da trava ${name} perdida: ${motivo}`);
