@@ -38,12 +38,18 @@ const h = vi.hoisted(() => {
     // transação em memória: se o callback lançar, restaura o estado anterior (rollback)
     prisma.$transaction = async (fn: (tx: Row) => Promise<unknown>) => {
         const antes = Object.fromEntries(Object.entries(t).map(([k, rs]) => [k, rs.map((r) => ({ ...r }))]));
-        try { return await fn(prisma); } catch (e) { for (const k of Object.keys(t)) t[k] = antes[k]; throw e; }
+        try { return await fn(prisma); } catch (e) {
+            for (const k of Object.keys(t)) t[k] = [...antes[k], ...externos.filter((x) => x.tabela === k && !antes[k].some((r) => r.id === x.row.id)).map((x) => x.row)];
+            throw e;
+        }
     };
-    const reset = () => { for (const k of Object.keys(t)) t[k] = []; n = 0; };
+    // linha gravada por OUTRA conexão durante a transação: já está commitada, o rollback desta não a desfaz
+    const externos: { tabela: string; row: Row }[] = [];
+    const externo = (tabela: string, row: Row) => { t[tabela].push(row); externos.push({ tabela, row }); };
+    const reset = () => { for (const k of Object.keys(t)) t[k] = []; externos.length = 0; n = 0; };
     // chave de API → usuário
     const chaves: Record<string, string> = { "chave-lavi": "u-lavi", "chave-outro": "u-outro" };
-    return { t, prisma, reset, chaves };
+    return { t, prisma, reset, chaves, externo };
 });
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 vi.mock("@/lib/api-auth", () => ({
@@ -372,10 +378,9 @@ describe("concorrência entre versões (achado 8)", () => {
 
     it("criação concorrente: o vencedor com versão/hash diferentes não vira 'inalterado'", async () => {
         const venc = peca("a", { versao: 2, legenda: "do vencedor" });
-        const orig = h.prisma.externalPostLink.create;
         const c = vi.spyOn(h.prisma.externalPostLink, "create").mockImplementationOnce(async () => {
-            h.t.scheduledPost.push({ id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
-            await orig({ data: { userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 2, contentHash: venc.p.hash, postId: "post-venc" } });
+            h.externo("scheduledPost", { id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
+            h.externo("externalPostLink", { id: "link-venc", userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 2, contentHash: venc.p.hash, postId: "post-venc", editorial: "aprovado" });
             throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
         });
         const r = await importar([peca("a", { versao: 1 })]);
@@ -386,10 +391,9 @@ describe("concorrência entre versões (achado 8)", () => {
 
     it("criação concorrente com a MESMA versão e hash continua 'inalterado'", async () => {
         const x = peca("a");
-        const orig = h.prisma.externalPostLink.create;
         const c = vi.spyOn(h.prisma.externalPostLink, "create").mockImplementationOnce(async () => {
-            h.t.scheduledPost.push({ id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
-            await orig({ data: { userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 1, contentHash: x.p.hash, postId: "post-venc" } });
+            h.externo("scheduledPost", { id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
+            h.externo("externalPostLink", { id: "link-venc", userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 1, contentHash: x.p.hash, postId: "post-venc", editorial: "aprovado" });
             throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
         });
         const r = await importar([x]);
@@ -541,6 +545,18 @@ describe("ajustes pós-revisão", () => {
     it("outro erro de banco no vínculo vira rejeição, não 'inalterado'", async () => {
         vi.spyOn(h.prisma.externalPostLink, "create").mockRejectedValueOnce(new Error("unique"));
         const r = await importar([peca("a")]);
+        expect(r.itens[0].resultado).toBe("rejeitado");
+        expect(h.t.scheduledPost).toHaveLength(0);
+        expect(h.t.mediaFile).toHaveLength(0);
+    });
+
+    it("queda entre criar o post e o vínculo não deixa post órfão (mesma transação, sem depender de compensação)", async () => {
+        vi.spyOn(h.prisma.externalPostLink, "create").mockRejectedValueOnce(new Error("queda simulada"));
+        // a compensação antiga (apagar o post depois) também cai: só a transação evita o órfão
+        const d = vi.spyOn(h.prisma.scheduledPost, "deleteMany").mockRejectedValue(new Error("queda simulada"));
+        const log = vi.spyOn(console, "error").mockImplementation(() => {});
+        const r = await importar([peca("a")]);
+        d.mockRestore(); log.mockRestore();
         expect(r.itens[0].resultado).toBe("rejeitado");
         expect(h.t.scheduledPost).toHaveLength(0);
         expect(h.t.mediaFile).toHaveLength(0);

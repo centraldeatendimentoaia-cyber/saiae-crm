@@ -289,16 +289,21 @@ async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise
 
         const mediaIds = await gravarMidias(userId, midias);
         const groupId = randomUUID();
-        const post = await prisma.scheduledPost.create({
-            data: { userId, accountId: contaId, type, caption: type === "STORY" ? null : legenda || null, mediaIds, publishAt: null, groupId, status: "DRAFT" },
-        });
+        let post: { id: string };
         try {
-            await prisma.externalPostLink.create({
-                data: { userId, source: SOURCE, externalKey, version: versao as number, contentHash: p.hash as string, editorial: "aprovado", postId: post.id, plannedAt, meta: { ...meta, mediaIds } },
+            // post e vínculo na MESMA transação: uma queda entre os dois não deixa post DRAFT órfão
+            post = await prisma.$transaction(async (tx) => {
+                const novo = await tx.scheduledPost.create({
+                    data: { userId, accountId: contaId, type, caption: type === "STORY" ? null : legenda || null, mediaIds, publishAt: null, groupId, status: "DRAFT" },
+                });
+                await tx.externalPostLink.create({
+                    data: { userId, source: SOURCE, externalKey, version: versao as number, contentHash: p.hash as string, editorial: "aprovado", postId: novo.id, plannedAt, meta: { ...meta, mediaIds } },
+                });
+                return novo;
             });
-        } catch (e) { // corrida com outra importação da mesma chave: desfaz para não deixar post órfão
-            await prisma.scheduledPost.deleteMany({ where: { id: post.id, userId } });
+        } catch (e) { // o rollback já desfez o post; as mídias já gravadas saem aqui
             await mediaStorage.remove(mediaIds);
+            // corrida com outra importação da mesma chave
             if (rec(e).code !== "P2002") throw e;
             const vencedor = await prisma.externalPostLink.findUnique({ where });
             const postVencedor = vencedor ? await prisma.scheduledPost.findFirst({ where: { id: vencedor.postId, userId } }) : null;
