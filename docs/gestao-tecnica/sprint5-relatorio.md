@@ -98,3 +98,15 @@ Revisão independente aprovou com ajustes; cada ponto foi conferido no código a
 - "Humano assumiu" não ganhou gancho de cancelamento imediato: os pontos que pausam a conversa são vários (painel, IA das lojas, atendente). O executor cancela na retomada e antes de cada envio via `quemPodeEnviar`, então a limitação é só a latência (a execução fica `waiting` até acordar). Opt-out cancela na hora, casando pelo `jid` recebido; outra forma do mesmo número cai na checagem do executor.
 - Teto por hora conta execuções criadas, não envios; o espaçamento só vale com Anti-Spam ligado na sessão (padrão: ligado sem configuração salva).
 - Nenhum teste contra Prisma real: rotas e serviço foram testados com banco falso/mocks.
+
+## Correções da revisão Codex
+
+Cinco achados da revisão independente do motor, todos confirmados no código e corrigidos (um commit por achado ou par coeso, cada um com teste de regressão que falhava antes):
+
+- **Resultado desconhecido nunca é reenviado.** Um último passo `unknown` agora encerra a execução como `unknown` sem enviar, mesmo que a gravação do fim da execução tenha falhado antes. As gravações do passo e da execução continuam em chamadas separadas (não há transação entre elas); o passo `unknown` é o registro durável que impede o reenvio.
+- **Cancelamento impede o envio.** A reserva do envio (`abrirPasso` com `posse`) é uma transação que confere execução `running` e dona e só então cria o passo `claimed`. Cancelar antes da reserva, ou perder a posse, impede a chamada ao provedor.
+- **Políticas dos outros envios.** Antes de cada envio o executor aplica `assertCanSend` (dono da sessão) e "só quem já interagiu", reaproveitando as funções do agendador, e registra o consumo depois do envio; falha ao registrar não derruba nem reenvia.
+- **Espaçamento por mensagem.** O espaçamento (e a contagem de lote) ocorre antes de cada mensagem posterior à primeira da mesma execução, renovando a posse a cada `RENOVACAO_CLAIM_MS`, e as checagens de cancelamento rodam depois da espera.
+- **Pausa humana da IA Cloud.** Em sessão Cloud a conversa também é consultada em `IaConversa` por contato. Limitação: `IaConversa` não tem `sessionId`, então a busca vale para todas as lojas do contato, o que só é exato com uma conta Meta (decisão do dono).
+
+Não verificado: nada foi exercitado contra Prisma, Baileys ou Cloud reais; a transação de reserva só foi testada com o banco em memória (a versão Prisma foi apenas compilada).

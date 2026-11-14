@@ -7,7 +7,7 @@ import { assertCanSend, recordMessages, ownerIdOfSession, PlanError } from "@/li
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
 import { cloudSessionIds, getProvider } from "@/modules/whatsapp/provider";
 import { numeroDeEnvioPertence } from "@/modules/whatsapp/provider/cloud-sessao";
-import { dadosPausar } from "@/modules/atendimento-comum/pausa";
+import { dadosPausar, iaPausada } from "@/modules/atendimento-comum/pausa";
 import type { Deps, RunRow, Store, StepRow, StatusPasso } from "./executor";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
 import { CLAIM_TTL_MS, type Contexto, type Definicao } from "./tipos";
@@ -120,8 +120,17 @@ export const depsReais: Deps = {
         const dono = await ownerIdOfSession(sessionId);
         if (dono) await recordMessages(dono, 1);
     },
-    conversa: async (sessionId, contactKey) =>
-        prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid: contactKey } }, select: { estado: true, pausadaAte: true } }),
+    // A pausa humana mora em duas tabelas: AgenteConversa (salão, por sessão) e IaConversa (atendimento Cloud, por loja).
+    // Qualquer uma pausada vale. Limitação conhecida: IaConversa não tem sessionId, então para sessão Cloud a consulta é por
+    // contato (telefone/BSUID) em todas as lojas; só é exata com UMA conta Meta (decisão do dono; revisar se houver várias).
+    async conversa(sessionId, contactKey) {
+        const agente = await prisma.agenteConversa.findUnique({ where: { sessionId_jid: { sessionId, jid: contactKey } }, select: { estado: true, pausadaAte: true } });
+        const cloud = cloudSessionIds().has(sessionId)
+            ? await prisma.iaConversa.findMany({ where: { contactKey: { in: [contactKey, contactKey.replace(/@.*$/, "")] } }, select: { estado: true, pausadaAte: true } })
+            : [];
+        const todas = [...(agente ? [agente] : []), ...cloud];
+        return todas.find((c) => iaPausada(c, new Date())) ?? todas[0] ?? null;
+    },
     provider(sessionId) {
         // Sessão Cloud: o número de envio é um só; com várias sessões Cloud só envia se o número pertence a esta (cloud-sessao).
         if (cloudSessionIds().has(sessionId) && !numeroDeEnvioPertence(process.env, sessionId))
