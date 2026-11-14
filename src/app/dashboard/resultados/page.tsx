@@ -11,11 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useSession } from "@/components/dashboard/session-provider";
 import { SessionGuard } from "@/components/dashboard/session-guard";
 import { dataBr, ultimosDias } from "@/modules/metricas/formato";
-import { ORIGENS, ROTULO_ORIGEM, ROTULO_TIPO, type Origem } from "@/modules/resultados/tipos";
+import { ORIGENS, ROTULO_CONFIANCA_ORIGEM, ROTULO_ORIGEM, ROTULO_TIPO } from "@/modules/resultados/tipos";
 import type { ContagemConfianca, Funil } from "@/modules/resultados/funil";
 
 interface Periodo { de: string; ate: string }
-interface ResumoImportacao { recebidas: number; validas: number; novos: number; repetidos: number; totalRejeitadas: number; rejeitadas: { linha: number; motivo: string }[] }
+interface ResumoImportacao { importacaoId: string | null; avisos: string[]; repetidasNoArquivo: number; recebidas: number; validas: number; novos: number; repetidos: number; totalRejeitadas: number; rejeitadas: { linha: number; motivo: string }[] }
 
 async function buscar(sessionId: string, p: Periodo, origem: string): Promise<Funil> {
     const extra = origem ? `&origem=${origem}` : "";
@@ -25,12 +25,12 @@ async function buscar(sessionId: string, p: Periodo, origem: string): Promise<Fu
     return json.data.funil as Funil;
 }
 
-/** Selo por número: texto e ícone, nunca só cor. Os três estados aparecem sempre separados. */
+/** Selo por número: texto e ícone, nunca só cor. Os três estados aparecem sempre separados. A explicação fica na legenda visível (não em title=, inacessível por teclado). */
 function Selos({ c }: { c: ContagemConfianca }) {
     return (
         <span className="flex flex-wrap gap-1 text-xs">
-            <span className="rounded border px-1.5 py-0.5" title="Registro autoritativo (mensagem, importação)">✔ {c.confirmado} confirmado{c.confirmado === 1 ? "" : "s"}</span>
-            <span className="rounded border border-dashed px-1.5 py-0.5" title="Derivado por regra; veja a nota de regras abaixo">≈ {c.inferido} inferido{c.inferido === 1 ? "" : "s"}</span>
+            <span className="rounded border px-1.5 py-0.5">✔ {c.confirmado} confirmado{c.confirmado === 1 ? "" : "s"}</span>
+            <span className="rounded border border-dashed px-1.5 py-0.5">≈ {c.inferido} inferido{c.inferido === 1 ? "" : "s"}</span>
             {c.desconhecido > 0 && <span className="rounded border px-1.5 py-0.5">? {c.desconhecido} desconhecido{c.desconhecido === 1 ? "" : "s"}</span>}
         </span>
     );
@@ -63,6 +63,18 @@ export default function ResultadosPage() {
     }, [sessionId, periodo, origem]);
     useEffect(() => { carregar(); }, [carregar]);
 
+    const desfazer = async (id: string) => {
+        try {
+            const res = await fetch(`/api/resultados/${encodeURIComponent(sessionId)}/importar?importacaoId=${encodeURIComponent(id)}`, { method: "DELETE" });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok || !json.status) throw new Error(json.message || "Não foi possível desfazer.");
+            toast.success(`${json.data.apagados} evento(s) removido(s).`);
+            setResumo(null);
+            carregar();
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Não foi possível desfazer.");
+        }
+    };
     const importar = async (e: React.FormEvent) => {
         e.preventDefault();
         setImportando(true);
@@ -95,7 +107,7 @@ export default function ResultadosPage() {
                 <div>
                     <h2 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-3xl"><Target className="h-6 w-6 sm:h-8 sm:w-8" aria-hidden="true" />Resultados</h2>
                     <p className="text-muted-foreground">
-                        Do lead à venda, por origem. Cada número mostra quantos casos são <strong>confirmados</strong> (registro autoritativo), <strong>inferidos</strong> (derivados por uma regra) e <strong>desconhecidos</strong>. A origem mostra de onde o contato aparentemente veio; não prova qual campanha causou a venda.
+                        Do lead à venda, por origem. Cada número mostra quantos casos são <strong>confirmados</strong> (registro direto do WhatsApp ou linha importada com fonte conferida), <strong>inferidos</strong> (derivados por uma regra) e <strong>desconhecidos</strong>. A origem mostra de onde o contato aparentemente veio; não prova qual campanha causou a venda.
                     </p>
                 </div>
 
@@ -137,8 +149,12 @@ export default function ResultadosPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <p className="rounded-md border p-3 text-sm" role="status">
-                                <strong>{funil.origemDesconhecida}</strong> contato(s) com <strong>origem não identificada</strong> (sem marcador de anúncio, etiqueta ou planilha). Eles entram nas contagens abaixo, na linha &quot;{ROTULO_ORIGEM.desconhecido}&quot;.
+                                <strong>{funil.origemDesconhecida}</strong> contato(s) com <strong>origem não identificada</strong> (sem marcador de anúncio, etiqueta ou planilha, ou com etiquetas de origem em conflito). Eles entram nas contagens abaixo, na linha &quot;{ROTULO_ORIGEM.desconhecido}&quot;.
                             </p>
+                            {funil.importadosSemConversa > 0 && (
+                                <p className="rounded-md border p-3 text-sm" role="status"><strong>{funil.importadosSemConversa}</strong> contato(s) importado(s) sem nenhuma conversa registrada nesta sessão (o telefone da planilha pode não bater com o do WhatsApp). Eles contam nas etapas importadas, mas sem origem do WhatsApp.</p>
+                            )}
+                            <p className="text-xs text-muted-foreground"><span aria-hidden="true">✔</span> confirmado: registro direto ou fonte conferida. <span aria-hidden="true">≈</span> inferido: derivado por regra ou declarado sem conferência. <span aria-hidden="true">?</span> desconhecido: sem base. O selo vale para o <strong>evento</strong>; a confiança da <strong>origem</strong> aparece ao lado do nome de cada origem.</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm">
                                     <caption className="sr-only">Funil de resultados por etapa e origem</caption>
@@ -152,8 +168,8 @@ export default function ResultadosPage() {
                                                 <td className="py-2 pr-4"><Selos c={l.contagem} /></td>
                                                 <td className="py-2">
                                                     <ul className="space-y-1">
-                                                        {(ORIGENS as readonly Origem[]).filter((o) => l.porOrigem[o].total > 0).map((o) => (
-                                                            <li key={o} className="flex flex-wrap items-center gap-2"><span className="w-44 shrink-0">{ROTULO_ORIGEM[o]}</span><Selos c={l.porOrigem[o]} /></li>
+                                                        {l.porOrigem.map((o) => (
+                                                            <li key={`${o.origem}|${o.confiancaOrigem}`} className="flex flex-wrap items-center gap-2"><span className="w-56 shrink-0">{ROTULO_ORIGEM[o.origem]} <span className="text-xs text-muted-foreground">({ROTULO_CONFIANCA_ORIGEM[o.confiancaOrigem]})</span></span><Selos c={o.contagem} /></li>
                                                         ))}
                                                         {l.contagem.total === 0 && <li className="text-muted-foreground">Sem registros</li>}
                                                     </ul>
@@ -170,6 +186,9 @@ export default function ResultadosPage() {
                                     <li>Orgânico inferido: a primeira mensagem não trouxe marcador de anúncio (pode ser indicação, post ou anúncio sem rastreio).</li>
                                     <li>Origem por etiqueta ou planilha: inferida, pois não é verificada pelo sistema.</li>
                                     <li>Venda registrada pela atendente IA: inferida, sem conferência com caixa ou agenda.</li>
+                                    <li>Conversas respondidas: inferidas (há mensagem enviada depois da primeira recebida; não distingue resposta humana de automática).</li>
+                                    <li>Origem em conflito (etiquetas de origem diferentes no mesmo contato): desconhecida.</li>
+                                    <li>Linha importada: inferida, a menos que a planilha declare fonte_conferida = sim.</li>
                                     <li>Lead: primeira mensagem recebida registrada. Se o histórico antigo foi apagado, um cliente antigo pode aparecer como lead.</li>
                                 </ul>
                             </details>
@@ -180,7 +199,7 @@ export default function ResultadosPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" aria-hidden="true" />Importar agenda e vendas</CardTitle>
-                        <CardDescription>Arquivo CSV (separado por ; ou ,) ou JSON exportado da sua agenda. Colunas: tipo (agendamento_solicitado, agendamento_confirmado, comparecimento, venda), contato (telefone com DDD), ocorrido_em (AAAA-MM-DD), origem, campanha, referencia, valor. Repetir o mesmo arquivo não duplica. Só o dono da sessão importa.</CardDescription>
+                        <CardDescription>Arquivo CSV (separado por ; ou ,) ou JSON exportado da sua agenda. Colunas: tipo (agendamento_solicitado, agendamento_confirmado, comparecimento, venda), contato (telefone com DDD), ocorrido_em (AAAA-MM-DD), origem, campanha, referencia, valor, fonte_conferida (sim só se a linha foi conferida; sem isso é inferida). Repetir o mesmo arquivo não duplica. Só o dono da sessão importa.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form className="space-y-3" onSubmit={importar}>
@@ -191,7 +210,9 @@ export default function ResultadosPage() {
                         <div aria-live="polite" className="mt-3 text-sm">
                             {resumo && (
                                 <div className="rounded-md border p-3">
-                                    <p>{resumo.recebidas} linha(s) lida(s): {resumo.novos} nova(s), {resumo.repetidos} já importada(s), {resumo.totalRejeitadas} rejeitada(s).</p>
+                                    <p>{resumo.recebidas} linha(s) lida(s): {resumo.novos} nova(s), {resumo.repetidos} já importada(s), {resumo.totalRejeitadas} rejeitada(s) ({resumo.repetidasNoArquivo} repetida(s) no próprio arquivo).</p>
+                                    {resumo.avisos.length > 0 && <ul className="mt-2 list-disc pl-5" role="status">{resumo.avisos.map((a) => <li key={a}>Aviso: {a}</li>)}</ul>}
+                                    {resumo.importacaoId && <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => desfazer(resumo.importacaoId!)}>Desfazer esta importação</Button>}
                                     {resumo.rejeitadas.length > 0 && <ul className="mt-2 list-disc pl-5 text-muted-foreground">{resumo.rejeitadas.map((r) => <li key={r.linha}>Linha {r.linha}: {r.motivo}</li>)}</ul>}
                                 </div>
                             )}

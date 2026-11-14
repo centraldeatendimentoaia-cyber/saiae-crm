@@ -47,11 +47,41 @@ describe("funil", () => {
         const eventos = [ev("lead_recebido", "a", "confirmado", ANUN), ev("lead_recebido", "b", "confirmado"), ev("lead_recebido", "c", "confirmado")];
         const f = consolidarFunil(eventos);
         expect(f.origemDesconhecida).toBe(2);
-        expect(f.linhas[0].porOrigem.anuncio.total).toBe(1);
-        expect(f.linhas[0].porOrigem.desconhecido.total).toBe(2);
+        expect(f.linhas[0].porOrigem.find((o) => o.origem === "anuncio")?.contagem.total).toBe(1);
+        expect(f.linhas[0].porOrigem.find((o) => o.origem === "desconhecido")?.contagem.total).toBe(2);
         const so = consolidarFunil(eventos, "anuncio");
         expect(so.linhas[0].contagem.total).toBe(1);
         expect(so.origemDesconhecida).toBe(0);
+    });
+});
+
+describe("confiança da origem (B1)", () => {
+    const ORG: OrigemResolvida = { origem: "organico", confianca: "inferido", regra: "sem marcador" };
+    it("lead orgânico (origem inferida) nunca aparece com origem confirmada, mesmo com evento confirmado", () => {
+        const f = consolidarFunil([ev("lead_recebido", "a", "confirmado", ORG), ev("lead_recebido", "b", "confirmado", ANUN)]);
+        const lin = f.linhas[0].porOrigem;
+        expect(lin.find((o) => o.origem === "organico")).toMatchObject({ confiancaOrigem: "inferido" });
+        expect(lin.filter((o) => o.confiancaOrigem === "confirmado").map((o) => o.origem)).toEqual(["anuncio"]);
+        const csv = csvFunil(f);
+        expect(csv).toContain("Leads recebidos;Orgânico;origem inferida;1;0;0");
+        expect(csv).toContain("Leads recebidos;Anúncio;origem confirmada;1;0;0");
+        expect(csv).not.toContain("Orgânico;origem confirmada");
+    });
+    it("mesma origem com confianças diferentes fica em linhas separadas", () => {
+        const f = consolidarFunil([ev("lead_recebido", "a", "confirmado", ANUN), ev("lead_recebido", "b", "confirmado", { ...ANUN, confianca: "inferido" })]);
+        expect(f.linhas[0].porOrigem).toHaveLength(2);
+    });
+});
+
+describe("origem por etiqueta: palavra inteira e conflito", () => {
+    it("meta só como palavra inteira", () => {
+        expect(origemDaEtiqueta("Meta")).toBe("anuncio");
+        expect(origemDaEtiqueta("Metade do pacote")).toBeNull();
+        expect(origemDaEtiqueta("Metas de abril")).toBeNull();
+    });
+    it("etiquetas de origem em conflito resultam em desconhecida; iguais não conflitam", () => {
+        expect(resolverOrigem({ etiquetas: ["Meta", "Indicação"] })).toMatchObject({ origem: "desconhecido", confianca: "desconhecido" });
+        expect(resolverOrigem({ etiquetas: ["Meta", "Facebook"] })).toMatchObject({ origem: "anuncio", confianca: "inferido" });
     });
 });
 
@@ -63,9 +93,9 @@ describe("csv", () => {
     });
     it("CSV do funil tem cabeçalho, BOM e as colunas de confiança", () => {
         const csv = csvFunil(consolidarFunil([ev("lead_recebido", "a", "confirmado", ANUN)]));
-        expect(csv.startsWith("﻿etapa;origem;confirmado;inferido;desconhecido")).toBe(true);
-        expect(csv).toContain("Leads recebidos;Anúncio;1;0;0");
-        expect(csv).toContain("Origem não identificada");
+        expect(csv.startsWith("﻿etapa;origem;confianca_da_origem;confirmado;inferido;desconhecido")).toBe(true);
+        expect(csv).toContain("Leads recebidos;Anúncio;origem confirmada;1;0;0");
+        expect(csvFunil(consolidarFunil([ev("lead_recebido", "b", "confirmado")]))).toContain("Origem não identificada;origem não identificada");
     });
 });
 
@@ -81,7 +111,7 @@ describe("importação de agenda", () => {
         const r = interpretarImportacao("csv", csv, AGORA);
         expect(r.ok && r.resultado.eventos).toHaveLength(3);
         if (!r.ok) throw new Error();
-        expect(r.resultado.eventos[0]).toMatchObject({ contactKey: "5561999990001@s.whatsapp.net", origem: "anuncio", dedupKey: "agendamento_confirmado:AG-1" });
+        expect(r.resultado.eventos[0]).toMatchObject({ contactKey: "5561999990001@s.whatsapp.net", origem: "anuncio", dedupKey: "agendamento_confirmado:5561999990001@s.whatsapp.net:AG-1", confianca: "inferido" });
         expect(r.resultado.eventos[2].valorCentavos).toBe(15050);
     });
     it("é idempotente: mesma entrada gera as mesmas chaves, e repetição no arquivo é descartada", () => {
@@ -92,6 +122,37 @@ describe("importação de agenda", () => {
         const dup = interpretarImportacao("csv", csv + "\nvenda;5561999990001;2026-11-11;;;V-1;1", AGORA);
         if (!dup.ok) throw new Error();
         expect(dup.resultado.rejeitadas.at(-1)?.motivo).toMatch(/duplicada/);
+    });
+    const L = (...l: string[]) => l.join("\n");
+    it("confirmado só com fonte_conferida explícita e válida; padrão é inferido", () => {
+        const r = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;referencia;fonte_conferida", "venda;61999990001;2026-11-01;A;sim", "venda;61999990001;2026-11-02;B;", "venda;61999990001;2026-11-03;C;talvez"), AGORA);
+        if (!r.ok) throw new Error();
+        expect(r.resultado.eventos.map((e) => e.confianca)).toEqual(["confirmado", "inferido"]);
+        expect(r.resultado.rejeitadas[0].motivo).toMatch(/fonte_conferida/);
+    });
+    it("mesma referência em contatos diferentes não colide", () => {
+        const r = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;referencia", "venda;61999990001;2026-11-01;X", "venda;61999990002;2026-11-01;X"), AGORA);
+        expect(r.ok && r.resultado.eventos).toHaveLength(2);
+    });
+    it("vendas no mesmo dia sem referência: não junta em silêncio, avisa com contagem", () => {
+        const r = interpretarImportacao("csv", L("tipo;contato;ocorrido_em", "venda;61999990001;2026-11-01", "venda;61999990001;2026-11-01", "venda;61999990001;2026-11-01"), AGORA);
+        if (!r.ok) throw new Error();
+        expect(r.resultado.eventos).toHaveLength(1);
+        expect(r.resultado.repetidasNoArquivo).toBe(2);
+        expect(r.resultado.repetidasSemReferencia).toBe(2);
+        expect(r.resultado.avisos.join(" ")).toMatch(/2 linha\(s\) sem "referencia"/);
+    });
+    it("valor ambíguo 1.234 é rejeitado; 1.234,50 e 1234.5 passam", () => {
+        const r = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;referencia;valor", "venda;61999990001;2026-11-01;A;1.234", "venda;61999990001;2026-11-02;B;1.234,50", "venda;61999990001;2026-11-03;C;1234.5"), AGORA);
+        if (!r.ok) throw new Error();
+        expect(r.resultado.rejeitadas[0].motivo).toMatch(/ambíguo/);
+        expect(r.resultado.eventos.map((e) => e.valorCentavos)).toEqual([123450, 123450]);
+    });
+    it("avisa de aspa solta e de encoding inválido", () => {
+        const a = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;campanha", 'venda;61999990001;2026-11-01;"abre sem fechar'), AGORA);
+        expect(a.ok && a.resultado.avisos.join(" ")).toMatch(/aspas abertas/);
+        const b = interpretarImportacao("csv", L("tipo;contato;ocorrido_em;campanha", "venda;61999990001;2026-11-01;Corte �"), AGORA);
+        expect(b.ok && b.resultado.avisos.join(" ")).toMatch(/UTF-8/);
     });
     it("sem referência a chave vem do hash de tipo+contato+data", () => {
         const r = interpretarImportacao("csv", "tipo;contato;ocorrido_em\nvenda;61999990002;2026-11-01", AGORA);
@@ -116,7 +177,7 @@ describe("importação de agenda", () => {
         const item = { tipo: "agendamento_solicitado", contato: "5561999990003", ocorrido_em: "2026-11-12T10:00:00-03:00", referencia: 42 };
         const a = interpretarImportacao("json", JSON.stringify([item]), AGORA);
         const b = interpretarImportacao("json", JSON.stringify({ eventos: [item, "lixo"] }), AGORA);
-        expect(a.ok && a.resultado.eventos[0].dedupKey).toBe("agendamento_solicitado:42");
+        expect(a.ok && a.resultado.eventos[0].dedupKey).toBe("agendamento_solicitado:5561999990003@s.whatsapp.net:42");
         expect(b.ok && b.resultado.rejeitadas).toHaveLength(1);
     });
     it("texto livre com controle e fórmula não quebra a leitura; fórmula é neutralizada só na exportação", () => {

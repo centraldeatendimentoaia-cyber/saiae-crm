@@ -5,7 +5,7 @@ import { ORIGENS, TIPOS_IMPORTAVEIS, type Origem, type TipoImportavel } from "./
 /**
  * Importação controlada de agenda/vendas (CSV ou JSON enviado pelo usuário). Núcleo puro: valida, normaliza e gera a chave de
  * idempotência. Não fala com agenda real nem com banco. Colunas: tipo, contato, ocorrido_em, origem (opc.), campanha (opc.),
- * referencia (opc.), valor (opc., em reais).
+ * referencia (opc.), valor (opc., em reais), fonte_conferida (opc.: "sim" só se a linha foi conferida com agenda ou caixa; sem isso a linha é INFERIDA).
  */
 
 export const MAX_BYTES_IMPORTACAO = 1_000_000;
@@ -20,9 +20,20 @@ export interface EventoImportado {
     refExterna: string | null;
     valorCentavos: number | null;
     dedupKey: string;
+    /** "confirmado" só quando a linha declara fonte_conferida; senão "inferido" (a planilha é declaração do usuário, não verificada). */
+    confianca: "confirmado" | "inferido";
 }
 export interface Rejeicao { linha: number; motivo: string }
-export interface ResultadoParse { eventos: EventoImportado[]; rejeitadas: Rejeicao[]; recebidas: number }
+export interface ResultadoParse {
+    eventos: EventoImportado[];
+    rejeitadas: Rejeicao[];
+    recebidas: number;
+    /** Linhas descartadas por serem repetidas dentro do próprio arquivo (também aparecem em rejeitadas). */
+    repetidasNoArquivo: number;
+    /** Quantas dessas repetidas não tinham "referencia": podem ser vendas distintas do mesmo dia juntadas. */
+    repetidasSemReferencia: number;
+    avisos: string[];
+}
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
@@ -49,15 +60,17 @@ export function lerData(bruto: string): Date | null {
     return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function lerValor(bruto: string): number | null | "invalido" {
+function lerValor(bruto: string): number | null | "invalido" | "ambiguo" {
     const t = bruto.trim();
     if (!t) return null;
+    // "1.234" pode ser 1234 (milhar BR) ou 1,234: não adivinhamos dinheiro
+    if (/^\d{1,3}(\.\d{3})+$/.test(t)) return "ambiguo";
     const n = t.includes(",") ? Number(t.replace(/\./g, "").replace(",", ".")) : Number(t);
     return Number.isFinite(n) && n >= 0 && n < 10_000_000 ? Math.round(n * 100) : "invalido";
 }
 
 export function chaveDedup(e: { tipo: string; contactKey: string; ocorridoEm: Date; refExterna: string | null }): string {
-    if (e.refExterna) return `${e.tipo}:${e.refExterna}`;
+    if (e.refExterna) return `${e.tipo}:${e.contactKey}:${e.refExterna}`;
     return "h:" + createHash("sha256").update(`${e.tipo}|${e.contactKey}|${e.ocorridoEm.toISOString()}`).digest("hex").slice(0, 32);
 }
 
@@ -69,11 +82,12 @@ const linhaSchema = z.object({
     campanha: z.string().optional().default(""),
     referencia: z.string().optional().default(""),
     valor: z.string().optional().default(""),
+    fonte_conferida: z.string().optional().default(""),
 });
 
 function validarLinha(bruta: Record<string, unknown>, agora: Date): { ok: true; evento: EventoImportado } | { ok: false; motivo: string } {
     const texto: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(bruta)) texto[k] = v === null || v === undefined ? undefined : typeof v === "string" ? v : typeof v === "number" ? String(v) : v;
+    for (const [k, v] of Object.entries(bruta)) texto[k] = v === null || v === undefined ? undefined : typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : v;
     const r = linhaSchema.safeParse(texto);
     if (!r.success) return { ok: false, motivo: "campos obrigatórios ausentes ou com tipo inválido (tipo, contato, ocorrido_em)" };
     const l = r.data;
@@ -94,15 +108,23 @@ function validarLinha(bruta: Record<string, unknown>, agora: Date): { ok: true; 
     }
     const valor = lerValor(l.valor);
     if (valor === "invalido") return { ok: false, motivo: "valor inválido" };
+    if (valor === "ambiguo") return { ok: false, motivo: 'valor ambíguo (use "1234,00" ou "1234.50", sem separador de milhar)' };
+    const conferida = semAcento(l.fonte_conferida);
+    if (!["", "sim", "nao", "true", "false", "1", "0"].includes(conferida)) return { ok: false, motivo: 'fonte_conferida inválida (use "sim" ou "nao", ou deixe em branco)' };
     const refExterna = l.referencia.trim().slice(0, 100) || null;
     // controle e quebras de linha não entram em texto livre
     const detalhe = l.campanha.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 120) || null;
     const base = { tipo, contactKey, ocorridoEm, refExterna };
-    return { ok: true, evento: { ...base, origem, origemDetalhe: detalhe, valorCentavos: valor, dedupKey: chaveDedup(base) } };
+    return { ok: true, evento: { ...base, origem, origemDetalhe: detalhe, valorCentavos: valor, dedupKey: chaveDedup(base), confianca: ["sim", "true", "1"].includes(conferida) ? "confirmado" : "inferido" } };
 }
 
 /** CSV simples com aspas. Separador detectado pelo cabeçalho (";" ou ","). */
 export function lerCsv(texto: string): string[][] {
+    return lerCsvDetalhado(texto).linhas;
+}
+
+/** Igual a lerCsv, mas diz se o arquivo terminou dentro de aspas abertas (aspa solta: as linhas seguintes foram engolidas). */
+export function lerCsvDetalhado(texto: string): { linhas: string[][]; aspaAberta: boolean } {
     const t = texto.replace(/^﻿/, "");
     const primeira = t.split(/\r?\n/, 1)[0] ?? "";
     const sep = (primeira.match(/;/g)?.length ?? 0) >= (primeira.match(/,/g)?.length ?? 0) && primeira.includes(";") ? ";" : ",";
@@ -127,15 +149,19 @@ export function lerCsv(texto: string): string[][] {
     }
     linha.push(cel);
     if (linha.some((x) => x.trim() !== "")) linhas.push(linha);
-    return linhas;
+    return { linhas, aspaAberta: aspas };
 }
 
 /** Valida o arquivo inteiro. Linhas ruins são rejeitadas com o número da linha; as boas seguem. Duplicatas dentro do arquivo são descartadas. */
 export function interpretarImportacao(formato: "csv" | "json", conteudo: string, agora = new Date()): { ok: true; resultado: ResultadoParse } | { ok: false; mensagem: string } {
     if (Buffer.byteLength(conteudo, "utf8") > MAX_BYTES_IMPORTACAO) return { ok: false, mensagem: "Arquivo grande demais (máximo 1 MB)." };
+    const avisos: string[] = [];
     let brutas: { numero: number; dados: Record<string, unknown> }[];
     if (formato === "csv") {
-        const linhas = lerCsv(conteudo);
+        const det = lerCsvDetalhado(conteudo);
+        const linhas = det.linhas;
+        if (det.aspaAberta) avisos.push('O CSV termina dentro de aspas abertas ("): linhas podem ter sido unidas ou perdidas. Revise o arquivo.');
+        if (conteudo.includes("�")) avisos.push("O arquivo tem caracteres inválidos: provavelmente não está em UTF-8 (ex.: Windows-1252). Salve como CSV UTF-8 e importe de novo.");
         if (linhas.length < 2) return { ok: false, mensagem: "O CSV precisa de cabeçalho e ao menos uma linha." };
         const cab = linhas[0].map((c) => semAcento(c).replace(/\s+/g, "_"));
         for (const obrig of ["tipo", "contato", "ocorrido_em"]) if (!cab.includes(obrig)) return { ok: false, mensagem: `Cabeçalho sem a coluna "${obrig}". Colunas: tipo, contato, ocorrido_em, origem, campanha, referencia, valor.` };
@@ -152,12 +178,20 @@ export function interpretarImportacao(formato: "csv" | "json", conteudo: string,
     const eventos: EventoImportado[] = [];
     const rejeitadas: Rejeicao[] = [];
     const vistos = new Set<string>();
+    let repetidasNoArquivo = 0;
+    let repetidasSemReferencia = 0;
     for (const b of brutas) {
         const r = validarLinha(b.dados, agora);
         if (!r.ok) { rejeitadas.push({ linha: b.numero, motivo: r.motivo }); continue; }
-        if (vistos.has(r.evento.dedupKey)) { rejeitadas.push({ linha: b.numero, motivo: "duplicada no próprio arquivo" }); continue; }
+        if (vistos.has(r.evento.dedupKey)) {
+            repetidasNoArquivo++;
+            if (!r.evento.refExterna) repetidasSemReferencia++;
+            rejeitadas.push({ linha: b.numero, motivo: r.evento.refExterna ? "duplicada no próprio arquivo" : "repetida no arquivo (mesmo tipo, contato e data, sem referência)" });
+            continue;
+        }
         vistos.add(r.evento.dedupKey);
         eventos.push(r.evento);
     }
-    return { ok: true, resultado: { eventos, rejeitadas, recebidas: brutas.length } };
+    if (repetidasSemReferencia > 0) avisos.push(`${repetidasSemReferencia} linha(s) sem "referencia" repetem tipo, contato e data de outra e foram ignoradas. Se são vendas distintas no mesmo dia, informe a coluna "referencia" em cada uma.`);
+    return { ok: true, resultado: { eventos, rejeitadas, recebidas: brutas.length, repetidasNoArquivo, repetidasSemReferencia, avisos } };
 }

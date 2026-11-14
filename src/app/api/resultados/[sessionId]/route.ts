@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { getAuthenticatedUser, canAccessSession } from "@/lib/api-auth";
 import { lerPeriodo } from "@/modules/metricas/periodo";
 import { carregarEventos } from "@/modules/resultados/carregar";
 import { consolidarFunil } from "@/modules/resultados/funil";
 import { csvFunil } from "@/modules/resultados/csv";
+import { resolverSessao, resultadosAtivo } from "@/modules/resultados/sessao";
 import { ORIGENS, type Origem } from "@/modules/resultados/tipos";
 
 /**
@@ -14,6 +14,7 @@ import { ORIGENS, type Origem } from "@/modules/resultados/tipos";
  * confirmado/inferido/desconhecido separados. Nunca devolve conteúdo de mensagem nem telefone.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
+    if (!resultadosAtivo()) return NextResponse.json({ status: false, message: "Recurso desativado." }, { status: 404 });
     const { sessionId } = await params;
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
@@ -27,13 +28,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const origemParam = q.get("origem");
     if (origemParam !== null && !(ORIGENS as readonly string[]).includes(origemParam)) return NextResponse.json({ status: false, message: "Origem inválida." }, { status: 400 });
 
-    const sessao = await prisma.session.findFirst({ where: { OR: [{ id: sessionId }, { sessionId }] }, select: { id: true, sessionId: true, userId: true } });
+    const sessao = await resolverSessao(sessionId);
     if (!sessao) return NextResponse.json({ status: false, message: "Session not found" }, { status: 404 });
 
     try {
         const { periodo } = lido;
-        const eventos = await carregarEventos(sessao, periodo.inicio, periodo.fim);
-        const funil = consolidarFunil(eventos, origemParam as Origem | null);
+        const { eventos, importadosSemConversa } = await carregarEventos(sessao, periodo.inicio, periodo.fim);
+        const funil = { ...consolidarFunil(eventos, origemParam as Origem | null), importadosSemConversa };
         if (formato === "csv") {
             return new NextResponse(csvFunil(funil), {
                 status: 200,

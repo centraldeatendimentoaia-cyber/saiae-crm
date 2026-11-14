@@ -25,7 +25,7 @@ export const ROTULO_TIPO: Record<TipoEvento, string> = {
     venda: "Vendas",
 };
 
-/** confirmado = registro autoritativo; inferido = derivado por regra (a regra vai junto); desconhecido = sem base. */
+/** Confiança de UM fato. Em um evento, confirma o evento (ex.: a mensagem existe), NÃO a origem: a origem tem a própria confiança (OrigemResolvida.confianca). confirmado = registro direto do WhatsApp ou fonte declarada como conferida; inferido = derivado por regra (a regra vai junto); desconhecido = sem base. */
 export type Confianca = "confirmado" | "inferido" | "desconhecido";
 
 export const ORIGENS = ["campanha", "post", "anuncio", "organico", "indicacao", "desconhecido"] as const;
@@ -59,3 +59,9 @@ export interface EventoResultado {
     origem: OrigemResolvida;
     valorCentavos?: number | null;
 }
+
+export const ROTULO_CONFIANCA_ORIGEM: Record<Confianca, string> = {
+    confirmado: "origem confirmada",
+    inferido: "origem inferida",
+    desconhecido: "origem não identificada",
+};
