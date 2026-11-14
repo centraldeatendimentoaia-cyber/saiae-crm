@@ -1043,8 +1043,10 @@ model ResultEvent {
   dedupKey      String // idempotência: tipo:refExterna ou hash de tipo+contato+data
   valorCentavos Int?
   ocorridoEm    DateTime
+  importacaoId  String? // lote da importação (permite desfazer o lote); null = registros anteriores ao lote
   createdAt     DateTime @default(now())
 
   @@unique([userId, sessionId, dedupKey])
   @@index([userId, sessionId, ocorridoEm])
+  @@index([userId, sessionId, importacaoId])
 }
