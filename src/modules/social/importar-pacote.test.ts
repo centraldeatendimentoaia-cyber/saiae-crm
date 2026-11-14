@@ -376,6 +376,21 @@ describe("concorrência entre versões (achado 8)", () => {
         expect(h.t.mediaFile).toHaveLength(2); // mídias da v2 foram limpas
     });
 
+    it("falha ao remover as mídias na compensação não esconde o erro original", async () => {
+        await importar([peca("a")]);
+        const v3 = peca("a", { versao: 3, legenda: "Legenda v3" });
+        const orig = mediaStorage.save.bind(mediaStorage);
+        let uma = false;
+        const s = vi.spyOn(mediaStorage, "save").mockImplementation(async (a) => {
+            if (!uma) { uma = true; Object.assign(h.t.externalPostLink[0], { version: 3, contentHash: v3.p.hash }); }
+            return orig(a);
+        });
+        const rm = vi.spyOn(mediaStorage, "remove").mockRejectedValue(new Error("storage fora do ar"));
+        const r2 = await importar([peca("a", { versao: 2, legenda: "Legenda v2" })]);
+        s.mockRestore(); rm.mockRestore();
+        expect(r2.itens[0]).toMatchObject({ resultado: "rejeitado", erro: { codigo: "versao_antiga" } });
+    });
+
     it("criação concorrente: o vencedor com versão/hash diferentes não vira 'inalterado'", async () => {
         const venc = peca("a", { versao: 2, legenda: "do vencedor" });
         const c = vi.spyOn(h.prisma.externalPostLink, "create").mockImplementationOnce(async () => {

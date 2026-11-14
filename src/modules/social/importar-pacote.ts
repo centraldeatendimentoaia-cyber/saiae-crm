@@ -152,7 +152,7 @@ async function gravarMidias(userId: string, midias: { nome: string; mime: string
         for (const m of midias) ids.push((await mediaStorage.save({ userId, name: m.nome, mime: m.mime, data: m.data })).id);
         if (!(await ensurePublicTokens(userId, ids))) throw new Error("mídia não encontrada após o envio");
     } catch (e) {
-        await mediaStorage.remove(ids);
+        await mediaStorage.remove(ids).catch(() => {}); // falha na limpeza não pode esconder o erro original
         throw e;
     }
     return ids;
@@ -275,7 +275,7 @@ async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise
                     if (r.count !== 1) throw new ErroItem("conflito_publicado", "A postagem mudou durante a importação.");
                 });
             } catch (e) { // rollback: as mídias novas não são referenciadas por nenhum post
-                await mediaStorage.remove(novos);
+                await mediaStorage.remove(novos).catch(() => {}); // falha na limpeza não pode esconder o erro original
                 throw e;
             }
             // só depois do commit as mídias antigas podem sair
@@ -302,7 +302,7 @@ async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise
                 return novo;
             });
         } catch (e) { // o rollback já desfez o post; as mídias já gravadas saem aqui
-            await mediaStorage.remove(mediaIds);
+            await mediaStorage.remove(mediaIds).catch(() => {}); // falha na limpeza não pode esconder o erro original
             // corrida com outra importação da mesma chave
             if (rec(e).code !== "P2002") throw e;
             const vencedor = await prisma.externalPostLink.findUnique({ where });
