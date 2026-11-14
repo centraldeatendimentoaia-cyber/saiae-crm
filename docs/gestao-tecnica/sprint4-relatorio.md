@@ -103,3 +103,13 @@ Revisor independente aprovou com ajustes; cada ponto foi validado no código ant
 - A varredura de referências a mídia usa todos os posts do usuário (sem índice por mídia); aceitável no volume atual, a revisar se um usuário tiver milhares de posts.
 - Posts importados antes desta mudança não têm `meta.mediaIds`: na próxima versão suas mídias antigas não são removidas (ficam órfãs, sem risco). Nenhuma importação real existe ainda.
 - `--importar` real e o roteiro de staging da seção 5 continuam pendentes. Os scripts da agência seguem não commitados.
+
+## Correções da revisão Codex
+
+Três achados de uma revisão independente, confirmados no código e corrigidos em commits separados (`src/modules/social/importar-pacote.ts`, sem mudança de schema).
+
+7. **Atomicidade**: a atualização do post e a do `ExternalPostLink` eram gravações separadas; se a segunda falhasse, o post ficava alterado e a resposta dizia "rejeitado". Agora as duas ocorrem na mesma `$transaction`; em rollback as mídias novas são removidas, e as antigas só saem depois do commit.
+8. **Concorrência entre versões**: a atualização do vínculo é condicional (`where` com versão, hash e estado editorial lidos) dentro da transação; se outra importação mudou a peça, há rollback e a peça é rejeitada como `versao_antiga`. Após `P2002` na criação, só é `inalterado` se o vencedor tem a mesma versão e o mesmo hash; vencedor mais novo rejeita, vencedor mais antigo reprocessa pela rota de atualização.
+9. **Decisões versionadas**: a versão da revogação fica em `meta.revogadoNaVersao` (sem coluna nova). Reaprovar (inclusive o mesmo hash) exige versão posterior a ela; decisão de versão mais antiga que a registrada é ignorada e não derruba uma versão mais nova aprovada.
+
+Testes: 5 de regressão novos em `importar-pacote.test.ts` (cada um falha sem a correção e passa com ela); o banco em memória ganhou `$transaction` com rollback e leituras que devolvem cópias, como o Prisma real. Não verificado: nada rodou contra Postgres real, então o isolamento real das transações e o `updateMany` condicional concorrente só foram simulados.
