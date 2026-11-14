@@ -26,6 +26,7 @@ import {
     CreditCard,
     BarChart3,
     GraduationCap,
+    Workflow,
 } from "lucide-react";
 
 export interface NavItem {
@@ -74,6 +75,7 @@ export const navGroups: NavGroup[] = [
     {
         label: "Automação",
         items: [
+            { href: "/dashboard/automacoes", label: "Fluxos de automação", icon: Workflow },
             { href: "/dashboard/bot-settings", label: "Configurações do Bot", icon: Bot },
             { href: "/dashboard/autoreply", label: "Resposta automática", icon: MessageCircleReply },
             { href: "/dashboard/atendente-ia", label: "Conversas da IA", icon: MessagesSquare, superadminOnly: true },

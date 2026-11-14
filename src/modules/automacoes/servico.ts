@@ -34,6 +34,13 @@ export async function criarFluxo(i: { userId: string; sessionId: string; name: s
     return prisma.automationFlow.create({ data: { userId: i.userId, sessionId, name: i.name, draft: json(i.draft ?? { schemaVersion: SCHEMA_VERSION, start: "", nodes: {} }) } });
 }
 
+/** Fluxo do usuário com o rascunho (para o editor). Escopado por userId. */
+export async function obterFluxo(userId: string, flowId: string) {
+    const f = await prisma.automationFlow.findFirst({ where: { id: flowId, userId }, select: { id: true, name: true, sessionId: true, status: true, draft: true, publishedVersionId: true, updatedAt: true } });
+    if (!f) throw new ErroAutomacao("nao_encontrado");
+    return f;
+}
+
 export async function atualizarRascunho(userId: string, flowId: string, draft: unknown) {
     const r = await prisma.automationFlow.updateMany({ where: { id: flowId, userId, status: "active" }, data: { draft: json(draft) } });
     if (r.count !== 1) throw new ErroAutomacao("nao_encontrado");

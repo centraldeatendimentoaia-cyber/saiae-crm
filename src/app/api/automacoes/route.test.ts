@@ -122,3 +122,28 @@ describe("criar fluxo e iniciar", () => {
         expect((await POST(req({ contactKey: "c" }), P({ id: "f-b" }))).status).toBe(429);
     });
 });
+
+describe("editor: GET do fluxo e validação no servidor ao publicar", () => {
+    it("GET de fluxo de outro usuário: 404; sem login: 401; dono: 200 com o rascunho", async () => {
+        const { GET } = await import("./[id]/route");
+        expect((await GET(req(), P({ id: "f-b" }))).status).toBe(404);
+        expect(h.prisma.automationFlow.findFirst.mock.calls[0][0].where).toMatchObject({ id: "f-b", userId: "ua" });
+        h.user = null;
+        expect((await GET(req(), P({ id: "f-b" }))).status).toBe(401);
+        h.user = { id: "ub", role: "OWNER" };
+        const r = await GET(req(), P({ id: "f-b" }));
+        expect(r.status).toBe(200);
+        expect((await r.json()).data.draft).toEqual({});
+    });
+    it("publicar rascunho inválido (órfão e ciclo sem espera) devolve 400 com os problemas e não grava versão", async () => {
+        h.user = { id: "ub", role: "OWNER" };
+        h.db.flows = [{ id: "f-b", userId: "ub", sessionId: "loja", status: "active", publishedVersionId: null, draft: { schemaVersion: 1, start: "a", nodes: { a: { type: "texto", text: "x", next: "b" }, b: { type: "texto", text: "y", next: "a" }, o: { type: "fim" } } } }];
+        const { POST } = await import("./[id]/publicar/route");
+        const r = await POST(req(), P({ id: "f-b" }));
+        expect(r.status).toBe(400);
+        const j = await r.json();
+        expect(j.details.join(" ")).toContain("órfão");
+        expect(j.details.join(" ")).toContain("ciclo sem nó de espera");
+        expect(h.prisma.$transaction).not.toHaveBeenCalled();
+    });
+});
