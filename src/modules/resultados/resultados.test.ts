@@ -201,6 +201,9 @@ describe("importação de agenda", () => {
             "2026-11-10T24:00:00-03:00", "2026-13-10T12:00:00-03:00", "2026-11-10T12:60:00Z", "2026-11-10T12:00:60Z", "2026-11-10T12:00:00+24:00", "2026-00-10T12:00:00Z", "2026-11-00T12:00:00Z",
         ]) expect(lerData(t), t).toBeNull();
         expect(lerData("2028-02-29T12:00:00-03:00")).toBeInstanceOf(Date); // bissexto
+        // ano de 0 a 99 não vira 1900+ no cálculo do último dia do mês (o ano 0 é bissexto; 1900 não)
+        expect(lerData("0000-02-29T12:00:00Z")).toBeInstanceOf(Date);
+        expect(lerData("0001-02-29T12:00:00Z")).toBeNull();
         expect(lerData("2026-11-10T23:59:59.500+05:30")).toBeInstanceOf(Date);
         const r = interpretarImportacao("csv", "tipo;contato;ocorrido_em;fonte_conferida\nvenda;61999990001;2026-02-31T12:00:00-03:00;sim", AGORA);
         if (!r.ok) throw new Error();
