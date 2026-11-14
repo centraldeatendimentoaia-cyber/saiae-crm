@@ -972,6 +972,7 @@ model AutomationRun {
   currentNodeId  String?
   context        Json // { vars, tentativas }
   stepCount      Int       @default(0)
+  claimsSemProgresso Int   @default(0) // reivindicações desde o último salvamento bem-sucedido (execução envenenada)
   resumeAt       DateTime? // quando status = waiting
   claimedBy      String?
   claimExpiresAt DateTime?
