@@ -77,3 +77,29 @@ Pré-requisito: schema da seção 6 aplicado no banco de staging (por revisão d
 - Rollback do código: `git revert 781f747` desliga rotas e bloqueio (o PATCH e o agendador voltam ao comportamento anterior). Posts importados continuam como rascunhos normais.
 - Rollback do schema: a tabela vazia ou sem uso pode ficar sem prejuízo. Para removê-la, `DROP TABLE ExternalPostLink` manual depois de reverter o código (o `db push` sem `--accept-data-loss` não a removerá sozinho enquanto estiver no schema; ao revertê-lo ela vira divergência do banco, que o `db push` recusará remover com dados; revisar antes). Preferir deixar a tabela e reverter só o código.
 - Dados: remover itens importados = apagar os `ScheduledPost` (rascunhos) pelo painel; os vínculos órfãos aparecem como `REMOVIDO` na consulta de estado.
+
+## 7. Ajustes pós-revisão
+Revisor independente aprovou com ajustes; cada ponto foi validado no código antes de corrigir.
+
+### Mudanças
+1. Revogação editorial (agência): com `--atualizar`, peça do manifesto anterior que deixou de estar aprovada, ou que sumiu do CSV, é emitida com o status real (`reprovado_revisao`, `reprovado`, `removido_do_csv`...), sem mídia, e o CRM a recusa e trava o vínculo. `enviar_crm.py` avisa sobre peças já importadas (`importacao-crm.json`) que não estão mais no manifesto e sobre peças que seguem não aprovadas.
+2. Veredito do `revisao.md`: o gerador lê a tabela por slug (aceita `` `pasta/slug` ``, `**APROVADA**`, `APROVADA COM AJUSTE`, `(condicionada)`, `REPROVADA`; testado também contra os `revisao.md` reais de S46, S47 e S48, só leitura). Peça aprovada no CSV mas REPROVADA, sem veredito, ou sem `revisao.md`, nunca sai como aprovada (`reprovado_revisao`, `sem_veredito`, `sem_revisao`).
+3. `enviar_crm.py`: recusa manifesto mais antigo que `agendamento.csv`/`revisao.md` ou com mídia cujo sha256 mudou; exige https (http só em localhost/127.0.0.1/::1); não segue redirects; trata resposta sem JSON válido; escapa nome de campo/arquivo no multipart.
+4. Mídia compartilhada: a importação guarda em `meta.mediaIds` as mídias que criou; ao trocar de versão só remove essas, e só as que nenhum outro post do usuário referencia. Mídia que o humano pôs no post nunca é apagada.
+5. Rota: `content-length` acima de 60 MB devolve 413 antes de `formData()`; lote com mais de 300 arquivos ou 60 MB de mídia devolve 413 (`lote_grande`); teto de 60 peças já existia.
+6. Peça apagada pelo humano: o vínculo órfão é apagado e a peça recriada como rascunho, com aviso (antes devolvia "inalterado" para um post inexistente).
+7. Menores: `P2002` real tratado (desfaz o post novo, relê o vínculo e devolve `inalterado`; outros erros viram rejeição); aviso "edição manual e agendamento substituídos pela versão N"; o guard do agendador move o post bloqueado para `DRAFT` (não é mais relido a cada ciclo); comentário da rota alinhado (JSON puro só confere contrato/contas/status, peça com mídia sai "arquivo ausente"; para validar de verdade, multipart); avisos para `data_planejada` e `hora_planejada` inválidas; `cliente`/`semana` validados no endpoint de estado (400); vetor de hash com emoji, aspas, `\n`, U+2028 e barra invertida nos testes TS e Python (mesmo hash `2111bcc1...de36`); testes de `draft:true` e `applyToGroup` com peça bloqueada.
+
+### Resultados reais
+- `npm run typecheck`: sem erros.
+- `npm test` (suíte completa, sozinha): 129 arquivos, 2189 testes, todos passaram. Uma primeira execução concorrente com eslint teve 7 timeouts de ~16 s em testes não relacionados; esses arquivos passaram isolados e a suíte completa passou na repetição sem carga paralela.
+- `importar-pacote.test.ts`: 33 testes passam (13 novos ou ajustados).
+- eslint nos 4 arquivos alterados: sem problemas.
+- `npm run build` (env fictício só no processo): concluído com sucesso.
+- `py -I -B scripts/test_gerar_manifesto.py` (agência): 17 testes, OK. O comando `py -I -m unittest scripts/test_gerar_manifesto.py` não encontra o módulo porque `-I` tira o diretório atual do caminho; o arquivo roda direto ou com `-m unittest discover -s scripts`.
+
+### Não verificado
+- Nada rodou contra banco real, rede ou Meta; o banco é em memória nos testes. `P2002` foi simulado com erro de código `P2002`, não com Prisma real.
+- A varredura de referências a mídia usa todos os posts do usuário (sem índice por mídia); aceitável no volume atual, a revisar se um usuário tiver milhares de posts.
+- Posts importados antes desta mudança não têm `meta.mediaIds`: na próxima versão suas mídias antigas não são removidas (ficam órfãs, sem risco). Nenhuma importação real existe ainda.
+- `--importar` real e o roteiro de staging da seção 5 continuam pendentes. Os scripts da agência seguem não commitados.

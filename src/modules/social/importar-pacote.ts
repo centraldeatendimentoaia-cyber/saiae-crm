@@ -9,6 +9,9 @@ import { parseContent } from "./validate";
 export const SOURCE = "agencia";
 export const CONTRATO = "agencia-crm/1";
 export const MAX_PECAS = 60;
+export const MAX_ARQUIVOS = 300;
+/** Teto de bytes de mídia por lote (a rota também recusa pelo content-length antes de ler o corpo). */
+export const MAX_LOTE_BYTES = 60 * 1024 * 1024;
 const MAX_BYTES = 5 * 1024 * 1024;
 const MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const EDITAVEIS = ["DRAFT", "PENDING"];
@@ -18,7 +21,7 @@ const SHA = /^[0-9a-f]{64}$/;
 
 export type Codigo =
     | "status_nao_aprovado" | "lint_com_erro" | "conta_nao_encontrada" | "formato_nao_suportado" | "midia_invalida"
-    | "legenda_longa" | "quota_midia" | "versao_antiga" | "conflito_publicado" | "hash_invalido" | "item_invalido";
+    | "legenda_longa" | "quota_midia" | "lote_grande" | "versao_antiga" | "conflito_publicado" | "hash_invalido" | "item_invalido";
 
 export interface ArquivoRecebido { type: string; size: number; arrayBuffer(): Promise<ArrayBuffer> }
 
@@ -129,6 +132,16 @@ async function gravarMidias(userId: string, midias: { nome: string; mime: string
     return ids;
 }
 
+/** Remove mídias que a importação criou e que nenhum outro post do usuário usa (nunca apaga mídia compartilhada). */
+async function removerMidiasDaImportacao(userId: string, ids: string[], exceto: string) {
+    if (!ids.length) return;
+    const outros = await prisma.scheduledPost.findMany({ where: { userId, id: { not: exceto } }, select: { mediaIds: true } });
+    const usadas = new Set(outros.flatMap((o) => (Array.isArray(o.mediaIds) ? (o.mediaIds as string[]) : [])));
+    await mediaStorage.remove(ids.filter((id) => !usadas.has(id)));
+}
+
+const idsDoMeta = (meta: unknown): string[] => { const v = rec(meta).mediaIds; return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; };
+
 async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
     const p = rec(raw);
     const slug = str(p.slug);
@@ -171,41 +184,53 @@ async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
         if (!ctx.contasOk.has(contaId)) return rej("conta_nao_encontrada", "Conta social do formato não definida em contas.");
 
         const plannedAt = planejadoEm(str(p.data_planejada), str(p.hora_planejada));
-        if (plannedAt && plannedAt.getTime() < Date.now()) avisos.push("A data planejada já passou.");
+        if (!plannedAt) avisos.push("data_planejada ausente ou inválida: a peça fica sem data planejada.");
+        else if (plannedAt.getTime() < Date.now()) avisos.push("A data planejada já passou.");
+        if (str(p.hora_planejada) && !/^([01]\d|2[0-3]):[0-5]\d$/.test(str(p.hora_planejada))) avisos.push("hora_planejada inválida: usado 12:00.");
 
         const where = { userId_source_externalKey: { userId, source: SOURCE, externalKey } };
-        const link = await prisma.externalPostLink.findUnique({ where });
+        let link = await prisma.externalPostLink.findUnique({ where });
         const meta = { cliente: ctx.cliente, semana: ctx.semana, formato: p.formato, aprovado_por: str(p.aprovado_por) || null, aprovado_em: str(p.aprovado_em) || null };
 
-        if (link) {
-            const post = await prisma.scheduledPost.findFirst({ where: { id: link.postId, userId } });
+        const postAnt = link ? await prisma.scheduledPost.findFirst({ where: { id: link.postId, userId } }) : null;
+        if (link && !postAnt) { // o humano apagou o rascunho: o vínculo ficou órfão, recria a peça do zero
+            avisos.push("A postagem anterior foi apagada no CRM; a peça foi recriada como rascunho.");
+            if (ctx.modo === "importar") {
+                await prisma.externalPostLink.deleteMany({ where: { id: link.id, userId } });
+                await removerMidiasDaImportacao(userId, idsDoMeta(link.meta), "");
+            }
+            link = null;
+        }
+
+        if (link && postAnt) {
             const mesmo = link.contentHash === p.hash;
             if (mesmo && link.editorial === "aprovado") {
-                return { externalKey, resultado: "inalterado", postId: link.postId, groupId: post?.groupId ?? null, mediaIds: (post?.mediaIds as string[]) ?? [], estado: post?.status, urlPainel: urlPainel(post?.status ?? "DRAFT"), avisos };
+                return { externalKey, resultado: "inalterado", postId: link.postId, groupId: postAnt.groupId ?? null, mediaIds: (postAnt.mediaIds as string[]) ?? [], estado: postAnt.status, urlPainel: urlPainel(postAnt.status), avisos };
             }
             if (!mesmo && (versao as number) <= link.version) return rej("versao_antiga", `versao ${versao as number} não é maior que a registrada (${link.version}).`);
-            if (!post || !EDITAVEIS.includes(post.status)) return rej("conflito_publicado", "A postagem já foi enviada ou está sendo publicada e não pode mudar.");
+            if (!postAnt || !EDITAVEIS.includes(postAnt.status)) return rej("conflito_publicado", "A postagem já foi enviada ou está sendo publicada e não pode mudar.");
 
             if (mesmo) { // mesmo conteúdo reaprovado pela agência: só destrava o vínculo
                 if (ctx.modo === "importar") await prisma.externalPostLink.update({ where: { id: link.id }, data: { editorial: "aprovado" } });
-                return { externalKey, resultado: "atualizado", postId: post.id, groupId: post.groupId, mediaIds: post.mediaIds as string[], estado: post.status, urlPainel: urlPainel(post.status), avisos };
+                return { externalKey, resultado: "atualizado", postId: postAnt.id, groupId: postAnt.groupId, mediaIds: postAnt.mediaIds as string[], estado: postAnt.status, urlPainel: urlPainel(postAnt.status), avisos };
             }
 
             const midias = await lerMidias(p, ctx);
             await conferirQuota(userId, midias.reduce((s, m) => s + m.data.length, 0));
-            if (ctx.modo === "validar") return { externalKey, resultado: "atualizado", postId: post.id, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
+            if (ctx.modo === "validar") return { externalKey, resultado: "atualizado", postId: postAnt.id, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
 
             const novos = await gravarMidias(userId, midias);
-            const antigos = post.mediaIds as string[];
+            const importadasAntes = idsDoMeta(link.meta);
+            avisos.push(`Edição manual e agendamento anteriores foram substituídos pela versão ${versao as number}; o rascunho voltou a DRAFT.`);
             // volta a DRAFT: conteúdo mudou, o agendamento anterior deixa de valer e um humano reagenda
             const r = await prisma.scheduledPost.updateMany({
-                where: { id: post.id, userId, status: { in: EDITAVEIS } },
+                where: { id: postAnt.id, userId, status: { in: EDITAVEIS } },
                 data: { type, caption: type === "STORY" ? null : legenda || null, mediaIds: novos, status: "DRAFT", publishAt: null },
             });
             if (r.count !== 1) { await mediaStorage.remove(novos); return rej("conflito_publicado", "A postagem mudou durante a importação."); }
-            await prisma.externalPostLink.update({ where: { id: link.id }, data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta } });
-            await mediaStorage.remove(antigos);
-            return { externalKey, resultado: "atualizado", postId: post.id, groupId: post.groupId, mediaIds: novos, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
+            await prisma.externalPostLink.update({ where: { id: link.id }, data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta: { ...meta, mediaIds: novos } } });
+            await removerMidiasDaImportacao(userId, importadasAntes, postAnt.id);
+            return { externalKey, resultado: "atualizado", postId: postAnt.id, groupId: postAnt.groupId, mediaIds: novos, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
         }
 
         const midias = await lerMidias(p, ctx);
@@ -219,12 +244,16 @@ async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
         });
         try {
             await prisma.externalPostLink.create({
-                data: { userId, source: SOURCE, externalKey, version: versao as number, contentHash: p.hash as string, editorial: "aprovado", postId: post.id, plannedAt, meta },
+                data: { userId, source: SOURCE, externalKey, version: versao as number, contentHash: p.hash as string, editorial: "aprovado", postId: post.id, plannedAt, meta: { ...meta, mediaIds } },
             });
         } catch (e) { // corrida com outra importação da mesma chave: desfaz para não deixar post órfão
             await prisma.scheduledPost.deleteMany({ where: { id: post.id, userId } });
             await mediaStorage.remove(mediaIds);
-            throw e;
+            if (rec(e).code !== "P2002") throw e;
+            const vencedor = await prisma.externalPostLink.findUnique({ where });
+            const postVencedor = vencedor ? await prisma.scheduledPost.findFirst({ where: { id: vencedor.postId, userId } }) : null;
+            if (!postVencedor) throw e;
+            return { externalKey, resultado: "inalterado", postId: postVencedor.id, groupId: postVencedor.groupId ?? null, mediaIds: postVencedor.mediaIds as string[], estado: postVencedor.status, urlPainel: urlPainel(postVencedor.status), avisos };
         }
         return { externalKey, resultado: "criado", postId: post.id, groupId, mediaIds, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
     } catch (e) {
@@ -251,6 +280,11 @@ export async function importarPacote(userId: string, manifesto: unknown, arquivo
     if (!Array.isArray(m.pecas) || m.pecas.length < 1) return falha(400, "pecas deve ser uma lista não vazia.");
     if (m.pecas.length > MAX_PECAS) return falha(400, `No máximo ${MAX_PECAS} peças por chamada.`);
 
+    if (arquivos.size > MAX_ARQUIVOS) return falha(413, `No máximo ${MAX_ARQUIVOS} arquivos por chamada.`, "lote_grande");
+    let total = 0;
+    for (const a of arquivos.values()) total += a.size;
+    if (total > MAX_LOTE_BYTES) return falha(413, `O lote passa de ${MAX_LOTE_BYTES / 1024 / 1024} MB de mídia.`, "lote_grande");
+
     // conta social: todas as ids citadas precisam ser Instagram do dono da chave (nunca adivinhar)
     const contas = rec(m.contas);
     const ids = [...new Set(["padrao", "carrossel", "stories"].map((k) => str(contas[k])).filter(Boolean))];
@@ -276,7 +310,7 @@ export async function importarPacote(userId: string, manifesto: unknown, arquivo
 export async function estadoPorChaves(userId: string, filtro: { keys?: string[]; semana?: string; cliente?: string }) {
     const where: Rec = { userId, source: SOURCE };
     if (filtro.keys?.length) where.externalKey = { in: filtro.keys.slice(0, 200) };
-    else if (filtro.cliente && filtro.semana) where.externalKey = { startsWith: `${filtro.cliente}:${filtro.semana}:` };
+    else if (SLUG.test(filtro.cliente ?? "") && SEMANA.test(filtro.semana ?? "")) where.externalKey = { startsWith: `${filtro.cliente}:${filtro.semana}:` };
     else return null;
     const links = await prisma.externalPostLink.findMany({ where: where as never, orderBy: { externalKey: "asc" }, take: 200 });
     const posts = await prisma.scheduledPost.findMany({ where: { id: { in: links.map((l) => l.postId) }, userId } });

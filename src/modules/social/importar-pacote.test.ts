@@ -23,7 +23,7 @@ const h = vi.hoisted(() => {
         findFirst: async ({ where = {} }: Row = {}) => t[name].find((r) => ok(r, where)) ?? null,
         findUnique: async ({ where }: Row) => t[name].find((r) => ok(r, where)) ?? null,
         create: async ({ data }: Row) => {
-            if (name === "externalPostLink" && t[name].some((r) => r.userId === data.userId && r.source === data.source && r.externalKey === data.externalKey)) throw new Error("unique");
+            if (name === "externalPostLink" && t[name].some((r) => r.userId === data.userId && r.source === data.source && r.externalKey === data.externalKey)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
             const row = { id: `${name}-${++n}`, createdAt: new Date(), ...data };
             if (name === "externalPostLink") row.editorial ??= "aprovado";
             t[name].push(row);
@@ -53,7 +53,7 @@ import { POST } from "@/app/api/social/importar-pacote/route";
 import { GET as ESTADO } from "@/app/api/social/importar-pacote/estado/route";
 import { PATCH } from "@/app/api/social/posts/[id]/route";
 import { publishOne } from "./scheduler";
-import { hashConteudo } from "./importar-pacote";
+import { hashConteudo, importarPacote, MAX_LOTE_BYTES } from "./importar-pacote";
 
 const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const png = (seed: string) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from(seed)]);
@@ -291,7 +291,7 @@ describe("bloqueio editorial (achado 8)", () => {
         h.t.scheduledPost[0].status = "PENDING";
         h.t.externalPostLink[0].editorial = "reprovado";
         await publishOne(r.itens[0].postId);
-        expect(h.t.scheduledPost[0].status).toBe("PENDING"); // não virou PUBLISHING
+        expect(h.t.scheduledPost[0]).toMatchObject({ status: "DRAFT", publishAt: null }); // não virou PUBLISHING e não é relido para sempre
     });
 
     it("regressão do fluxo manual: post sem vínculo agenda como sempre", async () => {
@@ -301,6 +301,19 @@ describe("bloqueio editorial (achado 8)", () => {
         expect(h.t.scheduledPost[0]).toMatchObject({ status: "PENDING" });
         expect((await patch("manual-1", { draft: true })).status).toBe(200);
         expect(h.t.scheduledPost[0]).toMatchObject({ status: "DRAFT", publishAt: null });
+    });
+
+    it("draft:true em peça bloqueada é permitido e applyToGroup não tira irmãs do rascunho", async () => {
+        const r = await importar([peca("a")]);
+        const id = r.itens[0].postId;
+        h.t.externalPostLink[0].editorial = "reprovado";
+        expect((await patch(id, { draft: true })).status).toBe(200);
+        expect(h.t.scheduledPost[0]).toMatchObject({ status: "DRAFT", publishAt: null });
+
+        h.t.scheduledPost.push({ id: "irma", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", caption: "x", mediaIds: h.t.scheduledPost[0].mediaIds, publishAt: null, groupId: h.t.scheduledPost[0].groupId, status: "DRAFT" });
+        expect((await patch("irma", { caption: "nova legenda", applyToGroup: true })).status).toBe(200);
+        expect(h.t.scheduledPost.map((x: any) => x.status)).toEqual(["DRAFT", "DRAFT"]);
+        expect((await patch(id, { publishAt: futuro, caption: "y", applyToGroup: true })).status).toBe(409);
     });
 
     it("a revogação só vale para o dono: reprovar na chave de outro usuário não toca no vínculo", async () => {
@@ -319,5 +332,97 @@ describe("hash canônico", () => {
     expect(hashConteudo(base)).not.toBe(hashConteudo({ ...base, midias: [{ sha256: "b" }, { sha256: "a" }] }));
     expect(hashConteudo(base)).toBe(VETOR_HASH);
   });
+
+  it("vetor com emoji, aspas, quebra de linha, U+2028 e barra invertida bate com o Python", () => {
+    expect(hashConteudo(VETOR_ESPECIAL)).toBe(VETOR_ESPECIAL_HASH);
+  });
 });
 const VETOR_HASH = "420b6b7b4f1a097c1775a9846e4653cb95dd33bedcb38194cede09a372375f99";
+
+describe("ajustes pós-revisão", () => {
+    it("nova versão não apaga mídia compartilhada nem mídia que o humano pôs no post", async () => {
+        const r1 = await importar([peca("a")]);
+        const [m1, m2] = r1.itens[0].mediaIds;
+        h.t.mediaFile.push({ id: "externa", userId: "u-lavi", size: 1 });
+        h.t.scheduledPost.push({ id: "outro-post", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", caption: "x", mediaIds: [m1], publishAt: null, status: "DRAFT" });
+        h.t.scheduledPost[0].mediaIds = [m2, "externa"]; // o humano trocou uma imagem
+        await importar([peca("a", { versao: 2, legenda: "v2" }, 2)]);
+        const ids = h.t.mediaFile.map((m: any) => m.id);
+        expect(ids).toContain(m1); // usada por outro post
+        expect(ids).toContain("externa"); // nunca foi da importação
+        expect(ids).not.toContain(m2); // da importação e sem outro uso
+        expect(h.t.externalPostLink[0].meta.mediaIds).toHaveLength(2);
+    });
+
+    it("atualização avisa que edição manual e agendamento foram substituídos", async () => {
+        await importar([peca("a")]);
+        const r = await importar([peca("a", { versao: 2, legenda: "v2" })]);
+        expect(r.itens[0].avisos.join(" ")).toMatch(/substituídos pela versão 2/);
+    });
+
+    it("peça apagada pelo humano é recriada em vez de devolver inalterado fantasma", async () => {
+        const x = peca("a");
+        const r1 = await importar([x]);
+        h.t.scheduledPost.length = 0;
+        const r2 = await importar([x]);
+        expect(r2.itens[0]).toMatchObject({ resultado: "criado" });
+        expect(r2.itens[0].postId).not.toBe(r1.itens[0].postId);
+        expect(r2.itens[0].avisos.join(" ")).toMatch(/apagada/);
+        expect(h.t.externalPostLink).toHaveLength(1);
+        expect(h.t.externalPostLink[0].postId).toBe(r2.itens[0].postId);
+        expect(h.t.scheduledPost).toHaveLength(1);
+    });
+
+    it("corrida P2002 de verdade: desfaz o post novo e devolve inalterado do vencedor", async () => {
+        const x = peca("a");
+        const r1 = await importar([x]);
+        vi.spyOn(h.prisma.externalPostLink, "findUnique").mockResolvedValueOnce(null); // a 2ª importação não viu o vínculo
+        const r2 = await importar([x]);
+        expect(r2.itens[0]).toMatchObject({ resultado: "inalterado", postId: r1.itens[0].postId });
+        expect(h.t.scheduledPost).toHaveLength(1);
+        expect(h.t.mediaFile).toHaveLength(2);
+    });
+
+    it("outro erro de banco no vínculo vira rejeição, não 'inalterado'", async () => {
+        vi.spyOn(h.prisma.externalPostLink, "create").mockRejectedValueOnce(new Error("unique"));
+        const r = await importar([peca("a")]);
+        expect(r.itens[0].resultado).toBe("rejeitado");
+        expect(h.t.scheduledPost).toHaveLength(0);
+        expect(h.t.mediaFile).toHaveLength(0);
+    });
+
+    it("recusa corpo acima de 60 MB (content-length) com 413 antes de ler o formulário", async () => {
+        const req = new NextRequest("http://x/api/social/importar-pacote", { method: "POST", body: "{}", headers: { "x-api-key": "chave-lavi", "content-type": "multipart/form-data; boundary=x", "content-length": String(70 * 1024 * 1024) } });
+        const res = await POST(req);
+        expect(res.status).toBe(413);
+        expect((await res.json()).codigo).toBe("lote_grande");
+    });
+
+    it("recusa lote com mais bytes ou arquivos que o teto", async () => {
+        const arquivo = (size: number) => ({ type: "image/png", size, arrayBuffer: async () => new ArrayBuffer(0) });
+        const m = { contrato: "agencia-crm/1", cliente: "lavi", semana: "2026-S47", modo: "validar", contas: { padrao: "ig-lavi" }, pecas: [peca("a").p] };
+        const grande = await importarPacote("u-lavi", m, new Map([["f1", arquivo(MAX_LOTE_BYTES)], ["f2", arquivo(1)]]));
+        expect(grande).toMatchObject({ http: 413, codigo: "lote_grande" });
+        const muitos = await importarPacote("u-lavi", m, new Map(Array.from({ length: 301 }, (_, i) => [`f${i}`, arquivo(1)] as const)));
+        expect(muitos).toMatchObject({ http: 413, codigo: "lote_grande" });
+    });
+
+    it("avisa data_planejada e hora_planejada inválidas", async () => {
+        const r = await importar([peca("a", { data_planejada: "17/11/2099", hora_planejada: "25:99" })]);
+        const av = r.itens[0].avisos.join(" ");
+        expect(av).toMatch(/data_planejada/);
+        expect(av).toMatch(/hora_planejada/);
+        expect(h.t.externalPostLink[0].plannedAt).toBeNull();
+    });
+
+    it("estado recusa cliente e semana fora do formato", async () => {
+        await importar([peca("a")]);
+        for (const qs of ["cliente=../x&semana=2026-S47", "cliente=lavi&semana=semana-1", "cliente=LAVI&semana=2026-S47"]) {
+            expect((await ESTADO(new NextRequest(`http://x/api/social/importar-pacote/estado?${qs}`, { headers: { "x-api-key": "chave-lavi" } }))).status).toBe(400);
+        }
+    });
+});
+
+// mesmo vetor está em scripts/test_gerar_manifesto.py da agência
+const VETOR_ESPECIAL = { slug: "s", formato: "stories", legenda: "Oi 💅 \"aspas\" \\ barra\nlinha fim\ttab", hashtags: "#á #ç", data_planejada: "2099-01-01", hora_planejada: "10:00", midias: [{ sha256: "a" }] };
+const VETOR_ESPECIAL_HASH = "2111bcc195151333e9d62f5948092f1c282e54dac8b4cbe1f390f2cfa73bde36";
