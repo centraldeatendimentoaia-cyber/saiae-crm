@@ -6,7 +6,7 @@ import { createServer } from "http";
 import { parse } from "url";
 import next from "next";
 import { Server } from "socket.io";
-import { setupSocket } from "./socket";
+import { setupSocket, allowedOrigins, originAllowed } from "./socket";
 import { waManager } from "../modules/whatsapp/manager";
 import { logger } from "../lib/logger";
 import { iniciarWorkerAvisos } from "../modules/integracao/comanda/aviso-worker";
@@ -43,9 +43,11 @@ app.prepare().then(() => {
     path: "/api/socket/io",
     addTrailingSlash: false,
     cors: {
-      origin: "*",
-      methods: ["GET", "POST"]
-    }
+      origin: allowedOrigins(),
+      methods: ["GET", "POST"],
+      credentials: true
+    },
+    allowRequest: (req, cb) => cb(null, originAllowed(req.headers.origin, req.headers.host, allowedOrigins()))
   });
 
   setupSocket(io);
