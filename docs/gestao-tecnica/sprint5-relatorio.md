@@ -101,7 +101,7 @@ Revisão independente aprovou com ajustes; cada ponto foi conferido no código a
 
 ## Correções da revisão Codex
 
-Achados da revisão independente do motor (os cinco primeiros do motor; depois #3, #11, #12, #13 e #2), todos confirmados no código e corrigidos (um commit por achado ou par coeso, cada um com teste de regressão que falhava antes):
+Achados da revisão independente (cinco do motor e depois #3, #11, #12, #13 e #2), todos confirmados no código e corrigidos (um commit por achado ou par coeso, cada um com teste de regressão que falhava antes):
 
 - **Resultado desconhecido nunca é reenviado.** Um último passo `unknown` agora encerra a execução como `unknown` sem enviar, mesmo que a gravação do fim da execução tenha falhado antes. As gravações do passo e da execução continuam em chamadas separadas (não há transação entre elas); o passo `unknown` é o registro durável que impede o reenvio.
 - **Cancelamento impede o envio.** A reserva do envio (`abrirPasso` com `posse`) é uma transação que confere execução `running` e dona e só então cria o passo `claimed`. Cancelar antes da reserva, ou perder a posse, impede a chamada ao provedor.
@@ -111,7 +111,7 @@ Achados da revisão independente do motor (os cinco primeiros do motor; depois #
 
 - **#3 Perda da trava (JobLock).** `startJobLock`/`withJobLock` agora usam um token por aquisição e entregam a posse (`signal` e `ativa()`): renovação com `count` 0 ou sem confirmação por um TTL marca a posse como perdida. Disparo em massa, agendador de mensagens, follow-up e publicação social param de iniciar novos envios quando a posse se perde; o worker de automações só deixa de iniciar a rodada (o executor não foi alterado, e o claim por execução segue como garantia).
 - **#11 Número de envio Cloud.** `numeroDeEnvioPertence` confere o número contra `WHATSAPP_CLOUD_PHONE_MAP` mesmo com uma só sessão; a compatibilidade implícita vale só sem mapa.
-- **#12 `dedupKey` de resultados.** A chave virou sha256 hex dos identificadores exatos (`r:` + 64 caracteres), então "PedidoA" e "pedidoa" não colidem na collation `utf8mb4_unicode_ci`. A coluna (`VARCHAR(191)`) comporta a chave: sem mudança de schema. Linhas já importadas com a chave antiga não casam com a nova (reimportar o mesmo arquivo as duplicaria uma vez; o piloto ainda não tem dados em produção).
+- **#12 `dedupKey` de resultados.** A chave virou sha256 hex dos identificadores exatos (`r:` + 64 caracteres), então "PedidoA" e "pedidoa" não colidem na collation `utf8mb4_unicode_ci`. A coluna (`VARCHAR(191)`) comporta a chave: sem mudança de schema. Linhas já importadas com a chave antiga não casam com a nova (reimportar o mesmo arquivo as duplicaria uma vez; se já houver importações, avaliar antes de aplicar).
 - **#13 ISO completo na importação.** `lerData` valida ano, mês, dia (com bissexto), hora, minuto, segundo e offset antes de converter; `2026-02-31T12:00:00-03:00` agora é rejeitada por linha.
 - **#2 Rollback documentado.** O rollback funcional preserva os models aditivos no `schema.prisma` (reverter só o código ou desligar `AUTOMACOES_ATIVAS`/`RESULTADOS_ENABLED`); reverter o schema faz o `prisma db push` do Dockerfile exigir confirmação de perda de dados e impedir o servidor de iniciar. Remoção de tabelas é operação separada, com workers parados, dados reconciliados e backup restaurável testado. Ajustados também o SQL aditivo, o plano de migração e o relatório final do Growth OS.
 
