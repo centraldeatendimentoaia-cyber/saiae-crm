@@ -96,7 +96,6 @@ function validarLinha(bruta: Record<string, unknown>, agora: Date): { ok: true; 
     if (valor === "invalido") return { ok: false, motivo: "valor inválido" };
     const refExterna = l.referencia.trim().slice(0, 100) || null;
     // controle e quebras de linha não entram em texto livre
-    // eslint-disable-next-line no-control-regex
     const detalhe = l.campanha.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, 120) || null;
     const base = { tipo, contactKey, ocorridoEm, refExterna };
     return { ok: true, evento: { ...base, origem, origemDetalhe: detalhe, valorCentavos: valor, dedupKey: chaveDedup(base) } };

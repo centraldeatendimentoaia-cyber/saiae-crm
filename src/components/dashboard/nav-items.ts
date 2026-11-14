@@ -25,6 +25,7 @@ import {
     BookOpen,
     CreditCard,
     BarChart3,
+    Target,
     GraduationCap,
     Workflow,
 } from "lucide-react";
@@ -60,6 +61,7 @@ export const navGroups: NavGroup[] = [
             { href: "/dashboard/chat", label: "Conversas", icon: MessageSquare },
             { href: "/dashboard/broadcast", label: "Disparo", icon: Megaphone },
             { href: "/dashboard/metricas", label: "Métricas de atendimento", icon: BarChart3 },
+            { href: "/dashboard/resultados", label: "Resultados e origem", icon: Target },
             { href: "/dashboard/descadastros", label: "Descadastrados", icon: UserX },
             { href: "/dashboard/sticker", label: "Criador de figurinhas", icon: ImageIcon },
         ],
