@@ -35,6 +35,11 @@ const h = vi.hoisted(() => {
         aggregate: async ({ where }: Row) => ({ _sum: { size: t[name].filter((r) => ok(r, where)).reduce((s, r) => s + r.size, 0) } }),
     });
     const prisma: Row = { socialAccount: model("socialAccount"), scheduledPost: model("scheduledPost"), mediaFile: model("mediaFile"), externalPostLink: model("externalPostLink") };
+    // transação em memória: se o callback lançar, restaura o estado anterior (rollback)
+    prisma.$transaction = async (fn: (tx: Row) => Promise<unknown>) => {
+        const antes = Object.fromEntries(Object.entries(t).map(([k, rs]) => [k, rs.map((r) => ({ ...r }))]));
+        try { return await fn(prisma); } catch (e) { for (const k of Object.keys(t)) t[k] = antes[k]; throw e; }
+    };
     const reset = () => { for (const k of Object.keys(t)) t[k] = []; n = 0; };
     // chave de API → usuário
     const chaves: Record<string, string> = { "chave-lavi": "u-lavi", "chave-outro": "u-outro" };
@@ -321,6 +326,27 @@ describe("bloqueio editorial (achado 8)", () => {
         h.t.socialAccount.push({ id: "ig-outro3", userId: "u-outro", provider: "instagram" });
         await importar([peca("a", { versao: 2, status_editorial: "reprovado" })], { chave: "chave-outro", contas: { padrao: "ig-outro" } });
         expect(h.t.externalPostLink[0].editorial).toBe("aprovado");
+    });
+});
+
+describe("atomicidade da atualização (achado 7)", () => {
+    it("falha ao gravar o vínculo desfaz o post e as mídias novas; o manifesto antigo continua inalterado", async () => {
+        const v1 = peca("a");
+        const r1 = await importar([v1]);
+        const antes = { post: { ...h.t.scheduledPost[0] }, midias: h.t.mediaFile.map((m: any) => m.id) };
+        const falha = () => Promise.reject(new Error("falha simulada no vínculo"));
+        const u = vi.spyOn(h.prisma.externalPostLink, "update").mockImplementation(falha as any);
+        const um = vi.spyOn(h.prisma.externalPostLink, "updateMany").mockImplementation(falha as any);
+        const log = vi.spyOn(console, "error").mockImplementation(() => {});
+        const r2 = await importar([peca("a", { versao: 2, legenda: "Legenda nova" }, 3)]);
+        u.mockRestore(); um.mockRestore(); log.mockRestore();
+
+        expect(r2.itens[0].resultado).toBe("rejeitado");
+        expect(h.t.scheduledPost[0]).toMatchObject({ caption: antes.post.caption, mediaIds: antes.post.mediaIds, status: "DRAFT" });
+        expect(h.t.mediaFile.map((m: any) => m.id)).toEqual(antes.midias); // mídias novas limpas, antigas intactas
+        expect(h.t.externalPostLink[0]).toMatchObject({ version: 1, contentHash: v1.p.hash });
+        const r3 = await importar([v1]);
+        expect(r3.itens[0]).toMatchObject({ resultado: "inalterado", postId: r1.itens[0].postId });
     });
 });
 

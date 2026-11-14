@@ -222,13 +222,25 @@ async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
             const novos = await gravarMidias(userId, midias);
             const importadasAntes = idsDoMeta(link.meta);
             avisos.push(`Edição manual e agendamento anteriores foram substituídos pela versão ${versao as number}; o rascunho voltou a DRAFT.`);
-            // volta a DRAFT: conteúdo mudou, o agendamento anterior deixa de valer e um humano reagenda
-            const r = await prisma.scheduledPost.updateMany({
-                where: { id: postAnt.id, userId, status: { in: EDITAVEIS } },
-                data: { type, caption: type === "STORY" ? null : legenda || null, mediaIds: novos, status: "DRAFT", publishAt: null },
-            });
-            if (r.count !== 1) { await mediaStorage.remove(novos); return rej("conflito_publicado", "A postagem mudou durante a importação."); }
-            await prisma.externalPostLink.update({ where: { id: link.id }, data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta: { ...meta, mediaIds: novos } } });
+            // volta a DRAFT: conteúdo mudou, o agendamento anterior deixa de valer e um humano reagenda.
+            // Post e vínculo mudam na MESMA transação: se um falhar, nada fica pela metade (achado 7).
+            let aplicado: boolean;
+            try {
+                aplicado = await prisma.$transaction(async (tx) => {
+                    const r = await tx.scheduledPost.updateMany({
+                        where: { id: postAnt.id, userId, status: { in: EDITAVEIS } },
+                        data: { type, caption: type === "STORY" ? null : legenda || null, mediaIds: novos, status: "DRAFT", publishAt: null },
+                    });
+                    if (r.count !== 1) return false;
+                    await tx.externalPostLink.update({ where: { id: link.id }, data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta: { ...meta, mediaIds: novos } } });
+                    return true;
+                });
+            } catch (e) { // rollback: as mídias novas não são referenciadas por nenhum post
+                await mediaStorage.remove(novos);
+                throw e;
+            }
+            if (!aplicado) { await mediaStorage.remove(novos); return rej("conflito_publicado", "A postagem mudou durante a importação."); }
+            // só depois do commit as mídias antigas podem sair
             await removerMidiasDaImportacao(userId, importadasAntes, postAnt.id);
             return { externalKey, resultado: "atualizado", postId: postAnt.id, groupId: postAnt.groupId, mediaIds: novos, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
         }
