@@ -19,6 +19,7 @@ export const MAX_SIMULTANEAS_POR_CONTATO_FLUXO = 1;
 export const TIMEOUT_TOTAL_MS = 7 * 24 * 3_600_000;
 export const JANELA_DEDUP_MS = 3_600_000; // mesmo contato/fluxo/versão na mesma hora = mesma execução
 export const CLAIM_TTL_MS = 5 * 60_000; // execução "running" sem renovar por mais que isto foi abandonada
+export const RENOVACAO_CLAIM_MS = CLAIM_TTL_MS / 3; // renovação da posse durante esperas longas (espaçamento)
 export const ESPERA_MIN_MS = 1_000;
 export const ESPERA_MAX_MS = TIMEOUT_TOTAL_MS; // uma espera maior que o prazo total da execução nunca seria cumprida
 export const MAX_CLAIMS_SEM_PROGRESSO = 5; // reivindicações seguidas sem salvar nada = execução envenenada

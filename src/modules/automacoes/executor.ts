@@ -4,7 +4,7 @@ import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
 import { avaliar, interpolar } from "./expressao";
 import {
-    CLAIM_TTL_MS, MAX_CLAIMS_SEM_PROGRESSO, MAX_PASSOS, PAUSA_HUMANO_MS,
+    CLAIM_TTL_MS, MAX_CLAIMS_SEM_PROGRESSO, MAX_PASSOS, PAUSA_HUMANO_MS, RENOVACAO_CLAIM_MS,
     type Contexto, type Definicao, type MotivoCancelamento, type No, type StatusRun,
 } from "./tipos";
 
@@ -63,7 +63,7 @@ export interface Deps {
     temAcesso(userId: string, sessionId: string): Promise<boolean>;
     /** Modo Seguro (só Baileys): fora do horário devolve quando a janela abre. Ausente = sem restrição. */
     gateEnvio?(sessionId: string, provider: WhatsAppProvider): Promise<{ ok: true } | { ok: false; resumeAt: Date }>;
-    /** Espaçamento humano entre envios (só Baileys), chamado por `processarProntas` entre execuções. */
+    /** Espaçamento humano entre envios (só Baileys): entre duas mensagens da mesma execução (renovando a posse) e entre execuções (`processarProntas`). */
     espacar?(sessionId: string, provider: WhatsAppProvider): Promise<void>;
     /** Mesmas políticas dos outros envios: plano/cota e "só quem já interagiu". `transitoria` = falha de infraestrutura (tenta de novo); senão é política e encerra. */
     politicaEnvio(sessionId: string, destino: string): Promise<{ ok: true } | { ok: false; transitoria: boolean; motivo: string }>;
@@ -141,12 +141,30 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
         return ok ? "waiting" : "perdida";
     };
 
+    /** Espera o espaçamento renovando a posse (a espera pode passar do TTL). False = a posse se perdeu durante a espera. */
+    const espacarRenovando = async (provider: WhatsAppProvider): Promise<boolean> => {
+        let perdeu = false;
+        const t = setInterval(() => { store.salvar(run.id, deps.holder, {}, deps.agora()).then((ok) => { if (!ok) perdeu = true; }, () => {}); }, RENOVACAO_CLAIM_MS);
+        try { await deps.espacar!(run.sessionId, provider); } catch { /* espaçamento é cortesia: a falha dele não impede nem repete envio */ } finally { clearInterval(t); }
+        return !perdeu;
+    };
+
     for (let primeira = true; ; primeira = false) {
         if (run.stepCount >= MAX_PASSOS) return falhar("permanent", "limite de passos por execução atingido");
         if (deps.agora() > run.deadlineAt) return falhar("permanent", "tempo total da execução excedido");
         const noId = run.currentNodeId;
         const no = noId && Object.prototype.hasOwnProperty.call(def.nodes, noId) ? def.nodes[noId] : undefined;
         if (!noId || !no) return falhar("permanent", "nó atual inexistente na versão do fluxo");
+
+        // Espaçamento entre mensagens da MESMA execução (a anterior já saiu), antes das checagens: o estado pode mudar durante a espera.
+        if (!envioJaFeito && ehEnvio(no) && info.enviou && deps.espacar) {
+            const pr0 = deps.provider(run.sessionId);
+            if (pr0.ok) {
+                const ficou = await espacarRenovando(pr0.provider);
+                info.enviou = undefined; // já espaçada aqui: `processarProntas` só espaça o que ainda não foi
+                if (!ficou) return "perdida";
+            }
+        }
 
         // Cancelamento automático: ao retomar e antes de CADA envio (humano assumiu ou contato saiu).
         if (!envioJaFeito && (primeira || ehEnvio(no) || no.type === "transferencia_humana")) {

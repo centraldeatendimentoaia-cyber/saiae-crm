@@ -4,9 +4,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 vi.mock("@/lib/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
-import { executarRun } from "./executor";
+import { executarRun, processarProntas } from "./executor";
 import { criarDeps, criarStoreMemoria } from "./testes-util";
-import { CLAIM_TTL_MS, type Definicao } from "./tipos";
+import { CLAIM_TTL_MS, RENOVACAO_CLAIM_MS, type Definicao } from "./tipos";
 
 const T0 = Date.parse("2026-11-13T12:00:00Z");
 const D = (nodes: Definicao["nodes"], start = "a"): Definicao => ({ schemaVersion: 1, start, nodes });
@@ -82,5 +82,39 @@ describe("achado 5: políticas dos outros envios", () => {
         c.deps.registrarConsumo.mockRejectedValue(new Error("contador fora"));
         expect(await executarRun("r1", c.store, c.deps)).toBe("completed");
         expect(c.deps.sendText).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("achado 6: espaçamento entre mensagens da mesma execução", () => {
+    it("espaça entre as duas mensagens (não só depois da execução) e conta um espaçamento por envio", async () => {
+        const c = cenario(duas);
+        const ordem: string[] = [];
+        c.deps.sendText.mockImplementation(async (_to: string, t: string) => { ordem.push(`envio:${t}`); return { messageId: "w" }; });
+        c.deps.espacar = vi.fn(async () => { ordem.push("espaco"); });
+        await processarProntas(c.store, c.deps);
+        expect(ordem).toEqual(["envio:um", "espaco", "envio:dois", "espaco"]);
+    });
+    it("cancelada durante o espaçamento: a segunda mensagem não sai", async () => {
+        const c = cenario(duas);
+        c.deps.espacar = vi.fn(async () => { c.run().status = "cancelled"; });
+        await executarRun("r1", c.store, c.deps, {});
+        expect(c.deps.sendText).toHaveBeenCalledTimes(1);
+    });
+    it("espera longa renova a posse: o claim não vence no meio do espaçamento", async () => {
+        vi.useFakeTimers();
+        try {
+            const c = cenario(duas);
+            let liberar!: () => void;
+            c.deps.espacar = vi.fn(() => new Promise<void>((r) => { liberar = r; }));
+            const p = executarRun("r1", c.store, c.deps);
+            await vi.advanceTimersByTimeAsync(0);
+            const antes = c.run().claimExpiresAt!.getTime();
+            c.agora.t += RENOVACAO_CLAIM_MS;
+            await vi.advanceTimersByTimeAsync(RENOVACAO_CLAIM_MS + 1);
+            expect(c.run().claimExpiresAt!.getTime()).toBeGreaterThan(antes);
+            liberar();
+            expect(await p).toBe("completed");
+            expect(c.deps.sendText).toHaveBeenCalledTimes(2);
+        } finally { vi.useRealTimers(); }
     });
 });
