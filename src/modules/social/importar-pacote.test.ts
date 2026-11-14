@@ -20,8 +20,8 @@ const h = vi.hoisted(() => {
         });
     const model = (name: string) => ({
         findMany: async ({ where = {} }: Row = {}) => t[name].filter((r) => ok(r, where)),
-        findFirst: async ({ where = {} }: Row = {}) => t[name].find((r) => ok(r, where)) ?? null,
-        findUnique: async ({ where }: Row) => t[name].find((r) => ok(r, where)) ?? null,
+        findFirst: async ({ where = {} }: Row = {}) => { const r = t[name].find((x) => ok(x, where)); return r ? { ...r } : null; }, // cópia, como o Prisma real
+        findUnique: async ({ where }: Row) => { const r = t[name].find((x) => ok(x, where)); return r ? { ...r } : null; },
         create: async ({ data }: Row) => {
             if (name === "externalPostLink" && t[name].some((r) => r.userId === data.userId && r.source === data.source && r.externalKey === data.externalKey)) throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
             const row = { id: `${name}-${++n}`, createdAt: new Date(), ...data };
@@ -59,6 +59,7 @@ import { GET as ESTADO } from "@/app/api/social/importar-pacote/estado/route";
 import { PATCH } from "@/app/api/social/posts/[id]/route";
 import { publishOne } from "./scheduler";
 import { hashConteudo, importarPacote, MAX_LOTE_BYTES } from "./importar-pacote";
+import { mediaStorage } from "@/lib/media-storage";
 
 const sha = (b: Buffer) => createHash("sha256").update(b).digest("hex");
 const png = (seed: string) => Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from(seed)]);
@@ -347,6 +348,53 @@ describe("atomicidade da atualização (achado 7)", () => {
         expect(h.t.externalPostLink[0]).toMatchObject({ version: 1, contentHash: v1.p.hash });
         const r3 = await importar([v1]);
         expect(r3.itens[0]).toMatchObject({ resultado: "inalterado", postId: r1.itens[0].postId });
+    });
+});
+
+describe("concorrência entre versões (achado 8)", () => {
+    it("versões 2 e 3 leem a 1; a 3 termina primeiro e a 2 não a sobrescreve", async () => {
+        await importar([peca("a")]);
+        const v3 = peca("a", { versao: 3, legenda: "Legenda v3" });
+        const orig = mediaStorage.save.bind(mediaStorage);
+        let uma = false;
+        // a v2 já leu o vínculo (versão 1); enquanto ela envia mídia, a v3 conclui a gravação
+        const s = vi.spyOn(mediaStorage, "save").mockImplementation(async (a) => {
+            if (!uma) { uma = true; Object.assign(h.t.externalPostLink[0], { version: 3, contentHash: v3.p.hash }); Object.assign(h.t.scheduledPost[0], { caption: "Legenda v3" }); }
+            return orig(a);
+        });
+        const r2 = await importar([peca("a", { versao: 2, legenda: "Legenda v2" })]);
+        s.mockRestore();
+        expect(r2.itens[0]).toMatchObject({ resultado: "rejeitado", erro: { codigo: "versao_antiga" } });
+        expect(h.t.externalPostLink[0]).toMatchObject({ version: 3, contentHash: v3.p.hash });
+        expect(h.t.scheduledPost[0].caption).toBe("Legenda v3");
+        expect(h.t.mediaFile).toHaveLength(2); // mídias da v2 foram limpas
+    });
+
+    it("criação concorrente: o vencedor com versão/hash diferentes não vira 'inalterado'", async () => {
+        const venc = peca("a", { versao: 2, legenda: "do vencedor" });
+        const orig = h.prisma.externalPostLink.create;
+        const c = vi.spyOn(h.prisma.externalPostLink, "create").mockImplementationOnce(async () => {
+            h.t.scheduledPost.push({ id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
+            await orig({ data: { userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 2, contentHash: venc.p.hash, postId: "post-venc" } });
+            throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        });
+        const r = await importar([peca("a", { versao: 1 })]);
+        c.mockRestore();
+        expect(r.itens[0]).toMatchObject({ resultado: "rejeitado", erro: { codigo: "versao_antiga" } });
+        expect(h.t.scheduledPost.map((x: any) => x.id)).toEqual(["post-venc"]);
+    });
+
+    it("criação concorrente com a MESMA versão e hash continua 'inalterado'", async () => {
+        const x = peca("a");
+        const orig = h.prisma.externalPostLink.create;
+        const c = vi.spyOn(h.prisma.externalPostLink, "create").mockImplementationOnce(async () => {
+            h.t.scheduledPost.push({ id: "post-venc", userId: "u-lavi", accountId: "ig-lavi", type: "FEED", mediaIds: [], status: "DRAFT", groupId: "g" });
+            await orig({ data: { userId: "u-lavi", source: "agencia", externalKey: chave("a"), version: 1, contentHash: x.p.hash, postId: "post-venc" } });
+            throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        });
+        const r = await importar([x]);
+        c.mockRestore();
+        expect(r.itens[0]).toMatchObject({ resultado: "inalterado", postId: "post-venc" });
     });
 });
 

@@ -142,7 +142,7 @@ async function removerMidiasDaImportacao(userId: string, ids: string[], exceto: 
 
 const idsDoMeta = (meta: unknown): string[] => { const v = rec(meta).mediaIds; return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []; };
 
-async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
+async function processarItem(raw: unknown, ctx: Ctx, reentrada = false): Promise<ItemResposta> {
     const p = rec(raw);
     const slug = str(p.slug);
     const externalKey = `${ctx.cliente}:${ctx.semana}:${slug}`;
@@ -224,22 +224,24 @@ async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
             avisos.push(`Edição manual e agendamento anteriores foram substituídos pela versão ${versao as number}; o rascunho voltou a DRAFT.`);
             // volta a DRAFT: conteúdo mudou, o agendamento anterior deixa de valer e um humano reagenda.
             // Post e vínculo mudam na MESMA transação: se um falhar, nada fica pela metade (achado 7).
-            let aplicado: boolean;
             try {
-                aplicado = await prisma.$transaction(async (tx) => {
+                await prisma.$transaction(async (tx) => {
+                    // atualização condicional (achado 8): só vale se versão/hash/estado editorial ainda forem os que foram lidos e validados acima
+                    const v = await tx.externalPostLink.updateMany({
+                        where: { id: link.id, version: link.version, contentHash: link.contentHash, editorial: link.editorial },
+                        data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta: { ...meta, mediaIds: novos } },
+                    });
+                    if (v.count !== 1) throw new ErroItem("versao_antiga", "Outra importação alterou esta peça ao mesmo tempo; reenvie o manifesto.");
                     const r = await tx.scheduledPost.updateMany({
                         where: { id: postAnt.id, userId, status: { in: EDITAVEIS } },
                         data: { type, caption: type === "STORY" ? null : legenda || null, mediaIds: novos, status: "DRAFT", publishAt: null },
                     });
-                    if (r.count !== 1) return false;
-                    await tx.externalPostLink.update({ where: { id: link.id }, data: { version: versao as number, contentHash: p.hash as string, editorial: "aprovado", plannedAt, meta: { ...meta, mediaIds: novos } } });
-                    return true;
+                    if (r.count !== 1) throw new ErroItem("conflito_publicado", "A postagem mudou durante a importação.");
                 });
             } catch (e) { // rollback: as mídias novas não são referenciadas por nenhum post
                 await mediaStorage.remove(novos);
                 throw e;
             }
-            if (!aplicado) { await mediaStorage.remove(novos); return rej("conflito_publicado", "A postagem mudou durante a importação."); }
             // só depois do commit as mídias antigas podem sair
             await removerMidiasDaImportacao(userId, importadasAntes, postAnt.id);
             return { externalKey, resultado: "atualizado", postId: postAnt.id, groupId: postAnt.groupId, mediaIds: novos, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
@@ -264,7 +266,13 @@ async function processarItem(raw: unknown, ctx: Ctx): Promise<ItemResposta> {
             if (rec(e).code !== "P2002") throw e;
             const vencedor = await prisma.externalPostLink.findUnique({ where });
             const postVencedor = vencedor ? await prisma.scheduledPost.findFirst({ where: { id: vencedor.postId, userId } }) : null;
-            if (!postVencedor) throw e;
+            if (!vencedor || !postVencedor) throw e;
+            // só é "inalterado" se o vencedor tem a MESMA versão e o MESMO hash (achado 8)
+            if (vencedor.version !== versao || vencedor.contentHash !== p.hash) {
+                if (vencedor.version >= (versao as number)) return rej("versao_antiga", `Outra importação gravou a versão ${vencedor.version} ao mesmo tempo; esta (${versao as number}) não é maior.`);
+                if (reentrada) throw e;
+                return processarItem(raw, ctx, true); // o vencedor é mais antigo: agora o vínculo existe e a rota de atualização cuida do resto
+            }
             return { externalKey, resultado: "inalterado", postId: postVencedor.id, groupId: postVencedor.groupId ?? null, mediaIds: postVencedor.mediaIds as string[], estado: postVencedor.status, urlPainel: urlPainel(postVencedor.status), avisos };
         }
         return { externalKey, resultado: "criado", postId: post.id, groupId, mediaIds, estado: "DRAFT", urlPainel: urlPainel("DRAFT"), avisos };
