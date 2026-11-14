@@ -1,6 +1,7 @@
 import { logger as defaultLogger } from "@/lib/logger";
 import { isOptedOut as defaultIsOptedOut } from "@/lib/optout";
-import { cloudSessionIds, getProvider as defaultGetProvider } from "@/modules/whatsapp/provider";
+import { getProvider as defaultGetProvider } from "@/modules/whatsapp/provider";
+import { numeroDeEnvioPertence, sessaoDaBarracaCloud } from "@/modules/whatsapp/provider/cloud-sessao";
 import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
 import { registerComandaEventConsumer, type ComandaEventConsumer } from "./consumers";
@@ -99,8 +100,17 @@ export function createOrderNotifier(over: Partial<NotifierDeps> = {}): ComandaEv
             return;
         }
 
-        // Piloto: 1 número da Cloud API (a primeira sessão de WHATSAPP_CLOUD_SESSION_ID).
-        const sessionId = [...cloudSessionIds(deps.env)][0];
+        // Uma sessão Cloud: ela (piloto). Várias: a da barraca em WHATSAPP_CLOUD_BARRACA_MAP, e só se o número de envio for dela.
+        const r = sessaoDaBarracaCloud(deps.env, event.barraca_id);
+        if (!r.ok && r.motivo !== "sem_sessao_cloud") {
+            deps.logger.warn(TAG, `${template} pulado: sessão Cloud da barraca ${r.motivo}`);
+            return;
+        }
+        if (r.ok && !numeroDeEnvioPertence(deps.env, r.sessionId)) {
+            deps.logger.warn(TAG, `${template} pulado: o número de envio não pertence à sessão da barraca`);
+            return;
+        }
+        const sessionId = r.ok ? r.sessionId : undefined;
         const provider = sessionId ? deps.getProvider(sessionId) : null;
         if (!sessionId || !provider?.sendTemplate) {
             deps.logger.warn(TAG, `${template} pulado: Cloud API não configurada`);

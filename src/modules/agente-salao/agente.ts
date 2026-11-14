@@ -14,6 +14,7 @@ import { sessaoEhDeBarraca } from "./barraca";
 import { registrarOrigem } from "./origem";
 import { origemDaMensagem } from "@/modules/metricas/anuncio";
 import { dadosPausar, dadosRetomar } from "@/modules/atendimento-comum/pausa";
+import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
 import { ehComandoDevolver, iaPausada, pessoaAssumiu, primeiroNome, salaoAberto } from "./estado";
 import { ETIQUETAS_INTERESSE_PADRAO, MSG_AUDIO, MSG_SO_TEXTO, MSG_TRANSFERENCIA, responderSalao, type MotivoRecepcao, type PedidoRecepcao } from "./motor";
 import { responderComTreino, usarAtendenteNovo } from "@/modules/atendente/integracao";
@@ -302,11 +303,12 @@ export function bindAgenteSalao(sock: WASocket, sessionId: string, over: OpcoesA
         const nomePerfil = msg.pushName ?? null;
 
         let conv = await garantirConversa(sessionId, jid, { telefone, nomePerfil });
-        if (iaPausada(conv, agora)) {
+        const decisao = quemPodeEnviar(conv, agora);
+        if (!decisao.pode) {
             logger.info(TAG, `sem resposta da IA: conversa pausada (${conv.motivoPausa ?? "sem motivo"}) até ${conv.pausadaAte?.toISOString()}`);
             return; // uma pessoa assumiu ou a recepção foi chamada
         }
-        if (conv.estado === "humano") conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: dadosRetomar({ motivoPausa: null }) });
+        if (decisao.retomar) conv = await prisma.agenteConversa.update({ where: { id: conv.id }, data: dadosRetomar({ motivoPausa: null }) });
         if (!podeResponder(MAX_RESPOSTAS_DIA)) {
             logger.warn(TAG, "teto diário de respostas do agente atingido: não responde mais hoje");
             return;

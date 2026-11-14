@@ -2,10 +2,12 @@ import crypto from "crypto";
 import { logger as defaultLogger } from "@/lib/logger";
 import { addOptOut, isOptedOut, isOptInText, isOptOutText, removeOptOut } from "@/lib/optout";
 import { cloudSessionIds } from "@/modules/whatsapp/provider";
+import { numeroDeEnvioPertence, sessaoDoNumero } from "@/modules/whatsapp/provider/cloud-sessao";
 import type { InboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/inbound";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
-import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
+import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
+import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS } from "./dono";
 import { MAX_TEXTO } from "./constantes";
 import { INTENCAO_VENDAS } from "./intencao";
 import { extrairCodigoLoja } from "./loja";
@@ -201,17 +203,16 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
         }
 
         const conv = registro.conversa;
-        if (conv.estado === "humano") {
-            if (pausadaAgora(conv, deps.now())) {
-                // o responsável assumiu: a IA fica calada; o cliente é avisado uma única vez
-                if (!deps.avisadosPausa.has(conv.id)) {
-                    deps.avisadosPausa.set(conv.id, true);
-                    await responderTexto(contactKey, conv, MSG_RESPONSAVEL_AVISADO);
-                }
-                return;
+        const decisao = quemPodeEnviar(conv, deps.now());
+        if (!decisao.pode) {
+            // o responsável assumiu: a IA fica calada; o cliente é avisado uma única vez
+            if (!deps.avisadosPausa.has(conv.id)) {
+                deps.avisadosPausa.set(conv.id, true);
+                await responderTexto(contactKey, conv, MSG_RESPONSAVEL_AVISADO);
             }
-            await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
+            return;
         }
+        if (decisao.retomar) await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
         const motor = loja === VENDAS ? deps.vendas : deps.responder;
         if (!motor) return;
 
@@ -225,10 +226,21 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
         const mensagens = batch.events.filter((e): e is InboundMessage => e.kind === "message").sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         if (mensagens.length === 0) return;
 
-        const sessionId = [...cloudSessionIds(deps.env)][0] ?? null;
         const c = { ignoradas: 0, limitadas: 0 };
         for (const m of mensagens) {
             try {
+                // A sessão vem do número que recebeu (phone_number_id do webhook). Sem sessão Cloud listada, segue como sempre
+                // (registra sem sessão). Ambíguo ou sem correspondência: recusa e registra; nunca a primeira da lista.
+                let sessionId: string | null = null;
+                if (cloudSessionIds(deps.env).size > 0) {
+                    const r = sessaoDoNumero(deps.env, m.phoneNumberId);
+                    if (!r.ok || !numeroDeEnvioPertence(deps.env, r.sessionId)) {
+                        deps.logger.warn(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo}`);
+                        c.ignoradas++;
+                        continue;
+                    }
+                    sessionId = r.sessionId;
+                }
                 await tratar(m, sessionId, c);
             } catch (e) {
                 // uma mensagem com problema nunca derruba as outras do lote

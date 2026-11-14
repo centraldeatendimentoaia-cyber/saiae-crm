@@ -68,11 +68,12 @@ describe("envio", () => {
             name: "pedido_recebido", languageCode: TEMPLATE_LANGUAGE, bodyParameters: ["Maria Teste", "42", "Açaí do Didi"],
         });
     });
-    it("usa a sessão Cloud do piloto (a primeira da lista)", async () => {
+    it("com mais de uma sessão Cloud e sem mapa da barraca: NÃO escolhe a primeira, registra e não envia", async () => {
         const getProvider = vi.fn(() => ({ sendTemplate: vi.fn().mockResolvedValue({}) }) as never);
-        const { run } = setup({ getProvider, env: { COMANDA_NOTIFY_TEMPLATES: "on", WHATSAPP_CLOUD_SESSION_ID: " a , b" } });
+        const { run, logger } = setup({ getProvider, env: { COMANDA_NOTIFY_TEMPLATES: "on", WHATSAPP_CLOUD_SESSION_ID: " a , b" } });
         await run(ev("order.created"));
-        expect(getProvider).toHaveBeenCalledWith("a");
+        expect(getProvider).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalledWith("AvisoPedido", expect.stringContaining("ambigua"));
     });
     it("telefone com formatação vira só dígitos", async () => {
         const { run, sendTemplate } = setup();
