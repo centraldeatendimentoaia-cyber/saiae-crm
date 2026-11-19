@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { parseContent, parseDate } from "@/modules/social/validate";
 import { asProvider, ensurePublicTokens } from "@/modules/social/posts";
+import { bloqueioEditorial } from "@/modules/social/importar-pacote";
 
 const EDITABLE = ["DRAFT", "PENDING"];
 type Ctx = { params: Promise<{ id: string }> };
@@ -69,6 +70,11 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         data.publishAt = null;
         data.status = "DRAFT";
     } else if (body.publishAt !== undefined) {
+        // item importado reprovado/não aprovado não sai de rascunho (posts manuais não têm vínculo e seguem como antes)
+        const bloqueio = await bloqueioEditorial(user.id, id);
+        if (bloqueio) {
+            return NextResponse.json({ status: false, codigo: "editorial_bloqueado", message: `Esta peça veio da agência com estado editorial "${bloqueio}" e não pode ser agendada.` }, { status: 409 });
+        }
         const d = parseDate(body.publishAt);
         if ("error" in d) return NextResponse.json({ status: false, message: d.error }, { status: 400 });
         data.publishAt = d.value;

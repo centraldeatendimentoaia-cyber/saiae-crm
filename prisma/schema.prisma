@@ -559,6 +559,27 @@ model ScheduledPost {
   @@index([seriesId])
 }
 
+// Vínculo entre uma peça importada de fora (agência) e o ScheduledPost. Tabela NOVA e aditiva: não altera ScheduledPost.
+// `editorial` guarda o estado editorial da origem; só "aprovado" libera o rascunho para agendar.
+model ExternalPostLink {
+  id          String    @id @default(cuid())
+  userId      String
+  source      String    // "agencia"
+  externalKey String    // cliente:semana:slug
+  version     Int
+  contentHash String    // sha256 do conteúdo canônico
+  editorial   String    @default("aprovado") // aprovado | reprovado | bloqueado_lint | pendente_aprovacao
+  postId      String    // ScheduledPost.id
+  plannedAt   DateTime? // data planejada (o rascunho não tem publishAt)
+  meta        Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, source, externalKey])
+  @@index([postId])
+  @@index([userId, source])
+}
+
 // Série recorrente ("toda terça às 10h"): gera as próximas semanas como ScheduledPost reais
 model PostSeries {
   id               String    @id @default(cuid())
