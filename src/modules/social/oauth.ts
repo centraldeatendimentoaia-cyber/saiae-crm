@@ -18,9 +18,38 @@ export function configuracaoMeta(): { appId: string; appSecret: string } | null 
     return appId && appSecret ? { appId, appSecret } : null;
 }
 
-export function urlDeRetorno(origin: string): string {
-    const base = (process.env.BASE_URL || process.env.NEXTAUTH_URL || origin).replace(/\/$/, "");
-    return `${base}/api/social/oauth/callback`;
+const HOST_VALIDO = /^[a-z0-9.-]+(:\d+)?$/i;
+const hostDe = (u: string) => { try { return new URL(u).hostname; } catch { return u; } };
+const LOOPBACK = /^(localhost|127\.\d+\.\d+\.\d+|0\.0\.0\.0|\[::1?\])$/i;
+
+/**
+ * Base pública do app para redirects e para o redirect_uri da Meta: BASE_URL, depois NEXTAUTH_URL.
+ * Sem nenhuma, usa o host do proxy (x-forwarded-*) quando o origin da requisição é loopback, e por fim o origin.
+ * Em produção, se ainda sobrar localhost/0.0.0.0, falha em vez de mandar o usuário para lá.
+ */
+export function baseUrl(origin: string, headers?: { get(name: string): string | null }, env: NodeJS.ProcessEnv = process.env): string {
+    const configurada = (env.BASE_URL || env.NEXTAUTH_URL || "").trim().replace(/\/+$/, "");
+    if (configurada) {
+        if (env.NODE_ENV === "production" && LOOPBACK.test(hostDe(configurada))) throw new Error("BASE_URL/NEXTAUTH_URL aponta para localhost em produção");
+        return configurada;
+    }
+    let base = origin.replace(/\/+$/, "");
+    const fHost = headers?.get("x-forwarded-host")?.split(",")[0]?.trim();
+    if (fHost && !HOST_VALIDO.test(fHost)) throw new Error("x-forwarded-host inválido");
+    // Em produção o host do proxy não é confiável o bastante: exige BASE_URL/NEXTAUTH_URL.
+    if (fHost && env.NODE_ENV === "production") throw new Error("BASE_URL (ou NEXTAUTH_URL) não está definido");
+    if (fHost && LOOPBACK.test(new URL(base).hostname)) {
+        const proto = headers?.get("x-forwarded-proto")?.split(",")[0]?.trim() === "http" ? "http" : "https";
+        base = `${proto}://${fHost}`;
+    }
+    if (env.NODE_ENV === "production" && LOOPBACK.test(new URL(base).hostname)) {
+        throw new Error("BASE_URL (ou NEXTAUTH_URL) não está definido: o redirect do login social apontaria para localhost");
+    }
+    return base;
+}
+
+export function urlDeRetorno(origin: string, headers?: { get(name: string): string | null }): string {
+    return `${baseUrl(origin, headers)}/api/social/oauth/callback`;
 }
 
 const assinar = (corpo: string, secret: string) => createHmac("sha256", secret).update(corpo).digest("base64url");

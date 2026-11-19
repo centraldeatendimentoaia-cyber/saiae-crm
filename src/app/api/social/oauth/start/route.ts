@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
-import { configuracaoMeta, criarEstado, urlDeAutorizacao, urlDeRetorno } from "@/modules/social/oauth";
+import { logger } from "@/lib/logger";
+import { baseUrl, configuracaoMeta, criarEstado, urlDeAutorizacao, urlDeRetorno } from "@/modules/social/oauth";
 
 const VOLTA = "/dashboard/redes-sociais/contas";
 
@@ -9,9 +10,14 @@ export async function GET(request: NextRequest) {
     const user = await getAuthenticatedUser(request);
     if (!user) return NextResponse.json({ status: false, message: "Unauthorized" }, { status: 401 });
 
-    const cfg = configuracaoMeta();
-    if (!cfg) return NextResponse.redirect(new URL(`${VOLTA}?oauth=nao-configurado`, request.nextUrl.origin));
+    try {
+        const cfg = configuracaoMeta();
+        if (!cfg) return NextResponse.redirect(new URL(`${VOLTA}?oauth=nao-configurado`, baseUrl(request.nextUrl.origin, request.headers)));
 
-    const estado = criarEstado(user.id, cfg.appSecret);
-    return NextResponse.redirect(urlDeAutorizacao(cfg.appId, urlDeRetorno(request.nextUrl.origin), estado));
+        const estado = criarEstado(user.id, cfg.appSecret);
+        return NextResponse.redirect(urlDeAutorizacao(cfg.appId, urlDeRetorno(request.nextUrl.origin, request.headers), estado));
+    } catch (e) {
+        logger.warn("SocialOAuth", `base URL inválida: ${e instanceof Error ? e.message : "erro"}`);
+        return new NextResponse(null, { status: 302, headers: { Location: `${VOLTA}?oauth=nao-configurado` } });
+    }
 }
