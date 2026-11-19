@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canAccessSession } from "@/lib/api-auth";
-import { JANELA_DEDUP_MS, MAX_SIMULTANEAS_POR_CONTATO_FLUXO, SCHEMA_VERSION, STATUS_ATIVOS, TIMEOUT_TOTAL_MS, type Contexto, type Definicao, type MotivoCancelamento } from "./tipos";
+import { JANELA_DEDUP_MS, type Valor, MAX_SIMULTANEAS_POR_CONTATO_FLUXO, SCHEMA_VERSION, STATUS_ATIVOS, TIMEOUT_TOTAL_MS, type Contexto, type Definicao, type MotivoCancelamento } from "./tipos";
 import { validarDefinicao } from "./validador";
 import { validarTrigger } from "./gatilhos/validacao";
 export { cancelarRunsDoContato } from "./cancelamento";
@@ -90,17 +90,20 @@ export type ResultadoInicio =
  * vale a janela de 1 h. Limite de execuções ativas por contato e fluxo (checagem antes de gravar: não é atômica entre
  * chaves diferentes, ver riscos no relatório).
  */
-export async function iniciarRun(i: { userId: string; role: string; flowId: string; contactKey: string; dedupeKey?: string; agora?: Date }): Promise<ResultadoInicio> {
+export async function iniciarRun(i: { userId: string; role: string; flowId: string; contactKey: string; dedupeKey?: string; agora?: Date; social?: { variaveis: Record<string, Valor> } }): Promise<ResultadoInicio> {
     const agora = i.agora ?? new Date();
     const flow = await prisma.automationFlow.findFirst({ where: { id: i.flowId, userId: i.userId } });
     if (!flow) throw new ErroAutomacao("nao_encontrado");
     if (flow.status !== "active") throw new ErroAutomacao("arquivado");
     if (!flow.publishedVersionId) throw new ErroAutomacao("sem_versao_publicada");
-    // O acesso à sessão é rechecado a cada início (pode ter sido revogado ou a sessão recriada por outro usuário).
-    if (!(await canAccessSession(i.userId, i.role, flow.sessionId))) throw new ErroAutomacao("sessao_invalida");
-    // Só contatos que já existem na sessão: sem isso o disparo manual viraria envio a números arbitrários.
-    const contato = await prisma.contact.findFirst({ where: { session: { sessionId: flow.sessionId }, OR: [{ jid: i.contactKey }, { remoteJidAlt: i.contactKey }] }, select: { id: true } });
-    if (!contato) throw new ErroAutomacao("contato_desconhecido");
+    // Início social (roteador do webhook): quem escreveu é o contato, validado por HMAC e conta; não há sessão de WhatsApp nem Contact.
+    if (!i.social) {
+        // O acesso à sessão é rechecado a cada início (pode ter sido revogado ou a sessão recriada por outro usuário).
+        if (!(await canAccessSession(i.userId, i.role, flow.sessionId))) throw new ErroAutomacao("sessao_invalida");
+        // Só contatos que já existem na sessão: sem isso o disparo manual viraria envio a números arbitrários.
+        const contato = await prisma.contact.findFirst({ where: { session: { sessionId: flow.sessionId }, OR: [{ jid: i.contactKey }, { remoteJidAlt: i.contactKey }] }, select: { id: true } });
+        if (!contato) throw new ErroAutomacao("contato_desconhecido");
+    }
     const versao = await prisma.automationFlowVersion.findUniqueOrThrow({ where: { id: flow.publishedVersionId }, select: { id: true, definition: true } });
 
     const ativas = await prisma.automationRun.count({ where: { flowId: flow.id, contactKey: i.contactKey, status: { in: STATUS_ATIVOS } } });
@@ -110,7 +113,7 @@ export async function iniciarRun(i: { userId: string; role: string; flowId: stri
     if ((await prisma.automationRun.count({ where: { flowId: flow.id, createdAt: { gte: desde } } })) >= limitePorFluxoHora()) return { ok: false, motivo: "limite_taxa" };
 
     const dedupeKey = (i.dedupeKey ?? `janela:${Math.floor(agora.getTime() / JANELA_DEDUP_MS)}`).slice(0, 120);
-    const contexto: Contexto = { vars: {}, tentativas: {} };
+    const contexto: Contexto = { vars: { ...(i.social?.variaveis ?? {}) }, tentativas: {} };
     try {
         const r = await prisma.automationRun.create({
             data: {

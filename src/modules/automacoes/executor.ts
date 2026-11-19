@@ -2,10 +2,11 @@ import { errorMessage } from "@/lib/errors";
 import { MAX_ATTEMPTS, backoffMs, classifySendFailure, maskPersonalData, type FailureClass } from "@/lib/send-failure";
 import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
 import type { WhatsAppProvider } from "@/modules/whatsapp/provider/types";
+import { ErroEnvioSocial } from "./canais/meta-social";
 import { avaliar, interpolar } from "./expressao";
 import {
     CLAIM_TTL_MS, MAX_CLAIMS_SEM_PROGRESSO, MAX_PASSOS, PAUSA_HUMANO_MS, RENOVACAO_CLAIM_MS,
-    type Contexto, type Definicao, type MotivoCancelamento, type No, type StatusRun,
+    type Contexto, type Definicao, type MotivoCancelamento, type No, type StatusRun, type Valor,
 } from "./tipos";
 
 /** Linha de execução como o executor a enxerga (a tabela AutomationRun). */
@@ -54,6 +55,17 @@ export type ProvedorResolvido =
     | { ok: true; provider: WhatsAppProvider }
     | { ok: false; permanente: boolean; motivo: string };
 
+/** Envio por Instagram/Messenger (execuções cujo contactKey é "instagram:<id>" ou "messenger:<id>"). Só texto; template é só WhatsApp. */
+export interface DepsSocial {
+    /** A conta social do gatilho ainda existe e é do usuário da execução? Falso = conta removida/trocada. */
+    contaAtiva(userId: string, contactKey: string, vars: Record<string, Valor>): Promise<boolean>;
+    optedOut(userId: string, contactKey: string, vars: Record<string, Valor>): Promise<boolean>;
+    /** Lança ErroEnvioSocial (já classificado) quando não envia. */
+    enviarTexto(i: { userId: string; contactKey: string; texto: string; vars: Record<string, Valor>; agoraMs: number }): Promise<{ messageId: string | null; privada: boolean }>;
+}
+
+const ehSocial = (contactKey: string) => /^(instagram|messenger):/.test(contactKey);
+
 /** Tudo o que toca o mundo de fora (provedor, conversa, opt-out, relógio), injetável para teste. */
 export interface Deps {
     holder: string;
@@ -76,6 +88,8 @@ export interface Deps {
     janelaAberta(sessionId: string, contactKey: string): Promise<boolean>;
     etiquetar(sessionId: string, contactKey: string, nome: string): Promise<void>;
     transferirHumano(sessionId: string, contactKey: string, ate: Date): Promise<void>;
+    /** Provedor Instagram/Messenger. Ausente = execuções sociais falham com erro claro. */
+    social?: DepsSocial;
 }
 
 export type ResultadoRun = "nao_reivindicada" | "perdida" | "waiting" | "completed" | "failed" | "cancelled";
@@ -157,7 +171,8 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
         if (!noId || !no) return falhar("permanent", "nó atual inexistente na versão do fluxo");
 
         // Espaçamento entre mensagens da MESMA execução (a anterior já saiu), antes das checagens: o estado pode mudar durante a espera.
-        if (!envioJaFeito && ehEnvio(no) && info.enviou && deps.espacar) {
+        const social = ehSocial(run.contactKey);
+        if (!envioJaFeito && ehEnvio(no) && info.enviou && deps.espacar && !social) {
             const pr0 = deps.provider(run.sessionId);
             if (pr0.ok) {
                 const ficou = await espacarRenovando(pr0.provider);
@@ -168,8 +183,9 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
 
         // Cancelamento automático: ao retomar e antes de CADA envio (humano assumiu ou contato saiu).
         if (!envioJaFeito && (primeira || ehEnvio(no) || no.type === "transferencia_humana")) {
-            if (!(await deps.temAcesso(run.userId, run.sessionId))) return cancelar("sessao_invalida");
-            if (await deps.optedOut(run.sessionId, run.contactKey)) return cancelar("optout");
+            if (social && !deps.social) return falhar("permanent", "canal social sem provedor de envio configurado");
+            if (!(social ? await deps.social!.contaAtiva(run.userId, run.contactKey, ctx.vars) : await deps.temAcesso(run.userId, run.sessionId))) return cancelar("sessao_invalida");
+            if (social ? await deps.social!.optedOut(run.userId, run.contactKey, ctx.vars) : await deps.optedOut(run.sessionId, run.contactKey)) return cancelar("optout");
             const conv = (await deps.conversa(run.sessionId, run.contactKey)) ?? { estado: "ia", pausadaAte: null };
             if (!quemPodeEnviar(conv, deps.agora()).pode) return cancelar("humano_assumiu");
         }
@@ -218,6 +234,29 @@ export async function executarRun(runId: string, store: Store, deps: Deps, info:
             case "texto":
             case "template": {
                 if (envioJaFeito) { envioJaFeito = false; fim = await avancar(no.next, { jaEnviado: true }); break; }
+                if (social) {
+                    if (no.type === "template") return falhar("permanent", "template é só WhatsApp: Instagram e Messenger aceitam apenas nó de texto");
+                    if (!deps.social) return falhar("permanent", "canal social sem provedor de envio configurado");
+                    const texto = interpolar(no.text, ctx.vars).trim();
+                    if (!texto) return falhar("permanent", "texto vazio após interpolar variáveis");
+                    const passo = await store.abrirPasso(run.id, ++seq, noId, no.type, "claimed", { holder: deps.holder, agora: deps.agora() });
+                    if (!passo) return "perdida";
+                    let enviada: { messageId: string | null; privada: boolean };
+                    try {
+                        enviada = await deps.social.enviarTexto({ userId: run.userId, contactKey: run.contactKey, texto, vars: ctx.vars, agoraMs: deps.agora().getTime() });
+                    } catch (e) {
+                        const cls: FailureClass = e instanceof ErroEnvioSocial ? e.classe : "unknown";
+                        await store.fecharPasso(passo.id, { status: cls === "unknown" ? "unknown" : "failed", error: curto(e), failureClass: cls });
+                        return falhaDeNo(cls, e, noId);
+                    }
+                    await store.fecharPasso(passo.id, { status: "done", output: { messageId: enviada.messageId } });
+                    ctx.tentativas = {};
+                    if (enviada.privada) ctx.vars.resposta_privada_enviada = true; // a Meta só aceita UMA resposta privada por comentário
+                    if (!(await salvar({ currentNodeId: no.next ?? noId, stepCount: run.stepCount + 1, context: ctx }))) return "perdida";
+                    if (!no.next) return terminar("completed");
+                    fim = null;
+                    break;
+                }
                 const pr = deps.provider(run.sessionId);
                 if (!pr.ok) return pr.permanente ? falhar("permanent", pr.motivo) : falhaDeNo("transient", pr.motivo, noId);
                 const provider = pr.provider;

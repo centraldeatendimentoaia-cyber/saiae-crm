@@ -44,12 +44,12 @@ describe("diagnóstico", () => {
         expect(d.length).toBe(6);
         for (const g of d) { expect(g.estado).toBe("desabilitado_flag"); expect(g.motivo).toContain(g.flag); }
     });
-    it("flag ligada mas permissão da Meta ausente (situação real hoje): bloqueado e lista o que falta", () => {
-        const d = diagnosticarGatilhos({ env: { AUTOMACOES_GATILHO_IG_DM: "true", AUTOMACOES_GATILHO_IG_COMENTARIO: "true", AUTOMACOES_GATILHO_MSGR_DM: "true" }, permissoes: PERMISSOES_DISPONIVEIS, provedorDeCanal: true });
+    it("flag ligada mas permissão da Meta ausente (app sem as permissões de mensagens): bloqueado e lista o que falta", () => {
+        const d = diagnosticarGatilhos({ env: { AUTOMACOES_GATILHO_IG_DM: "true", AUTOMACOES_GATILHO_IG_COMENTARIO: "true", AUTOMACOES_GATILHO_MSGR_DM: "true" }, permissoes: PERMISSOES_DISPONIVEIS.filter((p) => !p.startsWith("instagram_manage_") && !p.startsWith("pages_messaging")), provedorDeCanal: true });
         const ig = d.find((g) => g.id === "instagram_dm_palavra_chave")!;
         expect(ig.estado).toBe("bloqueado_permissao");
         expect(ig.permissoesFaltando).toContain("instagram_manage_messages");
-        expect(PERMISSOES_DISPONIVEIS).not.toContain("instagram_manage_messages");
+        expect(PERMISSOES_DISPONIVEIS).toContain("instagram_manage_messages"); // o login sem config_id já pede as permissões das automações
         expect(d.every((g) => g.estado !== "habilitado")).toBe(true);
     });
     it("com tudo presente mas sem provedor de envio ou sem webhook: não habilita", () => {
@@ -165,7 +165,7 @@ describe("deduplicação, isolamento, janela, consentimento, flag", () => {
         const base = montar({ u1: [fluxoPalavra("f1", "acc1", ["oi"])] });
         const contas = vi.fn(base.deps.contasPorExterno);
         const [ev] = normalizarWebhookSocial(dmPayload("m1", "oi"));
-        for (const ambiente of [{ ...ligado(), env: {} }, { ...ligado(), permissoes: PERMISSOES_DISPONIVEIS }, { ...ligado(), provedorDeCanal: false }]) {
+        for (const ambiente of [{ ...ligado(), env: {} }, { ...ligado(), permissoes: PERMISSOES_DISPONIVEIS.filter((p) => p !== "pages_messaging" && p !== "instagram_manage_messages") }, { ...ligado(), provedorDeCanal: false }]) {
             const r = await processarEventoSocial(ev, { ...base.deps, ambiente, contasPorExterno: contas });
             expect(r).toEqual([{ resultado: "ignorado", motivo: "gatilho_desabilitado" }]);
         }

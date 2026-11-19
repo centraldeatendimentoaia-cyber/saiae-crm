@@ -4,10 +4,13 @@ import { GRAPH_VERSION } from "./graph";
 /**
  * Login com a Meta (OAuth) para conectar Páginas e Instagram sem colar token.
  * Variáveis: SOCIAL_META_APP_ID e SOCIAL_META_APP_SECRET (app da Meta com "Login do Facebook" e esta URL de retorno cadastrada).
+ * Com SOCIAL_META_CONFIG_ID (Login para Empresas) a lista abaixo não vai no login: as permissões reais vêm da configuração do app na Meta.
  */
 export const SCOPES = [
     "pages_show_list", "pages_read_engagement", "pages_manage_posts",
     "instagram_basic", "instagram_content_publish", "business_management",
+    // Automações (DM e comentários): ver docs/automacoes-instagram-messenger.md. Fora do modo de desenvolvimento exigem revisão do app na Meta.
+    "instagram_manage_messages", "instagram_manage_comments", "pages_messaging", "pages_read_user_content", "pages_manage_metadata",
 ].join(",");
 
 const STATE_TTL_MS = 10 * 60 * 1000;

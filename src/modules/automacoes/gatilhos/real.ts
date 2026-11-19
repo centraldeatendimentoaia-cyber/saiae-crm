@@ -55,7 +55,15 @@ export function depsReais(): DepsRoteador {
             const sessionId = `social:${accountId}`;
             await prisma.optOut.upsert({ where: { sessionId_phoneKey: { sessionId, phoneKey: remetenteId } }, create: { sessionId, phoneKey: remetenteId, jid: remetenteId }, update: {} });
         },
-        // O executor só envia por WhatsApp. Sem provedor Instagram/Messenger não há como responder: recusa explicitamente.
-        async iniciar() { return { ok: false, motivo: "canal_sem_provedor" }; },
+        // Cria a execução com o contexto do evento; o executor envia pelo canal de origem (canais/meta-social.ts).
+        async iniciar(i) {
+            try {
+                const { iniciarRun } = await import("../servico"); // import tardio: servico puxa a autenticação, que o webhook não precisa para descartar eventos
+                const r = await iniciarRun({ userId: i.userId, role: "social", flowId: i.flowId, contactKey: i.contactKey, dedupeKey: i.dedupeKey, social: { variaveis: i.variaveis } });
+                return r.ok ? { ok: true } : { ok: false, motivo: r.motivo };
+            } catch (e) {
+                return { ok: false, motivo: (e as { codigo?: string } | null)?.codigo ?? "erro" };
+            }
+        },
     };
 }
