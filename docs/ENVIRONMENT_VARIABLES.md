@@ -125,3 +125,16 @@ Required ONLY if utilizing the `docker-compose.yml` stack deployment.
 <div align="center">
   **Last Updated**: June 2026 | **Version**: 1.6.2
 </div>
+
+
+---
+
+## Multiempresa Cloud API (sessões e mapas) — aviso de deploy
+
+Variáveis: `WHATSAPP_CLOUD_SESSION_ID` (lista separada por vírgula), `WHATSAPP_CLOUD_PHONE_MAP` (JSON `{"<phone_number_id>": "<sessionId>"}`), `WHATSAPP_CLOUD_BARRACA_MAP` (JSON `{"<barraca_id>": "<sessionId>"}`) e `META_WA_PHONE_NUMBER_ID` (o número que envia; um só por instância).
+
+- Com 2 ou mais sessões Cloud e sem `WHATSAPP_CLOUD_PHONE_MAP` / `WHATSAPP_CLOUD_BARRACA_MAP`, a IA de atendimento, os avisos de pedido e o envio do código de verificação ficam DESLIGADOS (falha fechada, nunca a primeira sessão da lista).
+- Com 1 sessão e mapa parcial, um número fora do mapa é RECUSADO (não cai na sessão única).
+- Mensagens recusadas aparecem no log como `error` ("IaAtendimento ... mensagem recusada: sessão Cloud <motivo>"), no máximo uma vez por motivo a cada 10 minutos, com o total desde o início do processo. Motivos: `ambigua`, `sem_correspondencia`, `sem_sessao_cloud`, "diferente do número de envio". O código de verificação responde 503 e registra `sessão Cloud não resolvida: <motivo>` (log `ComandaCodigo`).
+- JSON inválido em um dos mapas gera um `warn` único por variável e o mapa é tratado como vazio.
+- Depois de configurar, procure por "mensagem recusada" nos logs: qualquer ocorrência indica mapa faltando.

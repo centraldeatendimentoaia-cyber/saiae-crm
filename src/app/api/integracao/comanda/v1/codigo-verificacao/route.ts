@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { getProvider } from "@/modules/whatsapp/provider";
+import { sessaoDoNumero } from "@/modules/whatsapp/provider/cloud-sessao";
 import { CloudApiError } from "@/modules/whatsapp/cloud/errors";
 import { parseTimestamp, timestampInWindow, verifyComandaSignature } from "@/modules/integracao/comanda/signature";
 import { jaEnviado, marcarEnviado, validarPedidoCodigo } from "@/modules/integracao/comanda/codigo";
@@ -70,8 +71,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Sem WHATSAPP_CLOUD_SESSION_ID nunca cai para o Baileys: o código não pode sair por outro canal.
-    const sessionId = process.env.WHATSAPP_CLOUD_SESSION_ID?.split(",")[0]?.trim();
-    const provider = sessionId ? getProvider(sessionId) : null;
+    // A sessão é a dona do número que envia (META_WA_PHONE_NUMBER_ID); nunca a primeira da lista.
+    const sessao = sessaoDoNumero(process.env, process.env.META_WA_PHONE_NUMBER_ID?.trim());
+    if (!sessao.ok) {
+        logger.error(TAG, `sessão Cloud não resolvida: ${sessao.motivo}`);
+        return NextResponse.json({ error: "Envio indisponível" }, { status: 503 });
+    }
+    const provider = getProvider(sessao.sessionId);
     if (!provider || !provider.capabilities.templates || !provider.sendTemplate) {
         logger.error(TAG, "sessão Cloud API indisponível");
         return NextResponse.json({ error: "Envio indisponível" }, { status: 503 });

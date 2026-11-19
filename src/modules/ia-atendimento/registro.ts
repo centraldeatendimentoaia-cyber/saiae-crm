@@ -1,7 +1,7 @@
 import { logger } from "@/lib/logger";
 import { cloudConfigFromEnv } from "@/modules/whatsapp/cloud/config";
 import { CloudApiProvider } from "@/modules/whatsapp/cloud/provider";
-import { cloudSessionIds } from "@/modules/whatsapp/provider";
+import { sessaoDoNumero } from "@/modules/whatsapp/provider/cloud-sessao";
 import { registerInboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import { criarConsumidorIa, type IaDeps } from "./consumer";
 import { criarConfirmador } from "./confirmar-dono";
@@ -19,14 +19,19 @@ import { IaWindowStore, prismaStore } from "./store";
 
 /**
  * Liga a IA ao gancho do webhook da Meta. Só com IA_ATENDIMENTO=on (padrão: desligada: nada é registrado).
- * O envio usa a primeira sessão de WHATSAPP_CLOUD_SESSION_ID e a janela de 24 h lida das mensagens que a
+ * O envio usa a sessão dona do número de envio (META_WA_PHONE_NUMBER_ID): a única de WHATSAPP_CLOUD_SESSION_ID ou, com várias,
+ * a de WHATSAPP_CLOUD_PHONE_MAP (ambíguo = não envia; nunca a primeira da lista). A janela de 24 h lida das mensagens que a
  * própria IA grava (IaWindowStore). Sem credenciais da Cloud API não envia nada (erro registrado sem dados).
  */
 export function criarProviderCloud(env: Record<string, string | undefined> = process.env): CloudApiProvider | null {
     const config = cloudConfigFromEnv(env);
-    const sessionId = [...cloudSessionIds(env)][0];
-    if (!config || !sessionId) return null;
-    return new CloudApiProvider({ sessionId, config, windowStore: new IaWindowStore() });
+    if (!config) return null;
+    const r = sessaoDoNumero(env, config.phoneNumberId);
+    if (!r.ok) {
+        if (r.motivo !== "sem_sessao_cloud") logger.warn("IaAtendimento", `envio da IA desligado: sessão Cloud do número de envio ${r.motivo}`);
+        return null;
+    }
+    return new CloudApiProvider({ sessionId: r.sessionId, config, windowStore: new IaWindowStore() });
 }
 
 export function criarEnvioCloud(env: Record<string, string | undefined> = process.env): IaDeps["enviar"] | null {

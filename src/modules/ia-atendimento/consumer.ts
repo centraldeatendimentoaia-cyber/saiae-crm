@@ -2,10 +2,12 @@ import crypto from "crypto";
 import { logger as defaultLogger } from "@/lib/logger";
 import { addOptOut, isOptedOut, isOptInText, isOptOutText, removeOptOut } from "@/lib/optout";
 import { cloudSessionIds } from "@/modules/whatsapp/provider";
+import { numeroDeEnvioPertence, sessaoDoNumero } from "@/modules/whatsapp/provider/cloud-sessao";
 import type { InboundConsumer } from "@/modules/whatsapp/cloud/inbound-handler";
 import type { InboundMessage, NormalizedBatch } from "@/modules/whatsapp/cloud/inbound";
 import { BoundedTtlMap } from "@/modules/integracao/comanda/state";
-import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS, pausadaAgora } from "./dono";
+import { quemPodeEnviar } from "@/modules/atendimento-comum/precedencia";
+import { MSG_RESPONSAVEL_AVISADO, PAUSA_HORAS } from "./dono";
 import { MAX_TEXTO } from "./constantes";
 import { INTENCAO_VENDAS } from "./intencao";
 import { extrairCodigoLoja } from "./loja";
@@ -44,7 +46,7 @@ export interface IaDeps {
     };
     env: Record<string, string | undefined>;
     now: () => Date;
-    logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void };
+    logger: { info: (tag: string, msg: string) => void; warn: (tag: string, msg: string) => void; error: (tag: string, msg: string) => void };
     /** Ids de mensagem já vistos (memória; a garantia forte é a coluna única no banco). */
     vistos: BoundedTtlMap<true>;
     /** Quem já recebeu a orientação "use o link da loja" (uma vez por dia). */
@@ -63,6 +65,20 @@ export { MAX_TEXTO };
 
 const TAG = "IaAtendimento";
 const DIA = 24 * 60 * 60 * 1000;
+
+/**
+ * Mensagens recusadas por não achar a sessão Cloud do número (ambígua, sem correspondência, número de envio diferente).
+ * Contador por motivo desde o início do processo (`contadorRecusadas()`) e `error` no máximo uma vez por motivo a cada
+ * 10 minutos, para um erro de configuração aparecer no log sem virar spam. O log nunca leva telefone nem phoneNumberId.
+ */
+const JANELA_ALERTA_MS = 10 * 60 * 1000;
+const recusadas = new Map<string, number>();
+const ultimoAlerta = new Map<string, number>();
+export const contadorRecusadas = (): Record<string, number> => Object.fromEntries(recusadas);
+export function zerarContadorRecusadas(): void {
+    recusadas.clear();
+    ultimoAlerta.clear();
+}
 
 export const MSG_ORIENTACAO = "Olá! Para eu te ajudar, abra a conversa pelo link ou QR code da loja. Assim eu sei de qual loja você está falando.";
 export const MSG_TIPO_NAO_SUPORTADO = "Por enquanto eu só consigo ler mensagens de texto. Pode escrever sua dúvida?";
@@ -201,17 +217,16 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
         }
 
         const conv = registro.conversa;
-        if (conv.estado === "humano") {
-            if (pausadaAgora(conv, deps.now())) {
-                // o responsável assumiu: a IA fica calada; o cliente é avisado uma única vez
-                if (!deps.avisadosPausa.has(conv.id)) {
-                    deps.avisadosPausa.set(conv.id, true);
-                    await responderTexto(contactKey, conv, MSG_RESPONSAVEL_AVISADO);
-                }
-                return;
+        const decisao = quemPodeEnviar(conv, deps.now());
+        if (!decisao.pode) {
+            // o responsável assumiu: a IA fica calada; o cliente é avisado uma única vez
+            if (!deps.avisadosPausa.has(conv.id)) {
+                deps.avisadosPausa.set(conv.id, true);
+                await responderTexto(contactKey, conv, MSG_RESPONSAVEL_AVISADO);
             }
-            await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
+            return;
         }
+        if (decisao.retomar) await deps.store.retomar(conv.id); // pausa vencida (12 h): a IA volta sozinha
         const motor = loja === VENDAS ? deps.vendas : deps.responder;
         if (!motor) return;
 
@@ -225,10 +240,27 @@ export function criarConsumidorIa(over: Partial<IaDeps> = {}): InboundConsumer {
         const mensagens = batch.events.filter((e): e is InboundMessage => e.kind === "message").sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         if (mensagens.length === 0) return;
 
-        const sessionId = [...cloudSessionIds(deps.env)][0] ?? null;
         const c = { ignoradas: 0, limitadas: 0 };
         for (const m of mensagens) {
             try {
+                // A sessão vem do número que recebeu (phone_number_id do webhook). Sem sessão Cloud listada, segue como sempre
+                // (registra sem sessão). Ambíguo ou sem correspondência: recusa e registra; nunca a primeira da lista.
+                let sessionId: string | null = null;
+                if (cloudSessionIds(deps.env).size > 0) {
+                    const r = sessaoDoNumero(deps.env, m.phoneNumberId);
+                    if (!r.ok || !numeroDeEnvioPertence(deps.env, r.sessionId)) {
+                        const motivo = r.ok ? "numero_de_envio_diferente" : r.motivo;
+                        recusadas.set(motivo, (recusadas.get(motivo) ?? 0) + 1);
+                        const agora = deps.now().getTime();
+                        if (agora - (ultimoAlerta.get(motivo) ?? -Infinity) >= JANELA_ALERTA_MS) {
+                            ultimoAlerta.set(motivo, agora);
+                            deps.logger.error(TAG, `mensagem recusada: sessão Cloud ${r.ok ? "diferente do número de envio" : r.motivo} (total desde o início: ${recusadas.get(motivo)})`);
+                        }
+                        c.ignoradas++;
+                        continue;
+                    }
+                    sessionId = r.sessionId;
+                }
                 await tratar(m, sessionId, c);
             } catch (e) {
                 // uma mensagem com problema nunca derruba as outras do lote

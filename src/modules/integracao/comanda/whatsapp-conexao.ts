@@ -137,6 +137,8 @@ async function criarSessao(barracaId: string, sessionId: string, deps: ConexaoDe
     try {
         await deps.manager.createSession(userId, `Sai aê ${barracaId.slice(0, 8)}`, sessionId);
     } catch (e) {
+        // id já usado por OUTRA sessão (colisão com Session.id): não é corrida, não pode ser mascarado
+        if ((e as { code?: unknown } | null)?.code === "SESSION_ID_INDISPONIVEL") throw e;
         // duas chamadas ao mesmo tempo: a outra já criou a sessão
         if (!ehDuplicata(e) && !(await deps.db.session.findUnique({ where: { sessionId }, select: { id: true } }))) throw e;
     }
