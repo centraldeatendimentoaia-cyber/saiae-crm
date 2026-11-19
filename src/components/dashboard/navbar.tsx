@@ -13,6 +13,7 @@ import { tempoRelativo } from "@/lib/tempo-relativo";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { io, Socket } from "socket.io-client";
+import { reconectarComEspera } from "@/lib/socket-reconectar";
 
 interface NavbarProps {
     appName?: string;
@@ -83,6 +84,7 @@ export function Navbar({ appName }: NavbarProps) {
                 });
             });
 
+            reconectarComEspera(socketInstance);
             setSocket(socketInstance);
 
             return () => {
