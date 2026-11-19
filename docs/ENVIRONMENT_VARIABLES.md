@@ -29,6 +29,7 @@ Settings that manage OAuth flow, reverse proxies, and public-facing URL compilat
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `NEXTAUTH_URL` | string | `${BASE_URL}` | The URL pointing to the NextAuth authentication handler. Should match `BASE_URL`. |
+| `SOCKET_ALLOWED_ORIGINS` | string | — | Optional. Comma-separated extra origins (e.g. `https://crm.example.com,https://app.example.com`) allowed to open the Socket.IO connection. The origins of `BASE_URL` and `NEXTAUTH_URL` are always allowed; set this when users access the app through a different domain, otherwise their socket is refused. |
 | `AUTH_TRUST_HOST` | boolean | `true` | Set to `true` if your application is deployed behind a reverse proxy (e.g. Nginx, Cloudflare, Apache). |
 | `NEXT_PUBLIC_APP_URL` | string | `${BASE_URL}` | Public facing client URL. |
 | `NEXT_PUBLIC_API_URL` | string | `${BASE_URL}/api` | Public facing API endpoint URL. |

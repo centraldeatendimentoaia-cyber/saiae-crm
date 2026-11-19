@@ -103,6 +103,17 @@ export async function runRetention(): Promise<void> {
             logger.warn("Retention", `limpeza das origens de mensagem falhou: ${e instanceof Error ? e.name : "erro"}`);
         }
 
+        // Tentativas do agendador (podem guardar trecho de erro): mesmo prazo das mensagens (MESSAGE_RETENTION_DAYS, padrão 90).
+        try {
+            const tentativasDias = days("MESSAGE_RETENTION_DAYS", 90);
+            if (tentativasDias > 0) {
+                const r = await prisma.scheduledMessageAttempt.deleteMany({ where: { claimedAt: { lt: new Date(Date.now() - tentativasDias * 86_400_000) }, status: { not: "claimed" } } });
+                if (r.count) logger.info("Retention", `${r.count} tentativas de mensagem agendada com mais de ${tentativasDias} dias apagadas`);
+            }
+        } catch (e) {
+            logger.warn("Retention", `limpeza das tentativas de mensagem agendada falhou: ${e instanceof Error ? e.name : "erro"}`);
+        }
+
         const logDays = days("WEBHOOK_LOG_RETENTION_DAYS", 14);
         if (logDays > 0) {
             const r = await prisma.webhookLog.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - logDays * 86_400_000) } } });

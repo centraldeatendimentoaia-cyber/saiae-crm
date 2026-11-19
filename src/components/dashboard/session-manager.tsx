@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { useState, useEffect } from 'react';
 import { rotuloStatusSessao } from "@/lib/status-sessao";
 import { io, Socket } from 'socket.io-client';
+import { reconectarComEspera } from "@/lib/socket-reconectar";
 import QRCode from 'qrcode';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ export function SessionManager({ user }: { user?: { id: string } }) {
             }
         });
 
+        reconectarComEspera(socketInstance);
         setSocket(socketInstance);
 
         return () => {

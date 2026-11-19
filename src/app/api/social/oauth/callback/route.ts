@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthenticatedUser } from "@/lib/api-auth";
 import { logger } from "@/lib/logger";
 import { discoverAccounts } from "@/modules/social/graph";
-import { configuracaoMeta, lerEstado, trocarCodigoPorToken, urlDeRetorno } from "@/modules/social/oauth";
+import { baseUrl, configuracaoMeta, lerEstado, trocarCodigoPorToken, urlDeRetorno } from "@/modules/social/oauth";
 import { salvarContas } from "@/modules/social/salvar-contas";
 
 const VOLTA = "/dashboard/redes-sociais/contas";
 
 /** GET /api/social/oauth/callback — retorno da Meta: troca o código, descobre Páginas/Instagram e guarda o token de cada Página. */
 export async function GET(request: NextRequest) {
-    const origin = request.nextUrl.origin;
+    let origin: string;
+    try {
+        origin = baseUrl(request.nextUrl.origin, request.headers);
+    } catch (e) {
+        logger.warn("SocialOAuth", `base URL inválida: ${e instanceof Error ? e.message : "erro"}`);
+        // Sem base confiável, o Location relativo mantém o navegador no host que ele mesmo acessou.
+        return new NextResponse(null, { status: 302, headers: { Location: `${VOLTA}?oauth=nao-configurado` } });
+    }
     const voltar = (qs: string) => NextResponse.redirect(new URL(`${VOLTA}?${qs}`, origin));
 
     const user = await getAuthenticatedUser(request);
@@ -26,7 +33,7 @@ export async function GET(request: NextRequest) {
     if (!code || dono !== user.id) return voltar("oauth=invalido");
 
     try {
-        const token = await trocarCodigoPorToken(code, urlDeRetorno(origin), cfg.appId, cfg.appSecret);
+        const token = await trocarCodigoPorToken(code, urlDeRetorno(request.nextUrl.origin, request.headers), cfg.appId, cfg.appSecret);
         const found = await discoverAccounts(token);
         if (!found.length) return voltar("oauth=sem-paginas");
         const semIg = await salvarContas(user.id, found);

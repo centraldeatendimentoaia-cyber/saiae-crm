@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { ArrowLeft, Play, Square, RotateCcw, LogOut, Power, Trash2, QrCode, Activity, HardDrive, Wifi, MemoryStick, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import { io, Socket } from "socket.io-client";
+import { reconectarComEspera } from "@/lib/socket-reconectar";
 import { QRCodeSVG } from "qrcode.react";
 import {
     AlertDialog,
@@ -116,6 +117,7 @@ export default function SessionDetailPage() {
             }
         });
 
+        reconectarComEspera(socketInstance);
         setSocket(socketInstance);
 
         // Uptime counter
