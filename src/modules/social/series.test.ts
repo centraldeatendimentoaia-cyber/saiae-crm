@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { createMany, claim, accounts, closeSeries } = vi.hoisted(() => ({
+const { createMany, claim, accounts, closeSeries, notify } = vi.hoisted(() => ({
+    notify: vi.fn(async () => ({})),
     createMany: vi.fn(async (_args?: unknown) => ({ count: 0 })),
     claim: vi.fn(async (_args?: unknown) => ({ count: 1 })),
     accounts: vi.fn(async () => [{ id: "a1" }, { id: "a2" }]),
@@ -11,6 +12,7 @@ vi.mock("@/lib/prisma", () => ({
     prisma: {
         socialAccount: { findMany: accounts },
         postSeries: { updateMany: closeSeries },
+        notification: { create: notify },
         $transaction: async (fn: (tx: unknown) => unknown) => fn({ postSeries: { updateMany: claim }, scheduledPost: { createMany } }),
     },
 }));
@@ -140,11 +142,21 @@ describe("generateForSeries", () => {
         expect(createMany).not.toHaveBeenCalled();
     });
 
-    it("sem nenhuma conta viva, encerra a série", async () => {
+    it("sem nenhuma conta viva, pausa a série (não encerra em silêncio) e avisa o dono", async () => {
         accounts.mockResolvedValueOnce([]);
+        notify.mockClear();
         expect(await generateForSeries(series(), NOW)).toBe(0);
-        expect(closeSeries).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "ENDED" } }));
+        expect(closeSeries).toHaveBeenCalledWith(expect.objectContaining({ data: { status: "PAUSED" } }));
+        expect(notify).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ userId: expect.any(String), type: "WARNING" }) }));
         expect(createMany).not.toHaveBeenCalled();
+    });
+
+    it("sem conta viva e outra rodada já pausou (claim perdido): não duplica o aviso", async () => {
+        accounts.mockResolvedValueOnce([]);
+        closeSeries.mockResolvedValueOnce({ count: 0 });
+        notify.mockClear();
+        await generateForSeries(series(), NOW);
+        expect(notify).not.toHaveBeenCalled();
     });
 
     it("se outra rodada gerou no meio (claim falha), não duplica", async () => {

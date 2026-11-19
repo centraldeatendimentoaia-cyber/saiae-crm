@@ -11,9 +11,11 @@ import { isOptedOut, withFooter } from "@/lib/optout";
 import { resolveMedia } from "@/lib/media";
 import { canonicalPhone, jidVariants } from "@/lib/phone";
 import { onlyInteractedEnabled, hasInteracted, NO_INTERACTION_ERROR } from "@/lib/interaction";
+import { startJobLock, JobLockDbError } from "@/lib/job-lock";
+import { classifySendFailure, maskPersonalData } from "@/lib/send-failure";
 
-/** Disparos em andamento neste servidor (um por número): evita lançar o mesmo disparo duas vezes. */
-const running: Map<string, string> = ((globalThis as any).__broadcastRunning ||= new Map());
+/** Trava de disparo por número, no banco (vale entre instâncias). Renovada enquanto o disparo roda; expira sozinha se o processo morrer. */
+const BROADCAST_LOCK_TTL_MS = 2 * 60_000;
 const DUPLICATE_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 const broadcastBodySchema = z.object({
@@ -32,6 +34,8 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ sessionId: string }> }
 ) {
+    let releaseLock: (() => Promise<void>) | null = null;
+    let handedOff = false; // true quando o disparo em segundo plano passou a ser dono da trava
     try {
         const user = await getAuthenticatedUser(request);
         if (!user) {
@@ -69,13 +73,15 @@ export async function POST(
             return NextResponse.json({ status: false, message: "Session not ready", error: "Session not ready" }, { status: 503 });
         }
 
-        // trava contra disparo duplo, mas se o registro já não está "em andamento" (cancelado, interrompido) a trava se desfaz sozinha
-        const activeId = running.get(sessionId);
-        if (activeId) {
-            const active = await prisma.broadcastLog.findUnique({ where: { id: activeId }, select: { status: true } });
-            if (active?.status !== "running") running.delete(sessionId);
+        // Trava atômica no banco ANTES de qualquer outro trabalho: duas chamadas simultâneas (ou em duas instâncias) não passam as duas.
+        try {
+            releaseLock = await startJobLock(`broadcast:${sessionId}`, BROADCAST_LOCK_TTL_MS, { throwOnDbError: true });
+        } catch (e) {
+            if (!(e instanceof JobLockDbError)) throw e;
+            // banco fora do ar não é "disparo em andamento": 503 para o cliente tentar de novo
+            return NextResponse.json({ status: false, message: "Serviço temporariamente indisponível. Tente novamente em instantes.", code: "LOCK_UNAVAILABLE" }, { status: 503 });
         }
-        if (running.has(sessionId)) {
+        if (!releaseLock) {
             return NextResponse.json({ status: false, message: "Já existe um disparo em andamento neste número. Espere terminar ou cancele-o antes de começar outro.", code: "BROADCAST_RUNNING" }, { status: 409 });
         }
 
@@ -122,7 +128,8 @@ export async function POST(
         // Modo Seguro: só quando o Anti-Spam do número está ligado
         const safe = await getSafeMode(sessionId);
         const onlyInteracted = await onlyInteractedEnabled(sessionId);
-        running.set(sessionId, broadcastId); // só depois de tudo pronto: um erro antes daqui não deixa a trava presa
+        handedOff = true; // daqui em diante a trava é liberada no fim do disparo em segundo plano
+        const release = releaseLock;
 
         (async () => {
             let sent = 0;
@@ -199,13 +206,15 @@ export async function POST(
                     failed++;
                     // número inválido ou descadastrado: nada foi enviado, não precisa esperar
                     lastWasInvalid = /não possui WhatsApp|Descadastrado|Sem conversa anterior|Repetido/i.test(e?.message || "");
-                    errors.push({ jid, error: e.message || "Unknown error" });
+                    // resultado desconhecido (tempo esgotado, conexão caiu): pode ter saído; fica sinalizado e NUNCA é reenviado sozinho
+                    const errText = maskPersonalData(classifySendFailure(e) === "unknown" ? `Resultado desconhecido (pode ter sido enviado, não reenviar sem conferir): ${e?.message || "erro"}` : e.message || "Unknown error");
+                    errors.push({ jid, error: errText });
                     console.error(`Failed to send broadcast to ${jid}`, e);
 
                     // Update recipient error in DB
                     await prisma.broadcastRecipient.updateMany({
                         where: { broadcastLogId: broadcastId, jid },
-                        data: { status: "failed", error: e.message || "Unknown error" }
+                        data: { status: "failed", error: errText }
                     });
                 }
 
@@ -290,7 +299,7 @@ export async function POST(
                 console.error("Broadcast loop error", e);
                 await prisma.broadcastLog.update({ where: { id: broadcastId }, data: { status: "stopped", completedAt: new Date() } }).catch(() => {});
             })
-            .finally(() => { if (running.get(sessionId) === broadcastId) running.delete(sessionId); });
+            .finally(() => { void release(); });
 
         return NextResponse.json({
             status: true,
@@ -299,6 +308,7 @@ export async function POST(
         });
 
     } catch (e) {
+        if (releaseLock && !handedOff) await releaseLock();
         if ((e as any)?.name === "PlanError") {
             return NextResponse.json({ status: false, message: (e as PlanError).message, error: (e as PlanError).message, code: "PLAN_LIMIT" }, { status: 402 });
         }
