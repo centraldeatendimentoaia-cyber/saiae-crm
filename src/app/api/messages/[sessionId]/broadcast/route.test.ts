@@ -32,14 +32,17 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ prisma: h.prisma }));
 // Trava no banco emulada em memória: criar a chave é atômico (como o INSERT com chave única do JobLock).
-const locks = vi.hoisted(() => ({ held: new Set<string>(), released: [] as string[], dbDown: false }));
+const locks = vi.hoisted(() => ({ held: new Set<string>(), released: [] as string[], dbDown: false, ativaAte: Infinity }));
 vi.mock("@/lib/job-lock", () => ({
     JobLockDbError: class JobLockDbError extends Error {},
     startJobLock: async (name: string) => {
         if (locks.dbDown) throw new (await import("@/lib/job-lock")).JobLockDbError("db");
         if (locks.held.has(name)) return null;
         locks.held.add(name);
-        return async () => { locks.held.delete(name); locks.released.push(name); };
+        let consultas = 0;
+        const liberar = async () => { locks.held.delete(name); locks.released.push(name); };
+        // ativa() devolve verdadeiro nas primeiras "ativaAte" consultas e falso depois (posse perdida)
+        return Object.assign(liberar, { signal: new AbortController().signal, ativa: () => ++consultas <= locks.ativaAte });
     },
 }));
 vi.mock("@/modules/whatsapp/manager", () => ({ waManager: { getInstance: h.getInstance } }));
@@ -92,6 +95,7 @@ async function finished() {
 beforeEach(() => {
     locks.held.clear();
     locks.released.length = 0;
+    locks.ativaAte = Infinity;
     Object.values(h.prisma).forEach((m) => Object.values(m).forEach((fn) => (fn as ReturnType<typeof vi.fn>).mockReset()));
     h.socket.sendMessage.mockReset().mockResolvedValue({ key: { id: "ID1" } });
     h.socket.onWhatsApp.mockReset();
@@ -165,6 +169,15 @@ describe("POST /api/messages/{sessionId}/broadcast", () => {
         expect(locks.held.size).toBe(0);
         expect((await call({ recipients: [J1], message: "Oi" })).status).toBe(200);
         await finished();
+    });
+
+    it("perder a trava no meio do disparo: não envia mais ninguém e encerra como interrompido", async () => {
+        locks.ativaAte = 1; // posse vale só para o primeiro destinatário
+        h.getSafeMode.mockResolvedValue({ delayMinSec: 0, delayMaxSec: 0, batchSize: 0, batchPauseMin: 1, startHour: 0, endHour: 24 });
+        await call({ recipients: [J1, J2, "5561977776666@s.whatsapp.net"], message: "Oi" });
+        await finished();
+        expect(h.socket.sendMessage).toHaveBeenCalledTimes(1);
+        expect(h.prisma.broadcastLog.update.mock.calls.find((c) => c[0]?.data?.completedAt)![0].data.status).toBe("stopped");
     });
 
     it("resultado desconhecido (tempo esgotado) é sinalizado no destinatário e não é reenviado", async () => {

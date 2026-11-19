@@ -1,5 +1,5 @@
 import { TZ_SAO_PAULO } from "@/modules/atendimento-comum/tempo";
-import { withJobLock } from "@/lib/job-lock";
+import { withJobLock, type PosseTrava } from "@/lib/job-lock";
 import cron from "node-cron";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -24,13 +24,14 @@ let rodando = false;
 
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-export async function rodarFollowUps(agora: Date = new Date()): Promise<number> {
+export async function rodarFollowUps(agora: Date = new Date(), posse?: PosseTrava): Promise<number> {
     if (rodando) return 0;
     rodando = true;
     let enviados = 0;
     try {
         const configs = await prisma.agenteConfig.findMany({ where: { ativo: true }, select: { sessionId: true } });
         for (const { sessionId } of configs) {
+            if (posse && !posse.ativa()) break; // perdeu a trava: outra instância pode estar enviando
             const cfg = await carregarConfigAgente(sessionId);
             const sock = waManager.getInstance(sessionId)?.socket;
             if (!cfg?.ativo || !sock) continue;
@@ -45,7 +46,7 @@ export async function rodarFollowUps(agora: Date = new Date()): Promise<number> 
             const treino = await usarAtendenteNovo(sessionId).catch(() => null);
             if (treino) {
                 try {
-                    enviados += await rodarComTreino(sessionId, sock, cfg, treino, agora, restante);
+                    enviados += await rodarComTreino(sessionId, sock, cfg, treino, agora, restante, posse);
                 } catch (e) {
                     logger.warn(TAG, `follow-up com treino falhou na sessão: ${(e as { name?: string })?.name ?? "erro"}`);
                 }
@@ -58,7 +59,7 @@ export async function rodarFollowUps(agora: Date = new Date()): Promise<number> 
                 take: 30,
             });
             for (const c of candidatas) {
-                if (restante <= 0) break;
+                if (restante <= 0 || (posse && !posse.ativa())) break;
                 if (!devidoFollowUp(c, cfg, agora)) continue;
                 if (c.telefone && (await isOptedOut(sessionId, `${c.telefone}@s.whatsapp.net`))) continue;
                 try {
@@ -93,6 +94,7 @@ async function rodarComTreino(
     treino: Treino,
     agora: Date,
     restante: number,
+    posse?: PosseTrava,
 ): Promise<number> {
     const followUp = treino.followUp;
     const max = Math.min(followUp.maxMensagens, followUp.textos.length);
@@ -119,7 +121,7 @@ async function rodarComTreino(
     ).filter((c) => proximoFollowUp({ conv: c, followUp, agora, expedienteAberto }).enviar);
     let enviados = 0;
     for (const c of candidatas) {
-        if (restante <= 0) break;
+        if (restante <= 0 || (posse && !posse.ativa())) break;
         const p = proximoFollowUp({ conv: c, followUp, agora, expedienteAberto });
         // Sem telefone não dá para conferir o descadastro: não envia.
         if (!p.enviar || !p.texto || !c.telefone) continue;
@@ -158,5 +160,5 @@ async function rodarComTreino(
 
 export function startFollowUps(): void {
     if (process.env.AGENTE_SALAO?.trim().toLowerCase() === "off") return;
-    cron.schedule("*/10 * * * *", () => { void withJobLock("cron:agente-followup", 30 * 60_000, () => rodarFollowUps()); }, { timezone: TZ_SAO_PAULO });
+    cron.schedule("*/10 * * * *", () => { void withJobLock("cron:agente-followup", 30 * 60_000, (posse) => rodarFollowUps(new Date(), posse)); }, { timezone: TZ_SAO_PAULO });
 }

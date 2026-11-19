@@ -25,7 +25,9 @@ import {
     BookOpen,
     CreditCard,
     BarChart3,
+    Target,
     GraduationCap,
+    Workflow,
 } from "lucide-react";
 
 export interface NavItem {
@@ -59,6 +61,7 @@ export const navGroups: NavGroup[] = [
             { href: "/dashboard/chat", label: "Conversas", icon: MessageSquare },
             { href: "/dashboard/broadcast", label: "Disparo", icon: Megaphone },
             { href: "/dashboard/metricas", label: "Métricas de atendimento", icon: BarChart3 },
+            { href: "/dashboard/resultados", label: "Resultados e origem", icon: Target },
             { href: "/dashboard/descadastros", label: "Descadastrados", icon: UserX },
             { href: "/dashboard/sticker", label: "Criador de figurinhas", icon: ImageIcon },
         ],
@@ -74,6 +77,7 @@ export const navGroups: NavGroup[] = [
     {
         label: "Automação",
         items: [
+            { href: "/dashboard/automacoes", label: "Fluxos de automação", icon: Workflow },
             { href: "/dashboard/bot-settings", label: "Configurações do Bot", icon: Bot },
             { href: "/dashboard/autoreply", label: "Resposta automática", icon: MessageCircleReply },
             { href: "/dashboard/atendente-ia", label: "Conversas da IA", icon: MessagesSquare, superadminOnly: true },

@@ -14,7 +14,8 @@ import { startRetention } from "@/lib/retention";
 import { startFollowUps } from "@/modules/agente-salao/followup";
 import { resolveMedia } from "@/lib/media";
 import { startSocialScheduler } from "@/modules/social/scheduler";
-import { withJobLock, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
+import { startAutomacoes } from "@/modules/automacoes/worker";
+import { withJobLock, type PosseTrava, registrarInstancia, outrasInstanciasVivas } from "@/lib/job-lock";
 import { classifySendFailure, backoffMs, maskPersonalData, MAX_ATTEMPTS } from "@/lib/send-failure";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs } from "@/lib/safe-mode";
 
@@ -223,7 +224,7 @@ export function initScheduler() {
     }).catch(() => {});
 
     // Run every minute
-    const tick = async () => {
+    const tick = async (posse?: PosseTrava) => {
         if (running) return;
         running = true;
         try {
@@ -240,6 +241,7 @@ export function initScheduler() {
 
             let batchCount = 0;
             for (const msg of pendingMessages) {
+                if (posse && !posse.ativa()) { logger.error("Cron", "Trava do agendador perdida: rodada interrompida."); break; }
                 const provider = getProvider(msg.session.sessionId);
 
                 if (!provider || !provider.isConnected()) {
@@ -277,10 +279,11 @@ export function initScheduler() {
         }
     };
     // Com mais de uma instância (deploy sobreposto, escala), só uma executa a rodada.
-    cron.schedule("* * * * *", () => withJobLock("cron:mensagens-agendadas", 10 * 60_000, tick));
+    cron.schedule("* * * * *", () => withJobLock("cron:mensagens-agendadas", 10 * 60_000, (posse) => tick(posse)));
 
     startRetention();
     startFollowUps();
     startSocialScheduler();
+    startAutomacoes();
     logger.info("Cron", "Scheduler initialized");
 }

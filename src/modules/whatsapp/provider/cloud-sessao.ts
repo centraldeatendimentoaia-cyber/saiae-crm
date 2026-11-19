@@ -55,9 +55,14 @@ export const sessaoDaBarracaCloud = (env: Env, barracaId: string): ResolucaoClou
 /**
  * O número que ENVIA é um só (META_WA_PHONE_NUMBER_ID). Com mais de uma sessão Cloud, só envia pela sessão `esperada`
  * se esse número pertence a ela; senão a mensagem sairia pelo número de outra loja.
+ * Com mapa de números explícito a conferência vale mesmo com uma só sessão; a compatibilidade implícita (uma sessão,
+ * sem mapa) só existe na ausência do mapa.
  */
+/** Há mapa explícito de números (WHATSAPP_CLOUD_PHONE_MAP com ao menos uma entrada)? Com ele, número fora do mapa é negado. */
+export const temMapaDeNumeros = (env: Env): boolean => lerMapa(env, "WHATSAPP_CLOUD_PHONE_MAP").size > 0;
+
 export function numeroDeEnvioPertence(env: Env, esperada: string): boolean {
-    if (cloudSessionIds(env).size <= 1) return true;
+    if (cloudSessionIds(env).size <= 1 && lerMapa(env, "WHATSAPP_CLOUD_PHONE_MAP").size === 0) return true;
     const r = sessaoDoNumero(env, env.META_WA_PHONE_NUMBER_ID?.trim());
     return r.ok && r.sessionId === esperada;
 }

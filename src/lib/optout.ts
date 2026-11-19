@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { cancelarRunsDoContato } from "@/modules/automacoes/cancelamento";
 
 /** Aviso opcional anexado aos disparos. */
 export const OPTOUT_FOOTER = "Para não receber mais mensagens, responda SAIR.";
@@ -35,6 +36,9 @@ export async function addOptOut(sessionId: string, jid: string): Promise<void> {
         create: { sessionId, phoneKey: key, jid },
         update: {},
     });
+    // Automações em andamento deste contato param já (o executor também reconfere antes de cada envio).
+    // shortcut: casa pelo jid recebido; execução gravada com outra forma do mesmo número só cai na checagem do executor.
+    await cancelarRunsDoContato(sessionId, jid, "optout").catch(() => {});
 }
 
 export async function removeOptOut(sessionId: string, jid: string): Promise<void> {

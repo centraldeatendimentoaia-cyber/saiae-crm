@@ -143,6 +143,14 @@ describe("rodarFollowUps com treino publicado", () => {
     });
     afterEach(() => vi.useRealTimers());
 
+    it("trava perdida: não envia nenhum follow-up", async () => {
+        m.convs = [linha("5561900000001")];
+        const p = rodarFollowUps(AGORA, { signal: new AbortController().signal, ativa: () => false });
+        await vi.runAllTimersAsync();
+        expect(await p).toBe(0);
+        expect(m.enviados).toEqual([]);
+    });
+
     it("envia, incrementa followUpEnvios e grava followUpEm", async () => {
         m.convs = [linha("5561900000001")];
         expect(await rodar()).toBe(1);

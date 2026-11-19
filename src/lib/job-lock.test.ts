@@ -33,6 +33,21 @@ describe("startJobLock", () => {
     });
 });
 
+describe("startJobLock: prazo da posse", () => {
+    it("ativa() não passa do vencimento gravado no banco, mesmo com o create demorando", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        h.prisma.jobLock.create.mockImplementation(async () => { vi.setSystemTime(500); return {}; }); // create lento
+        h.prisma.jobLock.updateMany.mockReturnValue(new Promise(() => {})); // renovação nunca confirma
+        const posse = await startJobLock("j", 3000);
+        const expiresAt = (h.prisma.jobLock.create.mock.calls[0][0].data.expiresAt as Date).getTime();
+        expect(expiresAt).toBe(3000);
+        vi.setSystemTime(expiresAt);
+        expect(posse!.ativa()).toBe(false);
+        await posse!();
+    });
+});
+
 describe("startJobLock: banco x trava ocupada", () => {
     it("com throwOnDbError, erro de banco lança JobLockDbError; trava ocupada continua null", async () => {
         h.prisma.jobLock.create.mockRejectedValue(new Error("db fora"));
@@ -50,6 +65,55 @@ describe("startJobLock: banco x trava ocupada", () => {
         await vi.advanceTimersByTimeAsync(1100);
         expect(logger.warn).toHaveBeenCalledWith("JobLock", expect.stringContaining("renovar"));
         await release!();
+    });
+});
+
+describe("perda da posse da trava", () => {
+    it("renovação com count 0 (outra instância tomou a trava): posse perdida e sinal abortado", async () => {
+        vi.useFakeTimers();
+        h.prisma.jobLock.create.mockResolvedValue({});
+        h.prisma.jobLock.updateMany.mockResolvedValue({ count: 0 });
+        const posse = await startJobLock("j", 3000);
+        expect(posse!.ativa()).toBe(true);
+        await vi.advanceTimersByTimeAsync(1100);
+        expect(posse!.signal.aborted).toBe(true);
+        expect(posse!.ativa()).toBe(false);
+        await posse!();
+    });
+    it("renovação que falha por mais de um TTL: posse perdida mesmo sem resposta do banco", async () => {
+        vi.useFakeTimers();
+        h.prisma.jobLock.create.mockResolvedValue({});
+        h.prisma.jobLock.updateMany.mockRejectedValue(new Error("db fora"));
+        const posse = await startJobLock("j", 3000);
+        await vi.advanceTimersByTimeAsync(1100);
+        expect(posse!.ativa()).toBe(true); // falha recente: ainda dentro do prazo
+        await vi.advanceTimersByTimeAsync(2500);
+        expect(posse!.ativa()).toBe(false);
+        await posse!();
+    });
+    it("renovação bem-sucedida mantém a posse além do TTL original", async () => {
+        vi.useFakeTimers();
+        h.prisma.jobLock.create.mockResolvedValue({});
+        h.prisma.jobLock.updateMany.mockResolvedValue({ count: 1 });
+        const posse = await startJobLock("j", 3000);
+        await vi.advanceTimersByTimeAsync(10_000);
+        expect(posse!.ativa()).toBe(true);
+        await posse!();
+    });
+    it("cada aquisição usa um token próprio (posse antiga não vale para a nova)", async () => {
+        h.prisma.jobLock.create.mockResolvedValue({});
+        const a = await startJobLock("j", 1000);
+        const b = await startJobLock("j", 1000);
+        await a!();
+        await b!();
+        const holders = h.prisma.jobLock.deleteMany.mock.calls.map((c) => c[0].where.holder);
+        expect(holders[0]).not.toBe(holders[1]);
+    });
+    it("withJobLock entrega a posse ao job", async () => {
+        h.prisma.jobLock.create.mockResolvedValue({});
+        let recebida = false;
+        await withJobLock("j", 1000, async (p) => { recebida = p.ativa(); });
+        expect(recebida).toBe(true);
     });
 });
 

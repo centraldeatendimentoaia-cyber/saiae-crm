@@ -62,6 +62,12 @@ describe("numeroDeEnvioPertence", () => {
     it("uma sessão: sempre verdadeiro", () => {
         expect(numeroDeEnvioPertence({ WHATSAPP_CLOUD_SESSION_ID: "pilot" }, "pilot")).toBe(true);
     });
+    it("uma sessão com mapa explícito incompatível: o número de envio é conferido (nega o número de outra loja)", () => {
+        const env = { WHATSAPP_CLOUD_SESSION_ID: "loja-a", WHATSAPP_CLOUD_PHONE_MAP: JSON.stringify({ "111": "loja-a" }) };
+        expect(numeroDeEnvioPertence({ ...env, META_WA_PHONE_NUMBER_ID: "222" }, "loja-a")).toBe(false);
+        expect(numeroDeEnvioPertence(env, "loja-a")).toBe(false); // sem número de envio configurado
+        expect(numeroDeEnvioPertence({ ...env, META_WA_PHONE_NUMBER_ID: "111" }, "loja-a")).toBe(true);
+    });
     it("várias: só se o número de envio mapeia para a sessão esperada", () => {
         expect(numeroDeEnvioPertence({ ...MAPA, META_WA_PHONE_NUMBER_ID: "111" }, "loja-a")).toBe(true);
         expect(numeroDeEnvioPertence({ ...MAPA, META_WA_PHONE_NUMBER_ID: "111" }, "loja-b")).toBe(false);

@@ -1,3 +1,4 @@
+import { apagarResultadosDaSessao } from "@/modules/resultados/limpeza";
 import { prisma } from "@/lib/prisma";
 import { WhatsAppInstance } from "./instance";
 import { Server } from "socket.io";
@@ -116,6 +117,8 @@ export class WhatsAppManager {
             await instance.shutdown();
             this.sessions.delete(sessionId);
         }
+        const alvo = await prisma.session.findUnique({ where: { sessionId }, select: { userId: true } });
+        if (alvo) await apagarResultadosDaSessao(alvo.userId, sessionId);
         await prisma.session.delete({ where: { sessionId } });
     }
 

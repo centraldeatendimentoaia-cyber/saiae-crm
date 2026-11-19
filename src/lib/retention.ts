@@ -92,6 +92,17 @@ export async function runRetention(): Promise<void> {
             logger.warn("Retention", `limpeza das imagens falhou: ${e instanceof Error ? e.name : "erro"}`);
         }
 
+        // Eventos de resultado importados (agenda/vendas, contêm telefone): retenção própria, padrão 365 dias após a data do evento; 0 desliga.
+        try {
+            const resDias = days("RESULT_EVENT_RETENTION_DAYS", 365);
+            if (resDias > 0) {
+                const r = await prisma.resultEvent.deleteMany({ where: { ocorridoEm: { lt: new Date(Date.now() - resDias * 86_400_000) } } });
+                if (r.count) logger.info("Retention", `${r.count} eventos de resultado com mais de ${resDias} dias apagados`);
+            }
+        } catch (e) {
+            logger.warn("Retention", `limpeza dos eventos de resultado falhou: ${e instanceof Error ? e.name : "erro"}`);
+        }
+
         // Origem das mensagens enviadas (métricas): some junto com as mensagens.
         try {
             const origemDias = days("MESSAGE_RETENTION_DAYS", 90);

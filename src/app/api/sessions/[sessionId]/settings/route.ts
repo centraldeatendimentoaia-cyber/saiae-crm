@@ -1,3 +1,4 @@
+import { apagarResultadosDaSessao } from "@/modules/resultados/limpeza";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, NextRequest } from "next/server";
 import { waManager } from "@/modules/whatsapp/manager";
@@ -112,6 +113,10 @@ export async function DELETE(
             }
         }
         waManager.deleteSession(sessionId);
+
+        // ResultEvent não tem FK: apaga os resultados importados da sessão junto (cascata manual)
+        const alvo = await prisma.session.findUnique({ where: { sessionId }, select: { userId: true } });
+        if (alvo) await apagarResultadosDaSessao(alvo.userId, sessionId);
 
         // Delete from database
         await prisma.session.delete({

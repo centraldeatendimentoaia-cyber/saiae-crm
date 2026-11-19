@@ -47,6 +47,11 @@ export async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
+    // Webhook de Instagram/Messenger (gatilhos de automação): público; a rota valida token (GET) e HMAC (POST)
+    if (pathname === "/api/social/webhook") {
+        return NextResponse.next();
+    }
+
     // Eventos Comanda → CRM (contrato SAI-001): público; a rota valida a assinatura HMAC por barraca e a janela de 5 min
     if (pathname === "/api/integracao/comanda/v1/eventos" || pathname === "/api/integracao/comanda/v1/codigo-verificacao" || pathname === "/api/integracao/comanda/v1/ia-consumo" || pathname === "/api/integracao/comanda/v1/ia-dono-pedir-confirmacao" || pathname === "/api/integracao/comanda/v1/ia-apagar-conversas" || pathname === "/api/integracao/comanda/v1/whatsapp-conexao" || pathname === "/api/integracao/comanda/v1/whatsapp-disparos") {
         return NextResponse.next();

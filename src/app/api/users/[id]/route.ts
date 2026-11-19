@@ -1,3 +1,4 @@
+import { apagarResultadosDoUsuario } from "@/modules/resultados/limpeza";
 import { NextResponse, NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthenticatedUser, isAdmin } from "@/lib/api-auth";
@@ -95,6 +96,7 @@ export async function DELETE(
     }
 
     try {
+        await apagarResultadosDoUsuario(id); // ResultEvent não tem FK: cascata manual
         await prisma.user.delete({ where: { id } });
         return NextResponse.json({ status: true, message: "User deleted successfully" });
     } catch (error) {
