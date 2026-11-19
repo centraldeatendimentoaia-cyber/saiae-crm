@@ -11,6 +11,7 @@ import { dadosPausar, iaPausada } from "@/modules/atendimento-comum/pausa";
 import type { Deps, RunRow, Store, StepRow, StatusPasso } from "./executor";
 import { getSafeMode, safeGate, humanDelayMs, batchPauseMs, sleepMs } from "@/lib/safe-mode";
 import { CLAIM_TTL_MS, type Contexto, type Definicao } from "./tipos";
+import { depsSocialReais } from "./canais/social-prisma";
 
 const isUnique = (e: unknown) => (e as { code?: string })?.code === "P2002";
 const json = (v: unknown) => v as Prisma.InputJsonValue;
@@ -101,6 +102,7 @@ const enviadosPorSessao = new Map<string, number>();
 
 /** Dependências reais: provedor existente (Cloud pela sessão correta), opt-out e conversa do atendimento. */
 export const depsReais: Deps = {
+    social: depsSocialReais,
     holder: HOLDER,
     agora: () => new Date(),
     optedOut: (sessionId, contactKey) => isOptedOut(sessionId, contactKey),

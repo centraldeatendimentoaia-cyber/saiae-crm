@@ -30,7 +30,7 @@ export const GATILHOS: DefinicaoGatilho[] = [
     { id: "messenger_comentario_post", tipo: "comentario_post", canal: "messenger", titulo: "Messenger: comentário em post da Página (resposta privada)", permissoesExigidas: ["pages_read_user_content", "pages_manage_metadata", "pages_messaging"], campoWebhook: "feed", flag: "AUTOMACOES_GATILHO_MSGR_COMENTARIO" },
 ];
 
-/** Permissões que o app já pede hoje no OAuth (fonte única: src/modules/social/oauth.ts). Nenhuma é de mensagens ou comentários. */
+/** Permissões que o app pede no OAuth sem config_id (fonte única: src/modules/social/oauth.ts). */
 export const PERMISSOES_DISPONIVEIS: string[] = SCOPES.split(",");
 
 export type EstadoGatilho = "habilitado" | "sem_provedor_de_envio" | "desabilitado_flag" | "bloqueado_permissao" | "webhook_nao_configurado";
@@ -49,11 +49,11 @@ export interface DiagnosticoGatilho {
 export interface AmbienteGatilhos {
     env: Record<string, string | undefined>;
     permissoes: string[];
-    /** Existe provedor de envio Instagram/Messenger no executor? Hoje não (só WhatsApp). */
+    /** Existe provedor de envio Instagram/Messenger no executor? Sim: canais/meta-social.ts (texto e resposta privada). */
     provedorDeCanal: boolean;
 }
 
-export const ambienteReal = (): AmbienteGatilhos => ({ env: process.env, permissoes: PERMISSOES_DISPONIVEIS, provedorDeCanal: false });
+export const ambienteReal = (): AmbienteGatilhos => ({ env: process.env, permissoes: PERMISSOES_DISPONIVEIS, provedorDeCanal: true });
 
 export const flagLigada = (env: AmbienteGatilhos["env"], nome: string) => env[nome]?.trim().toLowerCase() === "true";
 
