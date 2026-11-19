@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { reconectarComEspera } from "@/lib/socket-reconectar";
 
 type SocketContextValue = {
     getSocket: () => Socket | null;
@@ -36,6 +37,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
             setReady(false);
         });
 
+        reconectarComEspera(socket);
         socketRef.current = socket;
 
         return () => {
